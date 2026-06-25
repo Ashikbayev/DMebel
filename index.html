@@ -2204,14 +2204,13 @@ async function aiSend(){
     if(aiMode === 'api' && apiKey){
       // ── Режим Claude API ──────────────────────────────────────
       const messages = [...aiHistory.slice(-8)];
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      // Используем Cloudflare Worker прокси (решает CORS)
+      const resp = await fetch('https://divine-union-9ecd.ashikbaevdali.workers.dev', {
         method: 'POST',
         mode: 'cors',
         headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-allow-browser': 'true'
+          'Content-Type': 'application/json'
+          // Ключ хранится в Cloudflare Variables, не передаём его
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
@@ -2268,7 +2267,14 @@ async function aiSend(){
 
   } catch(err){
     thinkDiv.remove();
-    aiRenderMsg('ai', 'Ошибка: ' + err.message + '. Попробуйте ещё раз.', ' error');
+    var errMsg = err.message || String(err);
+    if(errMsg.includes('fetch') || errMsg.includes('CORS') || errMsg.includes('Failed') || errMsg.includes('NetworkError')){
+      // CORS или сетевая ошибка — переключаем на локальный режим
+      aiSetMode('local');
+      aiRenderMsg('ai', 'Claude API недоступен с GitHub Pages (CORS). Переключился на Авто-режим — повторите запрос.', ' error');
+    } else {
+      aiRenderMsg('ai', 'Ошибка: ' + errMsg, ' error');
+    }
   }
 
   aiLoading=false;
@@ -3492,7 +3498,7 @@ function renderMatCards(){
         '<div class="cat-not-loaded">⚠ Загрузите каталог из Google Sheets</div>';
     } else {
       const opts=catalog.ldsp.map(d=>
-        '<option value="'+d.name+'" '+(matChoice.ldspName===d.name?'selected':'')+'>'+d.name+' — '+d.price.toLocaleString('ru-RU')+' ₸</option>'
+        '<option value="'+d.name+'" '+(matChoice.ldspName===d.name?'selected':'')+'>'+d.name+(d.price?' — '+(d.price||0).toLocaleString('ru-RU')+' ₸':'')+' </option>'
       ).join('');
       ldspCard.innerHTML='<div class="price-card-title"><span style="color:#c8a96e">■</span> ЛДСП (декор на весь проект)</div>' +
         '<select class="cat-select" onchange="setLdsp(this.value)">'+opts+'</select>' +
