@@ -1,0 +1,1557 @@
+
+
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxDa66S-OSeSR1B6B2EoS0h5R6X2jW22zccdJP8HtbiGwEh-IGzqf5BsmXNRTeTWN78/exec';
+
+// Статус загрузки
+function showStatus(msg, color) {
+  let el = document.getElementById('db-status');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'db-status';
+    el.style.cssText = 'position:fixed;top:48px;left:0;right:0;z-index:200;padding:8px 14px;font-size:12px;font-weight:500;text-align:center;transition:opacity .5s';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.background = color || '#1a5252';
+  el.style.color = '#fff';
+  el.style.opacity = '1';
+}
+function hideStatus() {
+  const el = document.getElementById('db-status');
+  if (el) { el.style.opacity = '0'; setTimeout(() => el.remove(), 500); }
+}
+
+async function loadFromSheets() {
+  showStatus('Загружаю цены из базы...', '#1a5252');
+  try {
+    const res = await fetch(SHEETS_URL);
+    const data = await res.json();
+    if (data.ldsp && data.ldsp.length > 0) {
+      DB.ldsp = data.ldsp;
+      DB.hdf_p = data.hdf_p || 9000;
+      DB.krom_p = data.krom_p || 200;
+      DB.fas_plen = data.fas_plen;
+      DB.fas_kr = data.fas_kr;
+      DB.furn = data.furn;
+      DB.kuh = data.kuh;
+      DB.svet = data.svet;
+      DB.works = data.works;
+      DB.vit = data.vit;
+      renderWorks();
+      recalc();
+      showStatus('OK: Цены загружены из Google Sheets', '#1D9E75');
+      setTimeout(hideStatus, 2500);
+    } else {
+      showStatus('⚠️ Нет данных — работаю офлайн', '#BA7517');
+      setTimeout(hideStatus, 3000);
+    }
+  } catch(e) {
+    showStatus('⚠️ Нет интернета — работаю офлайн', '#BA7517');
+    setTimeout(hideStatus, 3000);
+  }
+}
+
+const DB={
+  ldsp:[{n:"Бежевый",p:20000},{n:"Америка Орех",p:23000},{n:"Белый",p:19000},{n:"Белый Апельсин",p:20000},{n:"Белый Гладкий",p:20000},{n:"Белый Глянец",p:20000},{n:"Вотан",p:20000},{n:"Графит",p:20000},{n:"Дымчатый Зеленый",p:23000},{n:"Зеленый темный",p:23000},{n:"Кашемир",p:20000},{n:"ЛДСП",p:20000},{n:"Сатин",p:20000},{n:"Серый Камень",p:20000},{n:"Серый Светлый",p:20000},{n:"Слоновая кость",p:20000},{n:"Сонома",p:20000},{n:"Темный Дуб Вотан",p:23000},{n:"Фрост",p:23000},{n:"Цемент СВ",p:20000},{n:"Цемент Тем",p:20000},{n:"Черный",p:20000}],
+  hdf_p:9000,krom_p:200,
+  fas_plen:[{n:"МДФ 16-П",p:18000},{n:"МДФ 16-ПФ",p:20000},{n:"МДФ 18-ПФ",p:22000}],
+  fas_kr:[{n:"МДФ 16-К",p:26000},{n:"МДФ 16-КФ",p:29000},{n:"МДФ 18-КФ",p:31000},{n:"МДФ 16-КИР",p:27000},{n:"МДФ 16-КВАД",p:29000}],
+  furn:[{cat:"Петля",vid:"полувнешний",firm:"En-7",p:320},{cat:"Петля",vid:"полувнешний",firm:"Hefele",p:800},{cat:"Петля",vid:"полувнешний",firm:"GTV",p:670},{cat:"Петля",vid:"полувнешний",firm:"Blume",p:2200},{cat:"Петля",vid:"внутренний",firm:"En-7",p:320},{cat:"Петля",vid:"внутренний",firm:"Hefele",p:800},{cat:"Петля",vid:"внутренний",firm:"GTV",p:670},{cat:"Петля",vid:"внутренний",firm:"Blume",p:2200},{cat:"Петля",vid:"внешний",firm:"En-7",p:320},{cat:"Петля",vid:"внешний",firm:"Hefele",p:800},{cat:"Петля",vid:"внешний",firm:"GTV",p:670},{cat:"Петля",vid:"внешний",firm:"Blume",p:2200},{cat:"Петля",vid:"165°",firm:"En-7",p:320},{cat:"Петля",vid:"165°",firm:"Hefele",p:800},{cat:"Петля",vid:"165°",firm:"GTV",p:670},{cat:"Петля",vid:"165°",firm:"Blume",p:1200},{cat:"Петля",vid:"90°",firm:"En-7",p:320},{cat:"Петля",vid:"90°",firm:"Hefele",p:800},{cat:"Петля",vid:"90°",firm:"GTV",p:670},{cat:"Петля",vid:"90°",firm:"Blume",p:1200},{cat:"Петля",vid:"45°",firm:"En-7",p:320},{cat:"Петля",vid:"45°",firm:"Hefele",p:800},{cat:"Петля",vid:"45°",firm:"GTV",p:670},{cat:"Петля",vid:"45°",firm:"Blume",p:1200},{cat:"Телескоп",vid:"200мм",firm:"En-7",p:1800},{cat:"Телескоп",vid:"250мм",firm:"En-7",p:1670},{cat:"Телескоп",vid:"300мм",firm:"En-7",p:2100},{cat:"Телескоп",vid:"350мм",firm:"En-7",p:2130},{cat:"Телескоп",vid:"400мм",firm:"En-7",p:2270},{cat:"Телескоп",vid:"450мм",firm:"En-7",p:2400},{cat:"Телескоп",vid:"500мм",firm:"En-7",p:2500},{cat:"Телескоп",vid:"300мм",firm:"GTV",p:8000},{cat:"Телескоп",vid:"350мм",firm:"GTV",p:8000},{cat:"Телескоп",vid:"400мм",firm:"GTV",p:8000},{cat:"Телескоп",vid:"450мм",firm:"GTV",p:8000},{cat:"Телескоп",vid:"500мм",firm:"GTV",p:8000},{cat:"Телескоп",vid:"550мм",firm:"Blum",p:12000},{cat:"Телескоп",vid:"600мм",firm:"Blum",p:12000},{cat:"Телескоп-Д",vid:"500мм",firm:"—",p:2200},{cat:"Телескоп-Д",vid:"550мм",firm:"—",p:2700},{cat:"Телескоп-Д черный",vid:"250мм",firm:"—",p:1390},{cat:"Телескоп-Д черный",vid:"300мм",firm:"—",p:1750},{cat:"Телескоп-Д черный",vid:"350мм",firm:"—",p:1770},{cat:"Телескоп-Д черный",vid:"450мм",firm:"—",p:2000},{cat:"СМ-полный",vid:"450мм",firm:"En-7",p:3500},{cat:"СМ-полный",vid:"300мм",firm:"GTV",p:4850},{cat:"СМ-полный",vid:"350мм",firm:"GTV",p:5000},{cat:"СМ-полный",vid:"400мм",firm:"GTV",p:5200},{cat:"СМ-полный",vid:"450мм",firm:"GTV",p:5800},{cat:"СМ-полный",vid:"500мм",firm:"GTV",p:5950},{cat:"СМ-полный",vid:"250мм",firm:"Boyard",p:3950},{cat:"СМ-полный",vid:"300мм",firm:"Boyard",p:4200},{cat:"СМ-полный",vid:"400мм",firm:"Boyard",p:4900},{cat:"СМ-полный",vid:"450мм",firm:"Boyard",p:4950},{cat:"СМ-полный",vid:"500мм",firm:"Boyard",p:5090},{cat:"СМ-полный",vid:"550мм",firm:"Boyard",p:5800},{cat:"Push-open",vid:"300мм",firm:"Boyard",p:5780},{cat:"Push-open",vid:"350мм",firm:"Boyard",p:5250},{cat:"Push-open",vid:"550мм",firm:"Boyard",p:6300},{cat:"СМ-частичный",vid:"400мм",firm:"Boyard",p:3200},{cat:"СМ-частичный",vid:"450мм",firm:"Boyard",p:3580},{cat:"СМ-частичный",vid:"500мм",firm:"Boyard",p:3800},{cat:"Ножки",vid:"—",firm:"—",p:100},{cat:"Ножки",vid:"Хром",firm:"—",p:500},{cat:"Руч-Скрытая",vid:"96мм",firm:"—",p:450},{cat:"Руч-Скрытая",vid:"128мм",firm:"—",p:500},{cat:"Руч-Скрытая",vid:"192мм",firm:"—",p:600},{cat:"Руч-Скрытая",vid:"1000мм",firm:"—",p:1000},{cat:"Руч-Торцевая",vid:"96мм",firm:"—",p:450},{cat:"Руч-Торцевая",vid:"128мм",firm:"—",p:500},{cat:"Руч-Торцевая",vid:"192мм",firm:"—",p:600},{cat:"Руч-Торцевая",vid:"1000мм",firm:"—",p:1000},{cat:"Руч-Скоба",vid:"96мм",firm:"—",p:450},{cat:"Руч-Скоба",vid:"128мм",firm:"—",p:500},{cat:"Руч-Скоба",vid:"192мм",firm:"—",p:600},{cat:"Руч-Скоба",vid:"1000мм",firm:"—",p:1000},{cat:"Типон",vid:"—",firm:"—",p:500},{cat:"Газлифт",vid:"—",firm:"En-7",p:500},{cat:"Газлифт",vid:"—",firm:"Hefele",p:4500},{cat:"Газлифт Авентус",vid:"—",firm:"DTC",p:29000},{cat:"Гола.проф 6м",vid:"—",firm:"—",p:8200},{cat:"Крючки",vid:"—",firm:"—",p:600},{cat:"Крючки",vid:"1",firm:"—",p:600},{cat:"Крючки",vid:"2",firm:"—",p:600},{cat:"Крючки",vid:"3",firm:"—",p:600},{cat:"Штанга-Хром",vid:"—",firm:"—",p:2000},{cat:"Штанга",vid:"—",firm:"—",p:2000},{cat:"Турникет-Хром",vid:"250мм",firm:"—",p:480},{cat:"Турникет-Хром",vid:"350мм",firm:"—",p:670},{cat:"Турникет-Хром",vid:"400мм",firm:"—",p:700},{cat:"Турникет-Хром",vid:"450мм",firm:"—",p:770},{cat:"Турникет-Черный",vid:"300мм",firm:"—",p:900},{cat:"Турникет-Черный",vid:"350мм",firm:"—",p:980},{cat:"Турникет-Черный",vid:"400мм",firm:"—",p:1050},{cat:"Турникет-Черный",vid:"450мм",firm:"—",p:1150},{cat:"Турникет-Золото",vid:"300мм",firm:"—",p:900},{cat:"Турникет-Золото",vid:"350мм",firm:"—",p:980},{cat:"Турникет-Золото",vid:"400мм",firm:"—",p:1050},{cat:"Турникет-Золото",vid:"450мм",firm:"—",p:1150},{cat:"Пантограф",vid:"—",firm:"—",p:15000},{cat:"Пантограф",vid:"Серый",firm:"—",p:15000},{cat:"Пантограф",vid:"Черный",firm:"—",p:15000}],
+  kuh:[{cat:"Плинтус",vid:"—",p:2000},{cat:"Плинтус",vid:"черный",p:2000},{cat:"Плинтус",vid:"серый",p:2000},{cat:"Плинтус",vid:"белый",p:2000},{cat:"Плинтус",vid:"Вотан",p:2000},{cat:"Столешница",vid:"стандарт",p:10000},{cat:"Столешница",vid:"28мм",p:10000},{cat:"Столешница",vid:"38мм",p:10000},{cat:"Столешница",vid:"38мм Вотан",p:10000},{cat:"Столешница",vid:"38мм Сонома",p:10000},{cat:"Камень",vid:"Grandex",p:120000},{cat:"Камень",vid:"Китай",p:80000},{cat:"Мойка",vid:"500мм",p:25000},{cat:"Мойка",vid:"600мм",p:26000},{cat:"Сушилка",vid:"500мм",p:5300},{cat:"Сушилка",vid:"600мм",p:5500},{cat:"Сушилка",vid:"700мм",p:6500},{cat:"Сушилка",vid:"800мм",p:7000},{cat:"Сушилка",vid:"900мм",p:8500},{cat:"Сушилка",vid:"1000мм",p:9100},{cat:"Сушилка Нерж",vid:"500мм",p:5300},{cat:"Сушилка Нерж",vid:"600мм",p:5500},{cat:"Сушилка Нерж",vid:"700мм",p:6500},{cat:"Сушилка Нерж",vid:"800мм",p:7000},{cat:"Сушилка Нерж",vid:"900мм",p:8500},{cat:"Сушилка Нерж",vid:"1000мм",p:9100},{cat:"Бутылочница",vid:"150мм",p:10000},{cat:"Бутылочница",vid:"200мм",p:13000},{cat:"Бутылочница",vid:"250мм",p:15000},{cat:"Бутылочница",vid:"300мм",p:25000},{cat:"Угл.соед",vid:"38мм",p:2000},{cat:"Угл.соед",vid:"26мм",p:1950},{cat:"Карго",vid:"400мм",p:15000},{cat:"Карго",vid:"500мм",p:20000},{cat:"Карго",vid:"600мм",p:30000}],
+  shk:[{cat:"Штанга-Хром",vid:"—",p:2000},{cat:"Штанга",vid:"—",p:2000},{cat:"Крючки",vid:"—",p:600},{cat:"Крючки",vid:"1",p:600},{cat:"Крючки",vid:"2",p:600},{cat:"Крючки",vid:"3",p:600},{cat:"Турникет-Хром",vid:"250мм",p:480},{cat:"Турникет-Хром",vid:"350мм",p:670},{cat:"Турникет-Хром",vid:"400мм",p:700},{cat:"Турникет-Хром",vid:"450мм",p:770},{cat:"Турникет-Черный",vid:"300мм",p:900},{cat:"Турникет-Черный",vid:"350мм",p:980},{cat:"Турникет-Черный",vid:"400мм",p:1050},{cat:"Турникет-Черный",vid:"450мм",p:1150},{cat:"Турникет-Золото",vid:"300мм",p:900},{cat:"Турникет-Золото",vid:"350мм",p:980},{cat:"Турникет-Золото",vid:"400мм",p:1050},{cat:"Турникет-Золото",vid:"450мм",p:1150},{cat:"Пантограф",vid:"—",p:15000},{cat:"Пантограф",vid:"Серый",p:15000},{cat:"Пантограф",vid:"Черный",p:15000}],
+  svet:[{cat:"БлокП 12в",vid:"60вт",p:2200},{cat:"БлокП 12в",vid:"100вт",p:2430},{cat:"БлокП 12в",vid:"150вт",p:2970},{cat:"Вилка",vid:"—",p:200},{cat:"Вкл Круглый",vid:"—",p:250},{cat:"Вкл Кнопка",vid:"—",p:220},{cat:"Вкл Врезной",vid:"—",p:250},{cat:"Датчик 12в",vid:"ЛДСП",p:2800},{cat:"Датчик 12в",vid:"Касание",p:1500},{cat:"Датчик 12в",vid:"Махание",p:1760},{cat:"Датчик 12в",vid:"Откр-1-дверь",p:1960},{cat:"Датчик 12в",vid:"Откр-2-дверь",p:1960},{cat:"Датчик 12в",vid:"ДисУпр",p:4500},{cat:"Датчик 12в",vid:"ГолосУпр",p:4500},{cat:"Датчик 12в",vid:"ДляЗеркало",p:2500},{cat:"Датчик 220в",vid:"Касание",p:3400},{cat:"Датчик 220в",vid:"Махание",p:3400},{cat:"Датчик 220в",vid:"ЛДСП",p:4200},{cat:"Датчик 220в",vid:"ДисУпр",p:4500},{cat:"Лента 12в",vid:"Холодный",p:1760},{cat:"Лента 12в",vid:"Теплый",p:1760},{cat:"Лента 12в",vid:"Нейтральный",p:1760},{cat:"Лента 220в 1м",vid:"Холодный",p:410},{cat:"Лента 220в 5м",vid:"Холодный",p:1760},{cat:"Лента 220в 5м",vid:"Теплый",p:1760},{cat:"Лента 220в 5м",vid:"Нейтральный",p:1760},{cat:"Лента 220в 10м",vid:"Нейтральный",p:2700},{cat:"Лента Гибкий 12в",vid:"—",p:880},{cat:"Профиль.угл",vid:"алюминий",p:1620},{cat:"Профиль.угл",vid:"черный",p:1890},{cat:"Профиль.врез",vid:"черный",p:1890},{cat:"Профиль.врез",vid:"алюминий",p:1620},{cat:"Профиль.наклад",vid:"алюминий",p:1620},{cat:"Профиль.наклад",vid:"черный",p:1890},{cat:"Розетка",vid:"—",p:800},{cat:"Переходник",vid:"—",p:250},{cat:"Соед.лента",vid:"—",p:380}],
+  vit:{steklo:{"Бронза":12000,"Графит":12000,"Матовый":14000,"Зеркало":12000,"Простое":6000,"Риф-Бронза":40000,"Риф-Графит":40000,"Риф-Простой":40000},profil_uzkiy:2000,profil_shirokiy:3000,ugolok_uzkiy:1500,ugolok_shirokiy:2000,navesh:1000,prisadka:1500,uplotnitel:400},
+  works:[{n:"Установка мойки",p:0},{n:"Установка смесителя",p:0},{n:"Установка печки/духовки",p:0},{n:"Установка вытяжки",p:0},{n:"Установка посудомойки",p:0},{n:"Установка холодильника",p:0},{n:"Подключение электрики",p:0},{n:"Сборка мебели",p:0},{n:"Установка карго/сушилки",p:0},{n:"Установка витрины",p:0},{n:"Установка подсветки",p:0},{n:"Замер",p:0},{n:"Дизайн проект",p:0}]
+};
+const ST={ldsp:[],fldsp:[],fplen:[],fkr:[],furn:[],kuh:[],shk:[],svet:[],dop:[],vit:[]};
+let C={};
+const $=id=>document.getElementById(id);
+const fm=n=>Math.round(n).toLocaleString("ru")+"₸";
+const gn=id=>{const e=$(id);return e?(parseFloat(e.value)||0):0;};
+const st=(id,v)=>{const e=$(id);if(e)e.textContent=fm(v);};
+const sx=(id,v)=>{const e=$(id);if(e)e.textContent=v;};
+function page(p){["calc","kp","hist","conf","kitchen"].forEach(n=>{$("pg-"+n)?.classList.toggle("on",n===p);const b=$("bbt-"+n);if(b)b.classList.toggle("on",n===p);});if(p==="hist")renderHist();if(p==="conf"){initConf();}if(p==="kitchen"){initKitchen();}}
+function tab(t){["calc","coef","extra","vit","itog"].forEach(s=>$("scr-"+s).classList.toggle("on",s===t));document.querySelectorAll(".tb").forEach((b,i)=>b.classList.toggle("on",["calc","coef","extra","vit","itog"][i]===t));if(t==="itog")recalc();window.scrollTo(0,0);}
+function tog(id){const b=$("cb-"+id),a=$("ar-"+id);if(!b)return;const op=b.classList.toggle("op");if(a)a.classList.toggle("op",op);}
+function addLdsp(){
+  const i=ST.ldsp.length;ST.ldsp.push(0);
+  const c=$("ldsp-list");if(i===0)c.innerHTML="";
+  const d=document.createElement("div");d.id="lr"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
+  const o=DB.ldsp.map((x,j)=>`<option value="${j}">${x.n} — ${x.p.toLocaleString("ru")}₸</option>`).join("");
+  d.innerHTML=`<div class="fr"><select id="ls${i}" onchange="ST.ldsp[${i}]=+this.value;$('lp${i}').textContent=DB.ldsp[+this.value].p.toLocaleString('ru')+'₸/л';recalc()">${o}</select><button class="db" onclick="$('lr${i}').style.display='none';ST.ldsp[${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="lq${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="lp${i}">${DB.ldsp[0].p.toLocaleString("ru")}₸/л</span></div>`;
+  c.appendChild(d);recalc();
+}
+function lC(){return ST.ldsp.reduce((s,x,i)=>{if(x===null||x===undefined)return s;return s+(DB.ldsp[x]?.p||0)*(gn("lq"+i));},0);}
+function kC(){return lC()+DB.hdf_p*gn("hdf-qty")+DB.krom_p*gn("krom-qty");}
+function addSimple(sec,arr,lid){
+  const a=ST[sec];const i=a.length;a.push(0);
+  const c=$(lid);if(i===0)c.innerHTML="";
+  const d=document.createElement("div");d.id=sec+"r"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
+  const o=arr.map((x,j)=>`<option value="${j}">${x.n} — ${x.p.toLocaleString("ru")}₸</option>`).join("");
+  d.innerHTML=`<div class="fr"><select id="${sec}s${i}" onchange="ST['${sec}'][${i}]=+this.value;$('${sec}p${i}').textContent=arr[+this.value].p.toLocaleString('ru')+'₸/л';recalc()">${o}</select><button class="db" onclick="$('${sec}r${i}').style.display='none';ST['${sec}'][${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="${sec}q${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="${sec}p${i}">${arr[0].p.toLocaleString("ru")}₸/л</span></div>`;
+  c.appendChild(d);recalc();
+}
+function sC(sec,arr){return ST[sec].reduce((s,x,i)=>{if(x===null||x===undefined)return s;return s+(arr[x]?.p||0)*(gn(sec+"q"+i));},0);}
+function sIt(sec,arr){return ST[sec].map((x,i)=>{if(x===null||x===undefined)return null;const q=gn(sec+"q"+i);if(!q)return null;return{n:arr[x]?.n,q};}).filter(Boolean);}
+function gA(sec){return sec==="furn"?DB.furn:sec==="kuh"?DB.kuh:sec==="shk"?DB.shk:DB.svet;}
+function addCat(sec,arr,lid){
+  const a=ST[sec];const i=a.length;a.push({p:0});
+  const c=$(lid);if(i===0)c.innerHTML="";
+  const d=document.createElement("div");d.id=sec+"r"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
+  const cats=[...new Set(arr.map(x=>x.cat))];
+  d.innerHTML=`<div class="fr"><select id="${sec}c${i}" onchange="uC('${sec}',${i})">${cats.map(c=>`<option value="${c}">${c}</option>`).join("")}</select><button class="db" onclick="$('${sec}r${i}').style.display='none';ST['${sec}'][${i}]=null;recalc()">✕</button></div><div class="fr" id="${sec}vf${i}"></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="${sec}q${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="${sec}pp${i}">0₸</span></div>`;
+  c.appendChild(d);uC(sec,i);
+}
+function uC(sec,i){
+  const arr=gA(sec);const cat=$(sec+"c"+i)?.value;
+  const rows=arr.filter(x=>x.cat===cat);
+  const vids=[...new Set(rows.map(x=>x.vid))];
+  const firms=[...new Set(rows.map(x=>x.firm).filter(f=>f&&f!=="—"))];
+  const vf=$(sec+"vf"+i);vf.innerHTML="";
+  if(vids.length>1||(vids[0]&&vids[0]!=="—")){const s=document.createElement("select");s.id=sec+"v"+i;vids.forEach(v=>{const o=document.createElement("option");o.value=v;o.textContent=v;s.appendChild(o);});s.onchange=()=>uCP(sec,i);vf.appendChild(s);}
+  if(firms.length>0){const s=document.createElement("select");s.id=sec+"f"+i;firms.forEach(f=>{const o=document.createElement("option");o.value=f;o.textContent=f;s.appendChild(o);});s.onchange=()=>uCP(sec,i);vf.appendChild(s);}
+  uCP(sec,i);
+}
+function uCP(sec,i){
+  const arr=gA(sec);const a=ST[sec];
+  const cat=$(sec+"c"+i)?.value,vid=$(sec+"v"+i)?.value||"—",firm=$(sec+"f"+i)?.value||"—";
+  const row=arr.find(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")&&(x.firm===firm||x.firm==="—"||!x.firm));
+  const p=row?.p||0;if(a[i])a[i]={p};
+  const pr=$(sec+"pp"+i);if(pr)pr.textContent=p.toLocaleString("ru")+"₸";recalc();
+}
+function cC(sec){
+  const arr=gA(sec);
+  return ST[sec].reduce((s,item,i)=>{
+    if(!item)return s;
+    const cat=$(sec+"c"+i)?.value,vid=$(sec+"v"+i)?.value||"—",firm=$(sec+"f"+i)?.value||"—";
+    const row=arr.find(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")&&(x.firm===firm||x.firm==="—"||!x.firm));
+    return s+(row?.p||0)*(gn(sec+"q"+i));
+  },0);
+}
+function cIt(sec){
+  const arr=gA(sec);
+  return ST[sec].map((item,i)=>{
+    if(!item)return null;
+    const cat=$(sec+"c"+i)?.value||"",vid=$(sec+"v"+i)?.value||"—",firm=$(sec+"f"+i)?.value||"—";
+    const row=arr.find(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")&&(x.firm===firm||x.firm==="—"||!x.firm));
+    const q=gn(sec+"q"+i);if(!q)return null;
+    const parts=[cat];if(vid&&vid!=="—")parts.push(vid);if(firm&&firm!=="—")parts.push(firm);
+    return{n:parts.join(" "),q};
+  }).filter(Boolean);
+}
+function addDop(){
+  const i=ST.dop.length;ST.dop.push(1);
+  const c=$("dop-list");if(i===0)c.innerHTML="";
+  const d=document.createElement("div");d.id="dr"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
+  d.innerHTML=`<div class="fr"><input style="font-size:12px;border:1px solid #ddd;border-radius:8px;padding:6px 8px;flex:1;min-width:0" type="text" id="dn${i}" placeholder="Название"><button class="db" onclick="$('dr${i}').style.display='none';ST.dop[${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Цена</span><input class="qi" type="number" inputmode="decimal" id="dp${i}" placeholder="0" onchange="recalc()"><span class="fp">₸/шт</span></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="dq${i}" placeholder="1" onchange="recalc()"><span class="fp">шт</span></div>`;
+  c.appendChild(d);recalc();
+}
+function dC(){return ST.dop.reduce((s,x,i)=>x===null?s:s+(gn("dp"+i))*(gn("dq"+i)),0);}
+function dIt(){return ST.dop.map((x,i)=>{if(x===null)return null;const p=gn("dp"+i),q=gn("dq"+i);if(!q||!p)return null;return{n:$("dn"+i)?.value||"Доп.",q};}).filter(Boolean);}
+function renderWorks(){
+  const wl=$("works-list");if(wl){wl.innerHTML="";DB.works.forEach((w,i)=>{const d=document.createElement("div");if(i>0)d.className="ib";d.style.marginTop="6px";d.innerHTML=`<div class="fr"><span style="font-size:11px;flex:1;min-width:0">${w.n}</span><input class="qi" type="number" inputmode="decimal" id="wq${i}" placeholder="0" min="0" onchange="recalc()" style="width:62px;min-width:62px;max-width:62px"><span class="fp">шт</span><span class="fp" style="min-width:48px;text-align:right">${w.p.toLocaleString("ru")}₸</span></div>`;wl.appendChild(d);});}
+  const bl=$("base-works-list");if(bl){bl.innerHTML="";DB.works.forEach((w,i)=>{const d=document.createElement("div");if(i>0)d.className="ib";d.style.marginTop="6px";d.innerHTML=`<div class="fr"><span style="font-size:11px;flex:1;min-width:0">${w.n}</span><input class="qw" type="number" inputmode="decimal" id="bwp${i}" value="${w.p}" placeholder="0" onchange="DB.works[${i}].p=parseFloat(this.value)||0;renderWorks();recalc()"><span class="fp">₸</span></div>`;bl.appendChild(d);});}
+}
+function wC(){return DB.works.reduce((s,w,i)=>s+w.p*(gn("wq"+i)),0);}
+function wIt(){return DB.works.map((w,i)=>{const q=gn("wq"+i);if(!q||!w.p)return null;return{n:w.n,q};}).filter(Boolean);}
+function addVit(){
+  const i=ST.vit.length;ST.vit.push(1);
+  const c=$("vit-list");if(i===0)c.innerHTML="";
+  const d=document.createElement("div");d.id="vr"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
+  const so=Object.keys(DB.vit.steklo).map(k=>`<option value="${k}">${k} — ${DB.vit.steklo[k].toLocaleString("ru")}₸</option>`).join("");
+  d.innerHTML=`<div style="font-size:12px;color:#666;font-weight:500;margin-bottom:4px">Витрина ${i+1}</div>
+    <div class="fr"><span class="lb">Ширина</span><input class="ql" type="number" inputmode="decimal" id="vw${i}" placeholder="0" onchange="cV(${i})"><span class="fp">мм</span></div>
+    <div class="fr"><span class="lb">Высота</span><input class="ql" type="number" inputmode="decimal" id="vh${i}" placeholder="0" onchange="cV(${i})"><span class="fp">мм</span></div>
+    <div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="vn${i}" placeholder="1" onchange="cV(${i})"><span class="fp">шт</span></div>
+    <div class="fr"><span class="lb">Стекло</span><select id="vst${i}" onchange="cV(${i})">${so}</select></div>
+    <div class="fr"><span class="lb">Профиль</span><select id="vpr${i}" onchange="cV(${i})"><option value="uzkiy">Узкий — 2 000₸</option><option value="shirokiy">Широкий — 3 000₸</option></select></div>
+    <div class="ss"><div class="stl">Доставка</div><div class="fr"><span class="lb">Сумма</span><input class="ql" type="number" inputmode="decimal" id="vdel${i}" placeholder="0" onchange="cV(${i})"><span class="fp">₸</span></div></div>
+    <div class="ss"><div class="stl">Доход с установки</div><div class="fr"><span class="lb">Сумма</span><input class="ql" type="number" inputmode="decimal" id="vinc${i}" placeholder="0" onchange="cV(${i})"><span class="fp">₸</span></div></div>
+    <div class="fr" style="margin-top:8px;padding-top:8px;border-top:1px solid #f0f0f0"><span class="lb">Итог</span><span style="font-size:13px;font-weight:600;margin-left:auto" id="vres${i}">0₸</span><button class="db" style="margin-left:8px" onclick="$('vr${i}').style.display='none';ST.vit[${i}]=null;recalc()">✕</button></div>`;
+  c.appendChild(d);cV(i);
+}
+function gVD(i){
+  const w=gn("vw"+i),h=gn("vh"+i),n=parseFloat($("vn"+i)?.value)||1;
+  const st=$("vst"+i)?.value||"Бронза",pr=$("vpr"+i)?.value||"uzkiy";
+  const del=gn("vdel"+i),inc=gn("vinc"+i);
+  const V=DB.vit,steklo=(w*h/1e6)*V.steklo[st];
+  const profP=pr==="shirokiy"?V.profil_shirokiy:V.profil_uzkiy;
+  const profil=((w+h)*2/1000)*profP,uplot=((w+h)*2/1000)*V.uplotnitel;
+  const ugolok=pr==="shirokiy"?V.ugolok_shirokiy:V.ugolok_uzkiy;
+  const nav=h<=800?3:h<=2000?5:6,pris=h<=800?1:h<=2000?3:4;
+  const mat=(steklo+profil+uplot+ugolok+V.navesh*nav+V.prisadka*pris)*n;
+  return{mat,del,inc,tot:mat+del+inc,stName:st,n};
+}
+function cV(i){const d=gVD(i);const er=$("vres"+i);if(er)er.textContent=fm(d.tot);recalc();}
+function vTot(){let mat=0,inc=0,tot=0;ST.vit.forEach((x,i)=>{if(x===null)return;const d=gVD(i);mat+=d.mat;inc+=d.inc;tot+=d.tot;});return{mat,inc,tot};}
+function vIt(){return ST.vit.map((x,i)=>{if(x===null)return null;const d=gVD(i);if(!d.tot)return null;return{n:`Витрина стекло ${d.stName}`,q:d.n};}).filter(Boolean);}
+function blk(fas,k,rm,sk,tax,cr,vK,shared,extras,eInc){
+  const base=vK+fas+shared,aK=base*k,rabM=aK*rm,aSk=aK+sk,taxA=aSk*tax,tot=aSk+taxA+extras,credit=tot*(1+cr);
+  return{base,aK,rabM,sk,taxA,aSk,tot,credit,inc:aSk-base-rabM+eInc};
+}
+function recalc(){
+  const vK=kC(),vFL=sC("fldsp",DB.ldsp),vFP=sC("fplen",DB.fas_plen),vFK=sC("fkr",DB.fas_kr);
+  const vFu=cC("furn"),vKu=cC("kuh"),vSh=cC("shk"),vDel=gn("d-sat")+gn("d-pdm");
+  const vSM=cC("svet"),vSI=gn("svet-inc"),vDp=dC(),vWk=wC(),vVit=vTot();
+  const dfi=$("del-fi");if(dfi)dfi.textContent=fm(vFu+vKu+vSh);
+  const shared=vFu+vKu+vSh+vDel,extras=(vSM+vSI)+vVit.tot+vWk+vDp,eInc=vSI+vVit.inc+vWk;
+  const kl=gn("c-kl")||1.8,rml=gn("c-rl")/100,skl=parseFloat($("c-sl")?.value)||0,taxl=gn("c-taxl")/100,crl=gn("c-crl")/100;
+  const kp=gn("c-kp")||1.8,rmp=gn("c-rp")/100,skp=parseFloat($("c-sp")?.value)||0,taxp=gn("c-taxp")/100,crp=gn("c-crp")/100;
+  const kk=gn("c-kk")||1.8,rmk=gn("c-rk")/100,skk=parseFloat($("c-sk")?.value)||0,taxk=gn("c-taxk")/100,crk=gn("c-crk")/100;
+  const BL=blk(vFL,kl,rml,skl,taxl,crl,vK,shared,extras,eInc);
+  const BP=blk(vFP,kp,rmp,skp,taxp,crp,vK,shared,extras,eInc);
+  const BK=blk(vFK,kk,rmk,skk,taxk,crk,vK,shared,extras,eInc);
+  C={BL,BP,BK,vK,vFL,vFP,vFK,vFu,vKu,vSh,vDel,vSM,vSI,vVit,vDp,vWk,
+    ldspIt:ST.ldsp.map((x,i)=>{if(x===null||x===undefined)return null;const q=gn("lq"+i);if(!q)return null;return{n:DB.ldsp[x]?.n,q};}).filter(Boolean),
+    hdfQ:gn("hdf-qty"),kromQ:gn("krom-qty"),
+    fldspIt:sIt("fldsp",DB.ldsp),fplenIt:sIt("fplen",DB.fas_plen),fkrIt:sIt("fkr",DB.fas_kr),
+    fuIt:cIt("furn"),kuIt:cIt("kuh"),shIt:cIt("shk"),
+    svIt:cIt("svet"),dpIt:dIt(),wkIt:wIt(),vitIt:vIt()};
+  sx("tl-p",fm(BL.tot));sx("tl-c",fm(BL.credit));sx("tl-i",fm(BL.inc));
+  sx("tp-p",fm(BP.tot));sx("tp-c",fm(BP.credit));sx("tp-i",fm(BP.inc));
+  sx("tk-p",fm(BK.tot));sx("tk-c",fm(BK.credit));sx("tk-i",fm(BK.inc));
+  [["s-korp",vK],["s-fldsp",vFL],["s-fplen",vFP],["s-fkr",vFK],["s-furn",vFu],["s-kuh",vKu],["s-shk",vSh],["s-del",vDel],["s-svet",vSM+vSI],["s-dop",vDp],["s-works",vWk]].forEach(([id,v])=>st(id,v));
+  const sv=$("s-vit");if(sv)sv.textContent=fm(vVit.tot);
+  function fB(pfx,B){
+    st(pfx+"-b",B.base);st(pfx+"-a",B.aK);st(pfx+"-r",B.rabM);
+    const se=$(pfx+"-s");if(se){const s=B.sk;se.textContent=(s===0?"0₸":(s>0?"+":"")+Math.round(s).toLocaleString("ru")+"₸");se.style.color=s<0?"#E24B4A":s>0?"#1D9E75":"#aaa";}
+    st(pfx+"-t",B.taxA);st(pfx+"-tot",B.tot);st(pfx+"-cr",B.credit);st(pfx+"-inc",B.inc);
+  }
+  fB("il",BL);fB("ip",BP);fB("ik",BK);
+}
+
+// ── Модальное окно выбора вариантов КП ───────────────────────
+function openKpVarModal(){
+  if(!C.BL){ alert('Сначала заполните калькулятор'); return; }
+  document.getElementById('kp-var-modal').style.display='flex';
+}
+function kpVarClose(){
+  document.getElementById('kp-var-modal').style.display='none';
+}
+function kpVarCheck(){
+  // хотя бы один должен быть выбран
+  const l=$('kpv-ldsp').checked, p=$('kpv-plen').checked, k=$('kpv-kr').checked;
+  $('kpv-ok-btn').disabled = !l && !p && !k;
+  $('kpv-ok-btn').style.opacity = (!l && !p && !k) ? '0.4' : '1';
+}
+function kpVarConfirm(){
+  const showL = $('kpv-ldsp').checked;
+  const showP = $('kpv-plen').checked;
+  const showK = $('kpv-kr').checked;
+  kpVarClose();
+  showKP(showL, showP, showK);
+}
+
+let kpStyleModern = true; // текущий стиль
+function kpToggleStyle(){
+  kpStyleModern = !kpStyleModern;
+  const pg = document.getElementById('pg-kp');
+  const btn = document.getElementById('kp-style-toggle');
+  if(pg){ pg.classList.toggle('kp-classic', !kpStyleModern); }
+  if(btn){ btn.textContent = kpStyleModern ? '⬡ Modern' : '◈ Classic'; }
+}
+
+function showKP(showL=true, showP=true, showK=false){
+  const client=$("kp-client")?.value||"—",obj=$("kp-object")?.value||"—",num=$("kp-num")?.value||"001";
+  const today=new Date().toLocaleDateString("ru-RU",{day:"numeric",month:"long",year:"numeric"});
+
+  // Строка комплектации
+  const cols = [showL,showP,showK];
+  const nCols = cols.filter(Boolean).length;
+  const colStyle = `grid-template-columns:1fr${' 54px'.repeat(nCols)}`;
+
+  function mkR(n,q){
+    const checks = [
+      showL?'<div class="kck">OK</div>':'',
+      showP?'<div class="kck">OK</div>':'',
+      showK?'<div class="kck">OK</div>':''
+    ].filter((_,i)=>cols[i]).join('');
+    return `<div class="kr" style="${colStyle}"><div><div class="krn">${n}</div></div>${checks}</div>`;
+  }
+  function mkF(n, li, pi, ki){
+    const lc=li?`<div class="kvv" style="background:#ede9ff;color:#5b21b6">OK</div>`:`<div class="kck d">—</div>`;
+    const pc=pi?`<div class="kvv" style="background:#d1fae5;color:#065f46">OK</div>`:`<div class="kck d">—</div>`;
+    const kc=ki?`<div class="kvv" style="background:#fef3c7;color:#92400e">OK</div>`:`<div class="kck d">—</div>`;
+    const cells=[showL?lc:'',showP?pc:'',showK?kc:''].filter((_,i)=>cols[i]).join('');
+    return `<div class="kr" style="${colStyle}"><div><div class="krn">${n}</div></div>${cells}</div>`;
+  }
+
+  let kR="";
+  C.ldspIt.forEach(it=>{kR+=mkR(it.n,it.q);});
+  if(C.hdfQ>0)kR+=mkR("ХДФ (задняя стенка)",C.hdfQ);
+  if(C.kromQ>0)kR+=mkR("Кромка (пм)",C.kromQ);
+
+  const fL=C.fldspIt.map(it=>mkF(it.n,true,false,false)).join("");
+  const fP=C.fplenIt.map(it=>mkF(it.n,false,true,false)).join("");
+  const fK=C.fkrIt.map(it=>mkF(it.n,false,false,true)).join("");
+  const allF=[...C.fuIt,...C.kuIt,...C.shIt];
+  const fRows=allF.map(it=>mkR(it.n,it.q)).join("");
+  const dRow=C.vDel>0?mkR("Доставка по Сатпаеву и ПДМ",1):"";
+  const allE=[...C.svIt,...C.vitIt,...C.wkIt,...C.dpIt];
+  const eRows=allE.map(it=>mkR(it.n,it.q)).join("");
+
+  // Шапка колонок
+  const hdrCols=[
+    showL?'<div class="kchv" style="color:#a8c4ff">ЛДСП</div>':'',
+    showP?'<div class="kchv" style="color:#7dd5b0">Плёнка</div>':'',
+    showK?'<div class="kchv" style="color:#e8b07a">Краска</div>':''
+  ].filter((_,i)=>cols[i]).join('');
+  const hdrStyle=`display:grid;${colStyle};padding:8px 14px;background:#111827;border-radius:10px 10px 0 0;margin:10px 10px 0`;
+
+  // Итоговые колонки
+  const totCols=[
+    showL?`<div class="ktrv" style="color:#a8c4ff">${fm(C.BL.tot)}</div>`:'',
+    showP?`<div class="ktrv" style="color:#7dd5b0">${fm(C.BP.tot)}</div>`:'',
+    showK?`<div class="ktrv" style="color:#e8b07a">${fm(C.BK.tot)}</div>`:''
+  ].filter((_,i)=>cols[i]).join('');
+  const crCols=[
+    showL?`<div class="kcrv">${fm(C.BL.credit)}</div>`:'',
+    showP?`<div class="kcrv">${fm(C.BP.credit)}</div>`:'',
+    showK?`<div class="kcrv">${fm(C.BK.credit)}</div>`:''
+  ].filter((_,i)=>cols[i]).join('');
+  const thCols=[
+    showL?'<div class="kthv" style="color:#a8c4ff">ЛДСП</div>':'',
+    showP?'<div class="kthv" style="color:#7dd5b0">Плёнка</div>':'',
+    showK?'<div class="kthv" style="color:#e8b07a">Краска</div>':''
+  ].filter((_,i)=>cols[i]).join('');
+  const totStyle=`display:grid;${colStyle};align-items:center;padding:4px 0`;
+  const crStyle=`display:grid;${colStyle};padding:4px 0`;
+  const thStyle=`display:grid;${colStyle};margin-bottom:8px`;
+
+  $("kp-doc").innerHTML=`
+  <div class="kh">
+    <div class="kh-glass"></div>
+    <div class="kh-orb1"></div>
+    <div class="kh-orb2"></div>
+    <div class="kh-inner">
+      <div class="klr">
+        <div class="klb"><div class="klm">M</div><div class="kld"></div></div>
+        <div>
+          <div class="kbn">MEBEL<span>OFF</span></div>
+          <div class="kbs">Мебель на заказ · Сатпаев</div>
+        </div>
+      </div>
+      <div class="khb">
+        <div class="kct">
+          <strong>+7 707 540 7626</strong>
+          <div>mebeloff.kz</div>
+          <div>Абая 68, БЦ, каб. 4</div>
+        </div>
+        <div class="kdi">
+          <div class="kdl">Коммерческое предложение</div>
+          <div class="kdn">#${num}</div>
+          <div class="kdd">${today}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="kcb">
+    <div class="kcl"><div class="kcll">Клиент</div><div class="kclv">${client}</div></div>
+    <div class="kcl"><div class="kcll">Объект</div><div class="kclv">${obj}</div></div>
+    <div class="kcl"><div class="kcll">Менеджер</div><div class="kclv">Дали</div></div>
+  </div>
+
+  <div class="kvw">
+    <div class="kvt">Варианты исполнения</div>
+    <div class="kvs">
+      ${showL?`<div class="kv${showP||showK?'':' pop'}">
+        <div class="kv-tag ldsp">⬡ ЛДСП</div>
+        <div class="kvp">${fm(C.BL.tot)}</div>
+        <div class="kvc">кредит / рассрочка: <span>${fm(C.BL.credit)}</span></div>
+      </div>`:''}
+      ${showP?`<div class="kv pop">
+        <div class="kvbg"> Популярный</div>
+        <div class="kv-tag plen">◈ МДФ Плёнка</div>
+        <div class="kvp">${fm(C.BP.tot)}</div>
+        <div class="kvc">кредит / рассрочка: <span>${fm(C.BP.credit)}</span></div>
+      </div>`:''}
+      ${showK?`<div class="kv">
+        <div class="kv-tag kr">◆ МДФ Краска</div>
+        <div class="kvp">${fm(C.BK.tot)}</div>
+        <div class="kvc">кредит / рассрочка: <span>${fm(C.BK.credit)}</span></div>
+      </div>`:''}
+    </div>
+  </div>
+
+  <div style="${hdrStyle}">
+    <div class="kchl">Комплектация</div>
+    ${hdrCols}
+  </div>
+  ${kR?`<div class="ksl t"> Корпус</div>${kR}`:""}
+  ${(showL&&fL)||(showP&&fP)||(showK&&fK)?`<div class="ksl t"> Фасад</div>${showL?fL:""}${showP?fP:""}${showK?fK:""}`:""}
+  ${fRows?`<div class="ksl t"> Фурнитура</div>${fRows}`:""}
+  ${dRow?`<div class="ksl t"> Доставка</div>${dRow}`:""}
+  ${eRows?`<div class="ksl g">✦ Дополнительно</div>${eRows}`:""}
+  <div class="kf-spacer"></div>
+
+  <div class="kt">
+    <div style="${thStyle}"><div></div>${thCols}</div>
+    <div style="${totStyle}"><div class="ktrl">Итого клиенту</div>${totCols}</div>
+    <div class="ktd"></div>
+    <div style="${crStyle}"><div class="kcrl">💳 Кредит / рассрочка</div>${crCols}</div>
+  </div>
+
+  <div class="kco">
+    <div class="kcot">Условия сотрудничества</div>
+    <div class="kcog">
+      <div class="kcon"><div class="kcd">OK</div><span>Срок изготовления 15–45 рабочих дней</span></div>
+      <div class="kcon"><div class="kcd">OK</div><span>Предоплата 50% при подписании договора</span></div>
+      <div class="kcon"><div class="kcd">OK</div><span>Остаток оплачивается при доставке</span></div>
+      <div class="kcon"><div class="kcd">OK</div><span>КП действительно 7 календарных дней</span></div>
+    </div>
+  </div>
+
+  <div class="kf">
+    <div class="kfl">
+      <strong>Дали</strong>
+      <div class="kf-contacts">
+        <div class="kf-contact"><i class="ti ti-phone"></i>+7 707 540 7626</div>
+        <div class="kf-contact"><i class="ti ti-world"></i>mebeloff.kz</div>
+        <div class="kf-contact"><i class="ti ti-map-pin"></i>Абая 68, БЦ, каб. 4, Сатпаев</div>
+      </div>
+    </div>
+    <div class="kfr">КП не является публичной офертой. Цены действительны на дату выдачи.</div>
+  </div>
+  <div style="height:16px"></div>`;
+
+  page("kp");
+  window.scrollTo(0,0);
+}
+
+// ════════════════════════════════════════════════════════════
+// MebelOFF AI ПОМОЩНИК
+// ════════════════════════════════════════════════════════════
+
+// ── Состояние чата ───────────────────────────────────────────
+const aiHistory = []; // {role:'user'|'assistant', content}
+let aiLoading = false;
+
+// ── API ключ и режим ─────────────────────────────────────────
+let aiMode = 'local'; // 'local' | 'api'
+
+function aiKeyLoad(){
+  return localStorage.getItem('moff_ai_key')||'';
+}
+
+function aiSetMode(mode){
+  aiMode = mode;
+  const btnLocal = document.getElementById('ai-btn-local');
+  const btnApi   = document.getElementById('ai-btn-api');
+  const keyRow   = document.getElementById('ai-key-row');
+  const status   = document.getElementById('ai-mode-status');
+  const bar      = document.getElementById('ai-key-bar');
+  if(btnLocal) btnLocal.className = 'ai-mode-btn' + (mode==='local'?' active-local':'');
+  if(btnApi)   btnApi.className   = 'ai-mode-btn' + (mode==='api'?' active-api':'');
+  if(keyRow)   keyRow.classList.toggle('show', mode==='api');
+  if(bar){ bar.style.background = mode==='api'?'#fffbeb':'#f0fdf4'; bar.style.borderColor = mode==='api'?'#fde68a':'#bbf7d0'; }
+  if(status){
+    if(mode==='local') status.textContent = 'Авто-режим — работает без ключа';
+    else {
+      const k = aiKeyLoad();
+      status.textContent = k ? 'Claude API: ключ подключён' : 'Введите API ключ ниже';
+    }
+  }
+  // Если переключились на API и нет ключа — показываем поле
+  if(mode==='api' && !aiKeyLoad()){
+    setTimeout(()=>document.getElementById('ai-key-inp')?.focus(), 100);
+  }
+}
+window.aiSetMode = aiSetMode;
+function aiKeySave(){
+  const inp = document.getElementById('ai-key-inp');
+  const key = (inp?.value||'').trim();
+  if(!key){ alert('Введите API ключ'); return; }
+  if(!key.startsWith('sk-ant-')){
+    alert('Ключ должен начинаться с sk-ant-'); return;
+  }
+  localStorage.setItem('moff_ai_key', key);
+  aiSetMode('api');
+  const box = document.getElementById('ai-messages');
+  if(box){
+    box.innerHTML = '';
+    aiRenderMsg('ai', 'API ключ сохранён! Claude API подключён. Опишите задачу.');
+  }
+}
+function aiKeyUpdateUI(key){
+  const bar  = document.getElementById('ai-key-bar');
+  const inp  = document.getElementById('ai-key-inp');
+  const lbl  = document.getElementById('ai-key-lbl');
+  const save = document.getElementById('ai-key-save');
+  if(!bar) return;
+  if(key){
+    // Показываем маскированный ключ + кнопку изменить
+    bar.innerHTML = `<span id="ai-key-lbl" style="font-size:10px;color:#065f46">OK API ключ подключён</span>
+      <button id="ai-key-edit" onclick="aiKeyEdit()">Изменить</button>`;
+    bar.style.background='#d1fae5';
+    bar.style.borderBottom='1px solid #6ee7b7';
+  }
+}
+function aiKeyEdit(){
+  const bar = document.getElementById('ai-key-bar');
+  if(!bar) return;
+  bar.style.background='#fffbeb';
+  bar.style.borderBottom='1px solid #fde68a';
+  bar.innerHTML = `<span id="ai-key-lbl" style="font-size:10px;color:#92400e"> API ключ:</span>
+    <input id="ai-key-inp" type="password" placeholder="sk-ant-api..." autocomplete="off"
+      style="flex:1;font-size:11px;border:1px solid #fcd34d;border-radius:6px;padding:5px 8px;outline:none;background:#fff;font-family:monospace;color:#334155"
+      onkeydown="if(event.key==='Enter')aiKeySave()">
+    <button onclick="aiKeySave()" style="padding:5px 10px;background:#f59e0b;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">Сохранить</button>`;
+}
+
+// ── Открыть/закрыть drawer ───────────────────────────────────
+function aiOpen(){
+  document.getElementById('ai-drawer').classList.add('open');
+  document.getElementById('ai-drawer-overlay').classList.add('open');
+  document.getElementById('ai-input').focus();
+  document.getElementById('ai-fab').classList.add('has-ctx');
+  // Инициализируем режим
+  aiSetMode(aiMode);
+}
+function aiClose(){
+  document.getElementById('ai-drawer').classList.remove('open');
+  document.getElementById('ai-drawer-overlay').classList.remove('open');
+}
+
+// ── Получить контекст текущей страницы ───────────────────────
+function aiGetContext(){
+  const activePage = document.querySelector('.pg.on')?.id || 'pg-calc';
+  let ctx = '';
+
+  // Текущий расчёт
+  if(C && C.BL){
+    ctx += `\nТекущий расчёт: ЛДСП ${fm(C.BL.tot)}, МДФ Плёнка ${fm(C.BP.tot)}, МДФ Краска ${fm(C.BK.tot)}.`;
+    ctx += `\nКорпус ЛДСП: ${C.ldspIt?.map(x=>x.n+'×'+x.q).join(', ')||'нет'}.`;
+    ctx += `\nФурнитура: ${C.fuIt?.map(x=>x.n+'×'+x.q).join(', ')||'нет'}.`;
+    ctx += `\nКухня: ${C.kuIt?.map(x=>x.n+'×'+x.q).join(', ')||'нет'}.`;
+  }
+
+  // Кухонный конфигуратор
+  if(activePage === 'pg-kitchen' && typeof KitchenState !== 'undefined'){
+    const lower = KitchenState.lower || [];
+    const upper = KitchenState.upper || [];
+    ctx += `\nКухня: ${lower.length} нижних (${lower.map(m=>m.width+'мм '+m.type).join(', ')}), ${upper.length} верхних.`;
+    ctx += `\nГлубина кухни: ${document.getElementById('k-depth')?.value||501}мм, высота: ${document.getElementById('k-floor-h')?.value||850}мм.`;
+  }
+
+  // Шкафный конфигуратор
+  if(activePage === 'pg-conf' && typeof sections !== 'undefined' && sections.length){
+    ctx += `\nШкаф: ${sections.length} секций. `;
+    ctx += sections.map((s,i)=>`Секция ${i+1}: ${s.width}×${s.height}мм, глубина ${s.depth}мм${s.hasRod?', штанга':''}${s.antresol?.enabled?', антресоль '+s.antresol.height+'мм':''}`).join('. ');
+  }
+
+  // База материалов
+  if(DB && DB.ldsp?.length){
+    ctx += `\nДоступные цвета ЛДСП: ${DB.ldsp.map(x=>x.n).join(', ')}.`;
+  }
+  if(DB && DB.furn?.length){
+    const cats = [...new Set(DB.furn.map(x=>x.cat))];
+    ctx += `\nКатегории фурнитуры: ${cats.join(', ')}.`;
+  }
+  if(DB && DB.kuh?.length){
+    const kuhCats = [...new Set(DB.kuh.map(x=>x.cat))];
+    ctx += `\nКухонные аксессуары: ${kuhCats.join(', ')}.`;
+  }
+
+  return ctx;
+}
+
+// ── Системный промт ──────────────────────────────────────────
+function aiGetSystemPrompt(){
+  const ctx = aiGetContext();
+  return `Ты ИИ-помощник для мебельной компании MebelOFF (Сатпаев, Казахстан). Помогаешь менеджерам и клиентам быстро заполнять калькулятор мебели на заказ.
+
+ТЕКУЩИЙ КОНТЕКСТ ПРИЛОЖЕНИЯ:${ctx}
+
+СТАНДАРТЫ ПРОИЗВОДСТВА:
+- Толщина плиты ЛДСП: 16мм
+- Столешница кухни: 38мм
+- Ножки: 100мм
+- Стандартная глубина кухни: 501мм (внешняя)
+- Высота кухонного корпуса: 712мм (100+712+38=850мм)
+- Телескопы: 501мм корпус → 400мм направляющие
+- Листы ЛДСП: 2750×1830 или 2800×2070мм
+
+КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА ОТВЕТА:
+1. Всегда отвечай на русском языке. Будь кратким — 2-4 предложения максимум.
+2. ОБЯЗАТЕЛЬНО добавляй <actions> блок если запрос касается кухни, шкафа или настройки мебели.
+3. НЕ пиши таблицы, списки планировок или Markdown — только краткий текст + actions.
+4. <actions> блок ВСЕГДА в конце ответа, ВСЕГДА валидный JSON массив.
+
+ПРИМЕР — запрос "кухня 3 метра белый фасад мойка":
+Настраиваю кухню 3000мм с белым фасадом, мойкой и духовкой.
+<actions>
+[{"action":"navigateTo","page":"kitchen"},{"action":"clearKitchen"},{"action":"setKitchenGlobal","floorH":850,"depth":501},{"action":"addKitchenLower","width":600,"type":"drawers","facade":"door"},{"action":"addKitchenLower","width":600,"type":"shelves","facade":"door"},{"action":"addKitchenLower","width":600,"type":"sink","facade":"none"},{"action":"addKitchenLower","width":600,"type":"appliance","facade":"none"},{"action":"addKitchenLower","width":600,"type":"shelves","facade":"door"},{"action":"addKitchenUpper","width":600,"height":720,"facade":"door"},{"action":"addKitchenUpper","width":600,"height":720,"facade":"door"},{"action":"addKitchenUpper","width":600,"height":720,"facade":"door"}]
+</actions>
+
+ПРИМЕР — запрос "шкаф 2.4м 3 секции штанга":
+Настраиваю шкаф-купе 2400мм, 3 секции со штангой.
+<actions>
+[{"action":"navigateTo","page":"conf"},{"action":"clearWardrobe"},{"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":true,"shelves":2},{"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":true,"shelves":2},{"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":false,"shelves":3}]
+</actions>
+
+ДОСТУПНЫЕ ACTIONS:
+- {"action":"navigateTo","page":"kitchen|conf|calc"} — перейти на страницу (ВСЕГДА первым)
+- {"action":"clearKitchen"} — очистить кухню
+- {"action":"clearWardrobe"} — очистить шкаф
+- {"action":"setKitchenGlobal","floorH":850,"depth":501} — размеры кухни
+- {"action":"addKitchenLower","width":600,"type":"shelves|drawers|sink|appliance","facade":"door|none"}
+- {"action":"addKitchenUpper","width":600,"height":720,"facade":"door|none"}
+- {"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":true,"shelves":2}
+- {"action":"addLdsp","colorName":"Белый Глянец","qty":3.5}
+- {"action":"addFurn","cat":"Петля","qty":8}
+- {"action":"setHdfQty","qty":2.5}
+- {"action":"setKromQty","qty":45}
+- {"action":"explain"} — только для вопросов о цене/экономии
+
+ПРАВИЛА КУХНИ: ширина модулей кратна 100мм (400-900мм), sink и appliance всегда facade:"none".
+ПРАВИЛА ШКАФА: ширина секции 600-1200мм, hasRod:true = штанга.
+НЕ придумывай цены. Вопросы не о мебели — вежливо отклони.`;
+}
+
+// ── Отрисовка сообщений ──────────────────────────────────────
+function aiRenderMsg(role, text, extra){
+  const box = document.getElementById('ai-messages');
+  const div = document.createElement('div');
+  div.className = 'ai-msg ' + (role==='user'?'user':'ai') + (extra||'');
+  // Форматирование: **bold**, `code`
+  div.innerHTML = text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
+    .replace(/`(.+?)`/g,'<code>$1</code>')
+    .replace(/\n/g,'<br>');
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  return div;
+}
+
+// ── Выполнение команд из ответа ─────────────────────────────
+function aiExecuteActions(actionsJson){
+  let applied = 0;
+  let needKitchenRender = false;
+  let needConfRender = false;
+  let navigatePage = null;
+
+  actionsJson.forEach(act => {
+    try {
+      switch(act.action){
+
+        case 'clearKitchen':
+          if(typeof KitchenState!=='undefined'){
+            KitchenState.lower=[]; KitchenState.upper=[];
+            KitchenState.lId=0; KitchenState.uId=0;
+            needKitchenRender=true; applied++;
+          }
+          break;
+
+        case 'setKitchenGlobal':{
+          if(act.floorH){ const e=document.getElementById('k-floor-h'); if(e) e.value=act.floorH; }
+          if(act.depth){ const e=document.getElementById('k-depth'); if(e) e.value=act.depth; }
+          needKitchenRender=true; applied++;
+          break;
+        }
+
+        case 'addKitchenLower':
+          if(typeof KitchenState!=='undefined' && typeof kMkLower==='function'){
+            const m=kMkLower(act.width||600);
+            m.type=act.type||'shelves';
+            m.facade=act.facade||'door';
+            if(m.type==='sink'||m.type==='appliance') m.facade='none';
+            KitchenState.lower.push(m);
+            needKitchenRender=true; applied++;
+          }
+          break;
+
+        case 'addKitchenUpper':
+          if(typeof KitchenState!=='undefined' && typeof kMkUpper==='function'){
+            const m=kMkUpper(act.width||600);
+            m.height=act.height||720;
+            m.facade=act.facade||'door';
+            KitchenState.upper.push(m);
+            needKitchenRender=true; applied++;
+          }
+          break;
+
+        case 'clearWardrobe':{
+          // Используем сеттер: sections=[] в module через defineProperty
+          window._ai_sections = [];
+          needConfRender=true; applied++;
+          break;
+        }
+        case 'addWardobeSection':{
+          const mkS = window._ai_mkSection;
+          if(mkS){
+            const s = mkS();
+            s.width  = act.width  || 800;
+            s.height = act.height || 2200;
+            s.depth  = act.depth  || 600;
+            s.hasRod = act.hasRod || false;
+            if(act.shelves){
+              const step = Math.round(s.height / (act.shelves + 1));
+              s.shelves = Array.from({length: act.shelves}, (_, i) => ({id: s.shelfId++, height: step*(i+1)}));
+            }
+            window._ai_sections.push(s); // геттер даёт актуальный sections[]
+            needConfRender = true; applied++;
+          }
+          break;
+        }
+
+        case 'addLdsp':{
+          if(!DB.ldsp?.length) break;
+          const idx=DB.ldsp.findIndex(x=>x.n.toLowerCase().includes((act.colorName||'').toLowerCase()));
+          const di=idx>=0?idx:0;
+          const i=ST.ldsp.length; ST.ldsp.push(di);
+          const c=$('ldsp-list'); if(!c) break;
+          if(i===0) c.innerHTML='';
+          const d=document.createElement('div');
+          d.id='lr'+i; if(i>0) d.className='ib'; d.style.marginTop='8px';
+          const o=DB.ldsp.map((x,j)=>`<option value="${j}"${j===di?' selected':''}>${x.n} — ${x.p.toLocaleString('ru')}₸</option>`).join('');
+          d.innerHTML=`<div class="fr"><select id="ls${i}" onchange="ST.ldsp[${i}]=+this.value;recalc()">${o}</select><button class="db" onclick="$('lr${i}').style.display='none';ST.ldsp[${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="lq${i}" value="${act.qty||1}" min="0" step="0.01" onchange="recalc()"><span class="fp">${DB.ldsp[di].p.toLocaleString('ru')}₸/л</span></div>`;
+          c.appendChild(d); const cb=$('cb-korp'); if(cb&&!cb.classList.contains('op')) tog('korp');
+          applied++; break;
+        }
+
+        case 'addFurn':
+          if(typeof kAddFurnRow==='function' && act.cat){
+            kAddFurnRow(act.cat, act.qty||1); applied++;
+          }
+          break;
+
+        case 'setHdfQty':{
+          const e=$('hdf-qty'); if(e){e.value=act.qty||0; applied++;}
+          break;
+        }
+        case 'setKromQty':{
+          const e=$('krom-qty'); if(e){e.value=act.qty||0; applied++;}
+          break;
+        }
+
+        case 'navigateTo':
+          navigatePage=act.page; break;
+      }
+    } catch(err){ console.warn('AI action error:', act.action, err); }
+  });
+
+  // Применяем рендеры
+  if(needKitchenRender && typeof kRenderPanel==='function'){
+    kRenderPanel();
+    if(typeof kFillTopSelect==='function') kFillTopSelect();
+    if(typeof kRender==='function') setTimeout(()=>kRender(), 50);
+  }
+  if(needConfRender){
+    const doConfRender = () => {
+      if(typeof window._ai_renderPanel==='function') window._ai_renderPanel();
+      if(typeof window._ai_updateStats==='function') window._ai_updateStats();
+      if(typeof window._ai_render3D==='function')    window._ai_render3D();
+    };
+    if(navigatePage==='conf'){
+      page('conf'); // initConf внутри
+      setTimeout(doConfRender, 200); // ждём init Three.js
+      navigatePage = null;
+    } else if(document.getElementById('pg-conf')?.classList.contains('on')){
+      setTimeout(doConfRender, 50);
+    } else {
+      doConfRender();
+    }
+  }
+  if(applied>0) recalc();
+  if(navigatePage) { page(navigatePage); }
+
+  return applied;
+}
+
+// ── Парсинг actions из ответа ────────────────────────────────
+function aiParseActions(text){
+  const m = text.match(/<actions>([\s\S]*?)<\/actions>/);
+  if(!m) return null;
+  try { return JSON.parse(m[1].trim()); }
+  catch(e){ return null; }
+}
+
+// ── Очистить actions из текста ───────────────────────────────
+function aiCleanText(text){
+  return text.replace(/<actions>[\s\S]*?<\/actions>/g,'').trim();
+}
+
+// ── Локальный rule-based парсер (без API) ────────────────────
+function aiLocalProcess(text){
+  const t = text.toLowerCase();
+  const actions = [];
+  let reply = '';
+
+  // Числа из текста
+  function extractNum(str, patterns){
+    for(const p of patterns){
+      const m = str.match(p);
+      if(m) return parseFloat(m[1].replace(',','.'));
+    }
+    return null;
+  }
+
+  // Размер в метрах или мм
+  function extractSize(str){
+    const mM = str.match(/(\d+[\.,]?\d*)\s*м/);
+    if(mM) return Math.round(parseFloat(mM[1].replace(',','.'))*1000);
+    const mm = str.match(/(\d{3,4})\s*мм/);
+    if(mm) return parseInt(mm[1]);
+    const bare = str.match(/(\d+[\.,]\d+)/);
+    if(bare){ const v=parseFloat(bare[1].replace(',','.')); return v<10?Math.round(v*1000):Math.round(v); }
+    return null;
+  }
+
+  // Кол-во секций/модулей
+  function extractCount(str){
+    const m = str.match(/(\d+)\s*(секц|модул|шкаф|штук|шт)/);
+    if(m) return parseInt(m[1]);
+    const words = {'один':1,'одну':1,'одна':1,'два':2,'две':2,'три':3,'четыре':4,'пять':5,'шесть':6};
+    for(const [w,n] of Object.entries(words)) if(str.includes(w)) return n;
+    return null;
+  }
+
+  // ── КУХНЯ ────────────────────────────────────────────────────
+  if(t.includes('кухн') || t.includes('кухон')){
+    actions.push({action:'navigateTo', page:'kitchen'});
+    actions.push({action:'clearKitchen'});
+
+    const totalW = extractSize(t) || 3000;
+    const depth = t.includes('501') ? 501 : t.includes('600') ? 600 : 501;
+    const floorH = t.includes('900') ? 900 : t.includes('950') ? 950 : 850;
+    actions.push({action:'setKitchenGlobal', floorH, depth});
+
+    // Разбиваем на модули
+    const hasSink    = t.includes('мойк');
+    const hasAppl    = t.includes('духовк') || t.includes('печ') || t.includes('техник') || t.includes('холодил');
+    const hasDrawers = t.includes('ящик');
+
+    // Стандартные ширины модулей
+    const sinkW  = 600, applW = 600;
+    let remaining = totalW;
+    let modules = [];
+
+    if(hasSink){
+      modules.push({type:'sink', w:sinkW});
+      remaining -= sinkW;
+    }
+    if(hasAppl){
+      modules.push({type:'appliance', w:applW});
+      remaining -= applW;
+    }
+
+    // Остаток делим на модули по 600мм
+    const nReg = Math.max(1, Math.round(remaining / 600));
+    const regW  = Math.round(remaining / nReg / 100) * 100;
+    for(let i=0; i<nReg; i++){
+      modules.push({type: hasDrawers ? 'drawers' : 'shelves', w: regW});
+    }
+
+    // Позиция мойки/техники
+    const sinkRight  = t.includes('мойка справ') || t.includes('справа мойк');
+    const applRight  = t.includes('духовк справ') || t.includes('справа духовк');
+    const sinkLeft   = t.includes('мойка слев') || t.includes('слева мойк');
+    const sinkCenter = t.includes('мойка в центр') || t.includes('по центру') || t.includes('в центр');
+
+    // Пересортируем по позиции
+    const sinkMod  = modules.find(m=>m.type==='sink');
+    const applMod  = modules.find(m=>m.type==='appliance');
+    const regMods  = modules.filter(m=>m.type!=='sink'&&m.type!=='appliance');
+    const half     = Math.floor(regMods.length/2);
+
+    let ordered = [];
+    if(sinkCenter && sinkMod){
+      ordered = [...regMods.slice(0,half), sinkMod, ...(applMod?[applMod]:[]), ...regMods.slice(half)];
+    } else if(sinkRight && sinkMod){
+      ordered = [...regMods, ...(applMod?[applMod]:[]), sinkMod];
+    } else if(sinkLeft && sinkMod){
+      ordered = [sinkMod, ...(applMod?[applMod]:[]), ...regMods];
+    } else {
+      ordered = modules;
+    }
+
+    ordered.forEach(m => actions.push({action:'addKitchenLower', width:m.w, type:m.type, facade: m.type==='sink'||m.type==='appliance' ? 'none' : 'door'}));
+
+    // Верхние шкафы — половина нижних
+    const upperCount = Math.max(1, Math.floor(ordered.length * 0.6));
+    const upperW = Math.round(totalW / upperCount / 100) * 100;
+    for(let i=0; i<upperCount; i++) actions.push({action:'addKitchenUpper', width:upperW, height:720, facade:'door'});
+
+    // Цвет фасада
+    const colorMap = {
+      'бел':'Белый', 'глянц':'Белый Глянец', 'сонома':'Сонома', 'вотан':'Вотан',
+      'сер':'Серый Светлый', 'черн':'Черный', 'зелен':'Зеленый темный',
+      'крем':'Слоновая кость', 'беж':'Бежевый'
+    };
+    let colorName = '';
+    for(const [k,v] of Object.entries(colorMap)){ if(t.includes(k)){ colorName=v; break; } }
+    if(colorName) actions.push({action:'addLdsp', colorName, qty:0});
+
+    const nLower = ordered.length;
+    reply = 'Кухня настроена: ' + nLower + ' нижних модулей (' +
+      ordered.map(m=>m.w+'мм '+m.type).join(', ') + '), ' +
+      upperCount + ' верхних. Общая ширина ~' + totalW + 'мм.';
+    if(colorName) reply += ' Цвет: ' + colorName + '.';
+    reply += '\n\nПроверьте в 3D и при необходимости скорректируйте.';
+  }
+
+  // ── ШКАФ-КУПЕ ────────────────────────────────────────────────
+  else if(t.includes('шкаф') || t.includes('купе') || t.includes('гардероб') || t.includes('секц')){
+    actions.push({action:'navigateTo', page:'conf'});
+    actions.push({action:'clearWardrobe'});
+
+    const totalW  = extractSize(t) || 2400;
+    const height  = extractNum(t, [/высот[аы]\s*(\d+)/,/(\d{4})\s*мм\s*высот/]) || 2200;
+    const depth   = extractNum(t, [/глубин[аы]\s*(\d+)/,/(\d{3})\s*мм\s*глубин/]) || 600;
+    const nSec    = extractCount(t) || Math.max(2, Math.round(totalW/800));
+    const hasRod  = t.includes('штанг') || t.includes('плать') || t.includes('вешал');
+    const nShelves= extractNum(t,[/(\d+)\s*пол/]) || (hasRod ? 2 : 3);
+
+    const secW = Math.round(totalW / nSec / 10) * 10;
+    for(let i=0; i<nSec; i++){
+      actions.push({action:'addWardobeSection', width:secW, height:Math.round(height), depth:Math.round(depth), hasRod, shelves:Math.round(nShelves)});
+    }
+
+    reply = 'Шкаф настроен: ' + nSec + ' секций по ' + secW + 'мм, высота ' + height + 'мм' +
+      (hasRod ? ', со штангой' : '') + ', ' + nShelves + ' полки в секции.' +
+      '\n\nОбщая ширина: ' + totalW + 'мм. Проверьте в 3D.';
+  }
+
+  // ── ЦЕНА / РАСЧЁТ ────────────────────────────────────────────
+  else if(t.includes('цен') || t.includes('стоим') || t.includes('почему') || t.includes('дорог') || t.includes('сколько')){
+    if(C && C.BL && C.BL.tot > 0){
+      const base  = Math.round(C.vK + C.vFu + C.vKu);
+      const koef  = Math.round(C.BL.aK - C.BL.base);
+      const extra = Math.round(C.BL.tot - C.BL.aK);
+      reply = 'Расчёт стоимости (ЛДСП вариант):\n\n' +
+        '**Материалы и фурнитура:** ' + base.toLocaleString('ru') + ' ₸\n' +
+        '**Наценка (коэф.):** +' + koef.toLocaleString('ru') + ' ₸\n' +
+        (extra > 0 ? '**Доп. услуги:** +' + extra.toLocaleString('ru') + ' ₸\n' : '') +
+        '**Итого клиенту:** ' + C.BL.tot.toLocaleString('ru') + ' ₸\n' +
+        '**В рассрочку:** ' + C.BL.credit.toLocaleString('ru') + ' ₸\n\n' +
+        'МДФ Плёнка: ' + C.BP.tot.toLocaleString('ru') + ' ₸' +
+        (C.BK.tot > 0 ? '\nМДФ Краска: ' + C.BK.tot.toLocaleString('ru') + ' ₸' : '');
+    } else {
+      reply = 'Расчёт пустой. Сначала добавьте материалы в калькулятор или настройте кухню/шкаф.';
+    }
+    actions.push({action:'explain'});
+  }
+
+  // ── СЭКОНОМИТЬ ───────────────────────────────────────────────
+  else if(t.includes('сэконом') || t.includes('дешевл') || t.includes('снизит') || t.includes('уменьш')){
+    reply = 'Способы снизить стоимость:\n\n' +
+      '**1. ЛДСП вместо МДФ** — разница обычно 15-25%\n' +
+      '**2. Меньше фасадов** — открытые полки вместо дверей\n' +
+      '**3. Стандартные размеры** — 600мм модули оптимальны\n' +
+      '**4. Без антресоли** — упрощает конструкцию\n' +
+      '**5. Цокольные ящики вместо выдвижных** — дешевле на 30%\n\n' +
+      'Хотите пересчитать с другими параметрами?';
+    actions.push({action:'explain'});
+  }
+
+  // ── ПОМОЩЬ ───────────────────────────────────────────────────
+  else {
+    reply = 'Я понимаю запросы вида:\n\n' +
+      '- "Кухня 3 метра, белый глянец, мойка и духовка"\n' +
+      '- "Шкаф-купе 2.4м, 3 секции, штанга"\n' +
+      '- "Почему такая цена?"\n' +
+      '- "Как сэкономить?"\n\n' +
+      'Или введите API ключ (console.anthropic.com) для полноценного ИИ.';
+    actions.push({action:'explain'});
+  }
+
+  return {reply, actions};
+}
+
+// ── Отправить сообщение ──────────────────────────────────────
+async function aiSend(){
+  if(aiLoading) return;
+  const input = document.getElementById('ai-input');
+  const text  = (input.value||'').trim();
+  if(!text) return;
+
+  input.value='';
+  input.style.height='36px';
+  aiRenderMsg('user', text);
+  aiHistory.push({role:'user', content:text});
+
+  aiLoading=true;
+  document.getElementById('ai-send-btn').disabled=true;
+
+  const thinkDiv = aiRenderMsg('ai', '...', ' thinking');
+
+  try {
+    const apiKey = aiKeyLoad();
+
+    if(aiMode === 'api' && apiKey){
+      // ── Режим Claude API ──────────────────────────────────────
+      const messages = [...aiHistory.slice(-8)];
+      // Используем Cloudflare Worker прокси (решает CORS)
+      const resp = await fetch('https://divine-union-9ecd.ashikbaevdali.workers.dev', {
+        method: 'POST',
+        mode: 'cors',
+        headers: {
+          'Content-Type': 'application/json'
+          // Ключ хранится в Cloudflare Variables, не передаём его
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1000,
+          system: aiGetSystemPrompt(),
+          messages: messages
+        })
+      });
+
+      if(!resp.ok){
+        const err = await resp.json().catch(()=>({}));
+        if(resp.status===401||resp.status===403){
+          aiKeyEdit();
+          throw new Error('Неверный API ключ. Проверьте ключ выше.');
+        }
+        throw new Error(err?.error?.message || ('HTTP ' + resp.status));
+      }
+
+      const data = await resp.json();
+      const rawText = data.content?.map(c=>c.text||'').join('') || '(нет ответа)';
+      thinkDiv.remove();
+      const actions  = aiParseActions(rawText);
+      const cleanTxt = aiCleanText(rawText);
+      const msgDiv   = aiRenderMsg('ai', cleanTxt||'Готово!');
+      if(actions && actions.length){
+        const n = aiExecuteActions(actions);
+        if(n>0){
+          const badge = document.createElement('div');
+          badge.className='ai-applied-badge';
+          badge.textContent = 'OK Применено ' + n + ' изменений';
+          msgDiv.appendChild(badge);
+        }
+      }
+      aiHistory.push({role:'assistant', content:rawText});
+
+    } else {
+      // ── Локальный режим (без API) ─────────────────────────────
+      await new Promise(r=>setTimeout(r, 400)); // имитация задержки
+      thinkDiv.remove();
+      const result = aiLocalProcess(text);
+      const msgDiv = aiRenderMsg('ai', result.reply);
+      const realActions = result.actions.filter(a=>a.action!=='explain');
+      if(realActions.length){
+        const n = aiExecuteActions(realActions);
+        if(n>0){
+          const badge = document.createElement('div');
+          badge.className='ai-applied-badge';
+          badge.textContent = 'OK Применено ' + n + ' изменений';
+          msgDiv.appendChild(badge);
+        }
+      }
+      aiHistory.push({role:'assistant', content:result.reply});
+    }
+
+  } catch(err){
+    thinkDiv.remove();
+    var errMsg = err.message || String(err);
+    if(errMsg.includes('fetch') || errMsg.includes('CORS') || errMsg.includes('Failed') || errMsg.includes('NetworkError')){
+      // CORS или сетевая ошибка — переключаем на локальный режим
+      aiSetMode('local');
+      aiRenderMsg('ai', 'Claude API недоступен с GitHub Pages (CORS). Переключился на Авто-режим — повторите запрос.', ' error');
+    } else {
+      aiRenderMsg('ai', 'Ошибка: ' + errMsg, ' error');
+    }
+  }
+
+  aiLoading=false;
+  document.getElementById('ai-send-btn').disabled=false;
+  document.getElementById('ai-input').focus();
+}
+
+function aiSendChip(text){
+  document.getElementById('ai-input').value = text;
+  aiSend();
+}
+
+function fullReset(){
+  Object.keys(ST).forEach(k=>ST[k]=[]);
+  ["ldsp-list","fldsp-list","fplen-list","fkr-list","furn-list","kuh-list","shk-list","svet-list","dop-list","vit-list"].forEach(id=>{const e=$(id);if(e)e.innerHTML='<p class="hint">Нет позиций</p>';});
+  ["hdf-qty","krom-qty","d-sat","d-pdm","svet-inc","c-sl","c-sp","c-sk"].forEach(id=>{const e=$(id);if(e)e.value="0";});
+  document.querySelectorAll("[id^=wq]").forEach(e=>e.value="");
+  recalc();tab("calc");
+}
+
+// ===== МОСТ: 3D Конфигуратор → Калькулятор =====
+let confInitialized = false;
+
+function initConf() {
+  // Активируем стили конфигуратора
+  const styleEl = document.getElementById('conf-styles');
+  if (styleEl) styleEl.removeAttribute('style');
+  
+  // Three.js нужно инициализировать только один раз
+  if (!confInitialized) {
+    confInitialized = true;
+    // Запустим init конфигуратора после небольшой задержки
+    setTimeout(() => {
+      if (typeof window._confInit === 'function') window._confInit();
+    }, 100);
+  }
+  // Перерисуем 3D если уже инициализирован
+  if (typeof window.render3D === 'function') {
+    setTimeout(() => window.render3D(), 50);
+  }
+}
+
+function sendConfToCalc() {
+  if (typeof window.calcAllCosts === 'undefined') {
+    alert('Сначала перейдите во вкладку 3D и дождитесь загрузки'); return;
+  }
+  const d = window.calcAllCosts();
+  const mc = window._getMatChoice ? window._getMatChoice() : {};
+
+
+  const ldspEquiv    = Math.round((d.ldspEquiv    || 0) * 100) / 100;
+  const hdfEquiv     = Math.round((d.hdfEquiv     || 0) * 100) / 100;
+  const facLdspEquiv = Math.round((d.facLdspEquiv || 0) * 100) / 100;
+
+  // Сбрасываем калькулятор
+  Object.keys(ST).forEach(k => ST[k] = []);
+  ['ldsp-list','fldsp-list','fplen-list','fkr-list','furn-list','kuh-list','shk-list','svet-list','dop-list','vit-list']
+    .forEach(id => { const e = $(id); if(e) e.innerHTML = '<p class="hint">Нет позиций</p>'; });
+  ['hdf-qty','krom-qty','d-sat','d-pdm','svet-inc','c-sl','c-sp','c-sk'].forEach(id => {
+    const e = $(id); if(e) e.value = '0';
+  });
+
+  let imported = 0;
+
+  // ── Хелпер: добавить строку фурнитуры в furn-list ──────────
+  function addFurnRow(catName, qty) {
+    if (!qty || qty <= 0) return;
+    const arr = DB.furn;
+    const idx = arr.findIndex(x => x.cat === catName);
+    if (idx < 0) return; // нет такой категории в БД
+    const fi = ST.furn.length;
+    ST.furn.push({ p: arr[idx].p });
+    const fc = $('furn-list');
+    if (!fc) return;
+    if (fi === 0) fc.innerHTML = '';
+    const cats = [...new Set(arr.map(x => x.cat))];
+    const fd = document.createElement('div');
+    fd.id = 'furnr' + fi;
+    if (fi > 0) fd.className = 'ib';
+    fd.style.marginTop = '8px';
+    fd.innerHTML = `<div class="fr">
+      <select id="furnc${fi}" onchange="uC('furn',${fi})">${cats.map(c=>`<option value="${c}"${c===catName?' selected':''}>${c}</option>`).join('')}</select>
+      <button class="db" onclick="$('furnr${fi}').style.display='none';ST.furn[${fi}]=null;recalc()">✕</button>
+    </div>
+    <div class="fr" id="furnvf${fi}"></div>
+    <div class="fr">
+      <span class="lb">Кол-во</span>
+      <input class="qi" type="number" inputmode="decimal" id="furnq${fi}" placeholder="0" min="0" onchange="recalc()">
+      <span class="fp" id="furnpp${fi}">${arr[idx].p.toLocaleString('ru')}₸</span>
+    </div>`;
+    fc.appendChild(fd);
+    uC('furn', fi);
+    const aQEl = $('furnq'+fi);
+    if(aQEl) aQEl.value = qty;
+    const aCb = $('cb-furn');
+    if(aCb && !aCb.classList.contains('op')) tog('furn');
+    imported++;
+  }
+
+  // ── ЛДСП корпус ────────────────────────────────────────────
+  if (ldspEquiv > 0) {
+    const ldspName = mc.ldspName || '';
+    let ldspIdx = 0;
+    if (ldspName) {
+      const f = DB.ldsp.findIndex(x => x.n.toLowerCase().includes(ldspName.toLowerCase()) || ldspName.toLowerCase().includes(x.n.toLowerCase()));
+      if (f >= 0) ldspIdx = f;
+    }
+    const i = ST.ldsp.length;
+    ST.ldsp.push(ldspIdx);
+    const c = $('ldsp-list');
+    if (c) {
+      if (i === 0) c.innerHTML = '';
+      const d2 = document.createElement('div');
+      d2.id = 'lr' + i; if (i > 0) d2.className = 'ib'; d2.style.marginTop = '8px';
+      const o = DB.ldsp.map((x,j) => `<option value="${j}"${j===ldspIdx?' selected':''}>${x.n} — ${x.p.toLocaleString('ru')}₸</option>`).join('');
+      d2.innerHTML = `<div class="fr"><select id="ls${i}" onchange="ST.ldsp[${i}]=+this.value;$('lp${i}').textContent=DB.ldsp[+this.value].p.toLocaleString('ru')+'₸/л';recalc()">${o}</select><button class="db" onclick="$('lr${i}').style.display='none';ST.ldsp[${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="lq${i}" placeholder="0" min="0" step="0.01" onchange="recalc()"><span class="fp" id="lp${i}">${DB.ldsp[ldspIdx].p.toLocaleString('ru')}₸/л</span></div>`;
+      c.appendChild(d2);
+      $('lq' + i).value = ldspEquiv;
+      imported++;
+    }
+  }
+
+  // ── ЛДСП фасад ─────────────────────────────────────────────
+  if (facLdspEquiv > 0) {
+    const ldspName = mc.ldspName || '';
+    let ldspIdx = 0;
+    if (ldspName) {
+      const f = DB.ldsp.findIndex(x => x.n.toLowerCase().includes(ldspName.toLowerCase()) || ldspName.toLowerCase().includes(x.n.toLowerCase()));
+      if (f >= 0) ldspIdx = f;
+    }
+    const sec = 'fldsp';
+    const i = ST.fldsp.length; ST.fldsp.push(ldspIdx);
+    const c = $('fldsp-list');
+    if (c) {
+      if (i === 0) c.innerHTML = '';
+      const d2 = document.createElement('div');
+      d2.id = sec+'r'+i; if(i>0) d2.className='ib'; d2.style.marginTop='8px';
+      const o = DB.ldsp.map((x,j)=>`<option value="${j}"${j===ldspIdx?' selected':''}>${x.n} — ${x.p.toLocaleString('ru')}₸</option>`).join('');
+      d2.innerHTML = `<div class="fr"><select id="${sec}s${i}" onchange="ST['${sec}'][${i}]=+this.value;$('${sec}p${i}').textContent=DB.ldsp[+this.value].p.toLocaleString('ru')+'₸/л';recalc()">${o}</select><button class="db" onclick="$('${sec}r${i}').style.display='none';ST['${sec}'][${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="${sec}q${i}" placeholder="0" min="0" step="0.01" onchange="recalc()"><span class="fp" id="${sec}p${i}">${DB.ldsp[ldspIdx].p.toLocaleString('ru')}₸/л</span></div>`;
+      c.appendChild(d2); $('fldspq'+i).value = facLdspEquiv;
+      const cb = $('cb-fldsp'); if(cb && !cb.classList.contains('op')) tog('fldsp');
+      imported++;
+    }
+  }
+
+  // ── ХДФ ────────────────────────────────────────────────────
+  if (hdfEquiv > 0) {
+    const e = $('hdf-qty'); if (e) { e.value = hdfEquiv; imported++; }
+  }
+
+  // ── Кромка ─────────────────────────────────────────────────
+  const edgePm = Math.ceil((d.totalPm2 || 0) + (d.totalPm04 || 0));
+  if (edgePm > 0) {
+    const e = $('krom-qty'); if (e) { e.value = edgePm; imported++; }
+  }
+
+  // ── Фурнитура: Петли ───────────────────────────────────────
+  if ((d.totalHinges || 0) > 0) {
+    const arr = DB.furn;
+    const catName = 'Петля';
+    const hingeBrand = mc.hingeBrand || 'En-7';
+    const fi = ST.furn.length;
+    ST.furn.push({ p: 0 });
+    const fc = $('furn-list');
+    if (fc) {
+      if (fi === 0) fc.innerHTML = '';
+      const cats = [...new Set(arr.map(x => x.cat))];
+      const fd = document.createElement('div');
+      fd.id = 'furnr'+fi; if(fi>0) fd.className='ib'; fd.style.marginTop='8px';
+      fd.innerHTML = `<div class="fr"><select id="furnc${fi}" onchange="uC('furn',${fi})">${cats.map(c=>`<option value="${c}"${c===catName?' selected':''}>${c}</option>`).join('')}</select><button class="db" onclick="$('furnr${fi}').style.display='none';ST.furn[${fi}]=null;recalc()">✕</button></div><div class="fr" id="furnvf${fi}"></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="furnq${fi}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="furnpp${fi}">0₸</span></div>`;
+      fc.appendChild(fd);
+      uC('furn', fi);
+      // Синхронно выбираем бренд
+      const hFirmSel = $('furnf'+fi);
+      if(hFirmSel) { hFirmSel.value = hingeBrand; uCP('furn', fi); }
+      const hQEl = $('furnq'+fi);
+      if(hQEl) hQEl.value = d.totalHinges;
+      const hCb = $('cb-furn');
+      if(hCb && !hCb.classList.contains('op')) tog('furn');
+      imported++;
+    }
+  }
+
+  // ── Ручки (первая подходящая категория из Руч-*) ───────────
+  if ((d.totalHandles || 0) > 0) {
+    const ruchCat = ['Руч-Скоба','Руч-Скрытая','Руч-Торцевая'].find(c => DB.furn.some(x => x.cat === c)) || 'Руч-Скоба';
+    addFurnRow(ruchCat, d.totalHandles);
+  }
+
+  // ── Телескопы (направляющие) ──────────────────────────────
+  // Считаем суммарное кол-во ящиков по всем секциям
+  if (d.slideDetails && d.slideDetails.length > 0) {
+    // Группируем по типу телескопа — обычно один тип
+    d.slideDetails.forEach(function(sl) {
+      if (!sl.count) return;
+      var catName = sl.type || 'Телескоп';
+      // Ищем точную позицию в DB.furn по cat+vid+brand
+      var vidName = sl.length + 'мм';
+      var arr = DB.furn;
+      // Находим индекс с нужным vid и brand
+      var exactIdx = arr.findIndex(function(x) {
+        return x.cat === catName && x.vid === vidName && x.firm === sl.brand;
+      });
+      // Fallback: только по cat+vid
+      if (exactIdx < 0) exactIdx = arr.findIndex(function(x) {
+        return x.cat === catName && x.vid === vidName;
+      });
+      // Fallback: только по cat
+      if (exactIdx < 0) exactIdx = arr.findIndex(function(x) {
+        return x.cat === catName;
+      });
+      if (exactIdx < 0) return; // не нашли
+
+      var fi = ST.furn.length;
+      ST.furn.push({ p: arr[exactIdx].p });
+      var fc = $('furn-list');
+      if (!fc) return;
+      if (fi === 0) fc.innerHTML = '';
+
+      var cats = [];
+      var seen = {};
+      arr.forEach(function(x) { if (!seen[x.cat]) { seen[x.cat]=1; cats.push(x.cat); } });
+
+      // Строим DOM
+      var fd = document.createElement('div');
+      fd.id = 'furnr'+fi;
+      if (fi > 0) fd.className = 'ib';
+      fd.style.marginTop = '8px';
+
+      var row1 = document.createElement('div'); row1.className = 'fr';
+      var catSel = document.createElement('select');
+      catSel.id = 'furnc'+fi;
+      catSel.setAttribute('onchange', "uC('furn',"+fi+")");
+      cats.forEach(function(c) {
+        var o = document.createElement('option');
+        o.value = c; o.textContent = c;
+        if (c === catName) o.selected = true;
+        catSel.appendChild(o);
+      });
+      var delBtn = document.createElement('button');
+      delBtn.className = 'db'; delBtn.textContent = '✕';
+      delBtn.setAttribute('onclick', "$('furnr"+fi+"').style.display='none';ST.furn["+fi+"]=null;recalc()");
+      row1.appendChild(catSel); row1.appendChild(delBtn);
+
+      var vidDiv = document.createElement('div'); vidDiv.className = 'fr'; vidDiv.id = 'furnvf'+fi;
+
+      var row2 = document.createElement('div'); row2.className = 'fr';
+      var lbl = document.createElement('span'); lbl.className = 'lb'; lbl.textContent = 'Кол-во';
+      var qInp = document.createElement('input');
+      qInp.className = 'qi'; qInp.type = 'number'; qInp.id = 'furnq'+fi;
+      qInp.placeholder = '0'; qInp.min = '0';
+      qInp.setAttribute('onchange', 'recalc()');
+      qInp.value = sl.count;
+      var priceSpan = document.createElement('span');
+      priceSpan.className = 'fp'; priceSpan.id = 'furnpp'+fi;
+      priceSpan.textContent = arr[exactIdx].p.toLocaleString('ru') + '₸';
+      row2.appendChild(lbl); row2.appendChild(qInp); row2.appendChild(priceSpan);
+
+      fd.appendChild(row1); fd.appendChild(vidDiv); fd.appendChild(row2);
+      fc.appendChild(fd);
+
+      // uC строит подселект вида/бренда (catSel уже имеет selected=catName)
+      uC('furn', fi);
+      // Выбираем нужный vid и brand
+      var vSel = $('furnv'+fi);
+      var bSel = $('furnf'+fi);
+      if (vSel) vSel.value = vidName;
+      if (bSel && sl.brand && sl.brand !== '—') bSel.value = sl.brand;
+      uCP('furn', fi);
+      // Восстанавливаем qty (uCP мог сбросить)
+      $('furnq'+fi).value = sl.count;
+
+      var cb = $('cb-furn');
+      if (cb && !cb.classList.contains('op')) tog('furn');
+      imported++;
+    });
+  }
+
+  // ── Штанга ─────────────────────────────────────────────────
+  if ((d.totalRods || 0) > 0) {
+    addFurnRow('Штанга', d.totalRods);
+  }
+
+  // ── Ножки ──────────────────────────────────────────────────
+  if ((d.totalLegs || 0) > 0) {
+    addFurnRow('Ножки', d.totalLegs);
+  }
+
+  // ── Клиент из проекта ──────────────────────────────────────
+  const confClient = document.getElementById('proj-client-inp');
+  const confName   = document.getElementById('proj-name-inp');
+  if ($('kp-client') && confClient) $('kp-client').value = confClient.value;
+  if ($('kp-object') && confName)   $('kp-object').value = confName.value;
+
+  recalc();
+  page('calc');
+  tab('calc');
+  const korpCb = $('cb-korp');
+  if (korpCb && !korpCb.classList.contains('op')) tog('korp');
+
+  showStatus(`OK Импортировано: ЛДСП ${ldspEquiv} л, ХДФ ${hdfEquiv} л, кромка ${edgePm} пм, петли ${d.totalHinges||0} шт, ручки ${d.totalHandles||0} шт, ножки ${d.totalLegs||0} шт`, '#1a5252');
+  setTimeout(hideStatus, 5000);
+}
+
+// ===== КОНЕЦ МОСТА =====
+
+// ===== ИСТОРИЯ КП =====
+function getSnap(){
+  const snap={};
+  // Коэф и настройки
+  ["c-kl","c-rl","c-sl","c-taxl","c-crl","c-kp","c-rp","c-sp","c-taxp","c-crp","c-kk","c-rk","c-sk","c-taxk","c-crk",
+   "hdf-qty","krom-qty","d-sat","d-pdm","svet-inc","kp-client","kp-object","kp-num"].forEach(id=>{
+    const e=$(id);if(e)snap[id]=e.value;
+  });
+  // Работы
+  DB.works.forEach((_,i)=>{const e=$("wq"+i);if(e)snap["wq"+i]=e.value;});
+  // Витрины
+  ST.vit.forEach((x,i)=>{
+    if(x===null)return;
+    ["vw","vh","vn","vdel","vinc"].forEach(p=>{const e=$(p+i);if(e)snap[p+i]=e.value;});
+    const vst=$("vst"+i);if(vst)snap["vst"+i]=vst.value;
+    const vpr=$("vpr"+i);if(vpr)snap["vpr"+i]=vpr.value;
+  });
+  // Доп позиции
+  ST.dop.forEach((x,i)=>{
+    if(x===null)return;
+    ["dn","dp","dq"].forEach(p=>{const e=$(p+i);if(e)snap[p+i]=e.value;});
+  });
+  // ЛДСП
+  ST.ldsp.forEach((x,i)=>{
+    if(x===null||x===undefined)return;
+    const ls=$("ls"+i);if(ls)snap["ls"+i]=ls.value;
+    const lq=$("lq"+i);if(lq)snap["lq"+i]=lq.value;
+  });
+  // Простые секции
+  ["fldsp","fplen","fkr"].forEach(sec=>{
+    ST[sec].forEach((x,i)=>{
+      if(x===null||x===undefined)return;
+      const s=$(sec+"s"+i);if(s)snap[sec+"s"+i]=s.value;
+      const q=$(sec+"q"+i);if(q)snap[sec+"q"+i]=q.value;
+    });
+  });
+  // Кат секции
+  ["furn","kuh","shk","svet"].forEach(sec=>{
+    ST[sec].forEach((item,i)=>{
+      if(!item)return;
+      const c=$(sec+"c"+i);if(c)snap[sec+"c"+i]=c.value;
+      const v=$(sec+"v"+i);if(v)snap[sec+"v"+i]=v.value;
+      const f=$(sec+"f"+i);if(f)snap[sec+"f"+i]=f.value;
+      const q=$(sec+"q"+i);if(q)snap[sec+"q"+i]=q.value;
+    });
+  });
+  return snap;
+}
+function saveCalc(){
+  if(!C.BL){alert("Сначала добавьте позиции в расчёт");return;}
+  const client=$("kp-client")?.value||"Клиент";
+  const obj=$("kp-object")?.value||"";
+  const num=$("kp-num")?.value||"001";
+  const rec={
+    id:Date.now(),
+    date:new Date().toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"}),
+    client,obj,num,
+    totL:C.BL?.tot||0,totP:C.BP?.tot||0,totK:C.BK?.tot||0,
+    ST:JSON.parse(JSON.stringify(ST)),
+    snap:getSnap(),
+    vitCount:ST.vit.filter(x=>x!==null).length,
+    dopCount:ST.dop.filter(x=>x!==null).length
+  };
+  const hist=JSON.parse(localStorage.getItem("mebeloff_hist")||"[]");
+  hist.unshift(rec);
+  if(hist.length>50)hist.pop();
+  localStorage.setItem("mebeloff_hist",JSON.stringify(hist));
+  showStatus("OK Расчёт сохранён","#1D9E75");setTimeout(hideStatus,2000);
+}
+function renderHist(){
+  const hist=JSON.parse(localStorage.getItem("mebeloff_hist")||"[]");
+  const c=$("hist-list");
+  if(!hist.length){c.innerHTML='<p class="hint" style="padding:30px 0">Нет сохранённых расчётов</p>';return;}
+  c.innerHTML=hist.map(r=>`
+    <div class="card" style="margin-bottom:10px">
+      <div style="padding:10px 12px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--d)">${r.client}${r.obj?' — '+r.obj:''}</div>
+            <div style="font-size:10px;color:var(--t3);margin-top:2px">КП #${r.num} · ${r.date}</div>
+          </div>
+          <button onclick="deleteHist(${r.id})" style="background:none;border:none;color:#ccc;font-size:18px;cursor:pointer;line-height:1;padding:0 4px">✕</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:8px">
+          <div style="background:#f4f3ff;border-radius:6px;padding:6px 8px"><div style="font-size:8px;color:#534AB7;font-weight:700;text-transform:uppercase;margin-bottom:2px">ЛДСП</div><div style="font-size:12px;font-weight:700;color:#0a2e2e">${fm(r.totL)}</div></div>
+          <div style="background:#f0faf7;border-radius:6px;padding:6px 8px"><div style="font-size:8px;color:#0F6E56;font-weight:700;text-transform:uppercase;margin-bottom:2px">Плёнка</div><div style="font-size:12px;font-weight:700;color:#0a2e2e">${fm(r.totP)}</div></div>
+          <div style="background:#fdf5f0;border-radius:6px;padding:6px 8px"><div style="font-size:8px;color:#993C1D;font-weight:700;text-transform:uppercase;margin-bottom:2px">Краска</div><div style="font-size:12px;font-weight:700;color:#0a2e2e">${fm(r.totK)}</div></div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button onclick="loadCalc(${r.id})" class="actn ad" style="flex:1;padding:8px;font-size:12px;margin:0">📂 Загрузить</button>
+          <button onclick="loadAndKP(${r.id})" class="pb p" style="flex:1;font-size:12px">📄 КП</button>
+        </div>
+      </div>
+    </div>
+  `).join("");
+}
+function deleteHist(id){
+  let hist=JSON.parse(localStorage.getItem("mebeloff_hist")||"[]");
+  hist=hist.filter(r=>r.id!==id);
+  localStorage.setItem("mebeloff_hist",JSON.stringify(hist));
+  renderHist();
+}
+function clearHistory(){
+  if(!confirm("Удалить всю историю?"))return;
+  localStorage.removeItem("mebeloff_hist");
+  renderHist();
+}
+async function loadCalc(id){
+  const hist=JSON.parse(localStorage.getItem("mebeloff_hist")||"[]");
+  const rec=hist.find(r=>r.id===id);
+  if(!rec)return;
+  // Сброс
+  Object.keys(ST).forEach(k=>ST[k]=[]);
+  ["ldsp-list","fldsp-list","fplen-list","fkr-list","furn-list","kuh-list","shk-list","svet-list","dop-list","vit-list"].forEach(id2=>{const e=$(id2);if(e)e.innerHTML='<p class="hint">Нет позиций</p>';});
+  // Восстановить снэп полей (коэффициенты, клиент, и т.д.)
+  const snap=rec.snap;
+  // Простые инпуты
+  ["c-kl","c-rl","c-sl","c-taxl","c-crl","c-kp","c-rp","c-sp","c-taxp","c-crp","c-kk","c-rk","c-sk","c-taxk","c-crk",
+   "hdf-qty","krom-qty","d-sat","d-pdm","svet-inc","kp-client","kp-object","kp-num"].forEach(fid=>{
+    const e=$(fid);if(e&&snap[fid]!==undefined)e.value=snap[fid];
+  });
+  // Работы qty
+  DB.works.forEach((_,i)=>{const e=$("wq"+i);if(e&&snap["wq"+i]!==undefined)e.value=snap["wq"+i];});
+  // Восстановить ЛДСП
+  const ldspST=rec.ST.ldsp;
+  for(let i=0;i<ldspST.length;i++){if(ldspST[i]===null||ldspST[i]===undefined)continue;ST.ldsp.push(ldspST[i]);const c=$("ldsp-list");if(i===0)c.innerHTML="";const d=document.createElement("div");d.id="lr"+i;if(i>0)d.className="ib";d.style.marginTop="8px";const o=DB.ldsp.map((x,j)=>`<option value="${j}">${x.n} — ${x.p.toLocaleString("ru")}₸</option>`).join("");d.innerHTML=`<div class="fr"><select id="ls${i}" onchange="ST.ldsp[${i}]=+this.value;$('lp${i}').textContent=DB.ldsp[+this.value].p.toLocaleString('ru')+'₸/л';recalc()">${o}</select><button class="db" onclick="$('lr${i}').style.display='none';ST.ldsp[${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="lq${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="lp${i}">${DB.ldsp[0].p.toLocaleString("ru")}₸/л</span></div>`;c.appendChild(d);if(snap["ls"+i]!==undefined){const s=$("ls"+i);if(s){s.value=snap["ls"+i];ST.ldsp[i]=+snap["ls"+i];}}if(snap["lq"+i]!==undefined){const q=$("lq"+i);if(q)q.value=snap["lq"+i];}}
+  // Восстановить простые секции (фасады)
+  ["fldsp","fplen","fkr"].forEach(sec=>{
+    const arr=sec==="fldsp"?DB.ldsp:sec==="fplen"?DB.fas_plen:DB.fas_kr;
+    const lid=sec+"-list";
+    const secST=rec.ST[sec];
+    for(let i=0;i<secST.length;i++){
+      if(secST[i]===null||secST[i]===undefined)continue;
+      ST[sec].push(secST[i]);
+      const c=$(lid);if(i===0)c.innerHTML="";
+      const d=document.createElement("div");d.id=sec+"r"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
+      const o=arr.map((x,j)=>`<option value="${j}">${x.n} — ${x.p.toLocaleString("ru")}₸</option>`).join("");
+      d.innerHTML=`<div class="fr"><select id="${sec}s${i}" onchange="ST['${sec}'][${i}]=+this.value;recalc()">${o}</select><button class="db" onclick="$('${sec}r${i}').style.display='none';ST['${sec}'][${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="${sec}q${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="${sec}p${i}">${arr[0].p.toLocaleString("ru")}₸/л</span></div>`;
+      c.appendChild(d);
+      if(snap[sec+"s"+i]!==undefined){const s=$(sec+"s"+i);if(s)s.value=snap[sec+"s"+i];}
+      if(snap[sec+"q"+i]!==undefined){const q=$(sec+"q"+i);if(q)q.value=snap[sec+"q"+i];}
+    }
+  });
+  // Восстановить кат секции
+  ["furn","kuh","shk","svet"].forEach(sec=>{
+    const arr=gA(sec);const lid=sec+"-list";
+    const secST=rec.ST[sec];
+    for(let i=0;i<secST.length;i++){
+      if(!secST[i])continue;
+      ST[sec].push({p:0});
+      const c=$(lid);if(i===0)c.innerHTML="";
+      const d=document.createElement("div");d.id=sec+"r"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
+      const cats=[...new Set(arr.map(x=>x.cat))];
+      d.innerHTML=`<div class="fr"><select id="${sec}c${i}" onchange="uC('${sec}',${i})">${cats.map(cat=>`<option value="${cat}">${cat}</option>`).join("")}</select><button class="db" onclick="$('${sec}r${i}').style.display='none';ST['${sec}'][${i}]=null;recalc()">✕</button></div><div class="fr" id="${sec}vf${i}"></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="${sec}q${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="${sec}pp${i}">0₸</span></div>`;
+      c.appendChild(d);
+      if(snap[sec+"c"+i]!==undefined){const s=$(sec+"c"+i);if(s)s.value=snap[sec+"c"+i];}
+      uC(sec,i);
+      if(snap[sec+"v"+i]!==undefined){const s=$(sec+"v"+i);if(s)s.value=snap[sec+"v"+i];}
+      if(snap[sec+"f"+i]!==undefined){const s=$(sec+"f"+i);if(s)s.value=snap[sec+"f"+i];}
+      uCP(sec,i);
+      if(snap[sec+"q"+i]!==undefined){const q=$(sec+"q"+i);if(q)q.value=snap[sec+"q"+i];}
+    }
+  });
+  // Доп позиции
+  const dopST=rec.ST.dop;
+  for(let i=0;i<dopST.length;i++){
+    if(dopST[i]===null)continue;
+    ST.dop.push(1);
+    const c=$("dop-list");if(i===0)c.innerHTML="";
+    const d=document.createElement("div");d.id="dr"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
+    d.innerHTML=`<div class="fr"><input style="font-size:12px;border:1px solid #ddd;border-radius:8px;padding:6px 8px;flex:1;min-width:0" type="text" id="dn${i}" placeholder="Название"><button class="db" onclick="$('dr${i}').style.display='none';ST.dop[${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Цена</span><input class="qi" type="number" inputmode="decimal" id="dp${i}" placeholder="0" onchange="recalc()"><span class="fp">₸/шт</span></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="dq${i}" placeholder="1" onchange="recalc()"><span class="fp">шт</span></div>`;
+    c.appendChild(d);
+    ["dn","dp","dq"].forEach(p=>{if(snap[p+i]!==undefined){const e=$(p+i);if(e)e.value=snap[p+i];}});
+  }
+  // Витрины
+  const vitST=rec.ST.vit;
+  for(let i=0;i<vitST.length;i++){
+    if(vitST[i]===null)continue;
+    addVit();
+    ["vw","vh","vn","vdel","vinc"].forEach(p=>{if(snap[p+i]!==undefined){const e=$(p+i);if(e)e.value=snap[p+i];}});
+    if(snap["vst"+i]!==undefined){const s=$("vst"+i);if(s)s.value=snap["vst"+i];}
+    if(snap["vpr"+i]!==undefined){const s=$("vpr"+i);if(s)s.value=snap["vpr"+i];}
+    cV(i);
+  }
+  renderWorks();recalc();
+  page("calc");tab("calc");
+  showStatus("OK Расчёт загружен","#1a5252");setTimeout(hideStatus,2000);
+}
+async function loadAndKP(id){
+  await loadCalc(id);
+  setTimeout(()=>{showKP();},100);
+}
+// ===== КОНЕЦ ИСТОРИИ =====
+
+loadFromSheets();
