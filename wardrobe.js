@@ -863,6 +863,21 @@ function switchTab(tab){
   if(tab==='prices'){ renderPricesPane(); renderMatCards(); }
 }
 
+let clientMode = false;
+function toggleClientMode(){
+  clientMode = !clientMode;
+  const btn = document.getElementById('client-mode-btn');
+  const tp  = document.getElementById('tab-prices');
+  if(btn){
+    btn.classList.toggle('active', clientMode);
+    btn.title = clientMode ? 'Режим менеджера — показать цены' : 'Режим клиента — скрыть цены';
+    btn.innerHTML = clientMode ? '<i class="ti ti-eye-off"></i>' : '<i class="ti ti-eye"></i>';
+  }
+  if(tp) tp.style.display = clientMode ? 'none' : '';
+  if(clientMode) switchTab('constructor');
+}
+window.toggleClientMode = toggleClientMode;
+
 
 /* ============================================================
    ШАБЛОНЫ СЕКЦИЙ — только пользовательские, с SVG превью
@@ -3310,8 +3325,32 @@ function kAccToggle(id){
 }
 window.kAccToggle=kAccToggle;
 function kSwitchTab(tab){
-  // legacy — функция сохранена для совместимости
+  const con = document.getElementById('k-pane-constructor');
+  const pri = document.getElementById('k-pane-prices');
+  const tc  = document.getElementById('k-tab-constructor');
+  const tp  = document.getElementById('k-tab-prices');
+  if(!con || !pri) return;
+  con.style.display = tab==='constructor' ? '' : 'none';
+  pri.style.display = tab==='prices'      ? '' : 'none';
+  if(tc) tc.classList.toggle('active', tab==='constructor');
+  if(tp) tp.classList.toggle('active', tab==='prices');
 }
+
+let kClientMode = false;
+function kToggleClientMode(){
+  kClientMode = !kClientMode;
+  const btn = document.getElementById('k-client-mode-btn');
+  const tp  = document.getElementById('k-tab-prices');
+  if(btn){
+    btn.classList.toggle('active', kClientMode);
+    btn.title = kClientMode ? 'Режим менеджера — показать цены' : 'Режим клиента — скрыть цены';
+    btn.innerHTML = kClientMode ? '<i class="ti ti-eye-off"></i>' : '<i class="ti ti-eye"></i>';
+  }
+  if(tp) tp.style.display = kClientMode ? 'none' : '';
+  // Если сейчас на табе Цены — переключить на Конструктор
+  if(kClientMode) kSwitchTab('constructor');
+}
+window.kToggleClientMode = kToggleClientMode;
 
 // ── Добавить модули ───────────────────────────────────────────
 function kAddLower(){
@@ -4598,6 +4637,21 @@ function sendKitchenToCalc(){
   const LDSP_SHEET_M2 = LDSP_W_MM/1000 * LDSP_H_MM/1000;
   const T = K_BOARD;
 
+  // ── ХДФ задние стенки (стандарт MebelOFF: 4мм ХДФ) ────────
+  // Нижние: W × H каждого модуля (без столешницы и ножек)
+  // Верхние: W × H каждого модуля
+  let hdfM2 = 0;
+  KitchenState.lower.forEach(m=>{
+    const W = m.width, H = floorH - K_TOP - 100;
+    hdfM2 += (W * H) / 1e6;
+  });
+  KitchenState.upper.forEach(m=>{
+    hdfM2 += (m.width * m.height) / 1e6;
+  });
+  // Пересчёт в листы ХДФ (формат 2800×2070)
+  const HDF_SHEET_M2 = 2.8 * 2.07;
+  const hdfSheets = Math.round((hdfM2 / HDF_SHEET_M2) * 100) / 100;
+
   // ── Подсчёт ЛДСП корпуса (стандарт MebelOFF 16мм) ──────────
   // Нижний: 2 боковины + дно (верхней крышки нет — столешница)
   // + полки если тип shelves
@@ -4757,6 +4811,9 @@ function sendKitchenToCalc(){
   // ── Кромка ───────────────────────────────────────────────────
   if(edgePm>0){ const e=$('krom-qty'); if(e){ e.value=edgePm; imported++; } }
 
+  // ── ХДФ задние стенки ────────────────────────────────────────
+  if(hdfSheets>0){ const e=$('hdf-qty'); if(e){ e.value=hdfSheets; imported++; } }
+
   // ── Столешница (авто по суммарной ширине нижних) ─────────────
   const topSel=document.getElementById('k-top-type');
   const topVid=topSel?.value;
@@ -4894,7 +4951,7 @@ function sendKitchenToCalc(){
   // Переходим в калькулятор
   page('calc'); tab('calc');
   const facLabel={'ldsp':'ЛДСП','mdf_plen':'МДФ Плёнка','mdf_kr':'МДФ Краска','none':'без фасада'}[facadeMat]||facadeMat;
-  showStatus(`✓ Кухня: корпус ${corpSheets}л, фасад ${facLabel}${facSheets>0?' '+facSheets+'л':''}, кромка ${edgePm}пм, петли ${hinges}шт, ручки ${handles}шт, ножки ${legs}шт`, '#1a5252');
+  showStatus(`✓ Кухня: корпус ${corpSheets}л, ХДФ ${hdfSheets}л, фасад ${facLabel}${facSheets>0?' '+facSheets+'л':''}, кромка ${edgePm}пм, петли ${hinges}шт, ручки ${handles}шт, ножки ${legs}шт`, '#1a5252');
   setTimeout(hideStatus, 4000);
 }
 window.sendKitchenToCalc=sendKitchenToCalc;

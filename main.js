@@ -1118,6 +1118,41 @@ function sendConfToCalc() {
 
   let imported = 0;
 
+  // ── Хелпер: добавить строку в shk-list (Фурнитура шкаф) ───
+  function addSHKRow(catName, qty) {
+    if (!qty || qty <= 0) return;
+    const arr = DB.furn;
+    const idx = arr.findIndex(x => x.cat === catName);
+    if (idx < 0) return;
+    const si = ST.shk.length;
+    ST.shk.push({ p: arr[idx].p });
+    const sc = $('shk-list');
+    if (!sc) return;
+    if (si === 0) sc.innerHTML = '';
+    const cats = [...new Set(arr.map(x => x.cat))];
+    const fd = document.createElement('div');
+    fd.id = 'shkr' + si;
+    if (si > 0) fd.className = 'ib';
+    fd.style.marginTop = '8px';
+    fd.innerHTML = `<div class="fr">
+      <select id="shkc${si}" onchange="uC('shk',${si})">${cats.map(c=>`<option value="${c}"${c===catName?' selected':''}>${c}</option>`).join('')}</select>
+      <button class="db" onclick="$('shkr${si}').style.display='none';ST.shk[${si}]=null;recalc()">✕</button>
+    </div>
+    <div class="fr" id="shkvf${si}"></div>
+    <div class="fr">
+      <span class="lb">Кол-во</span>
+      <input class="qi" type="number" inputmode="decimal" id="shkq${si}" placeholder="0" min="0" onchange="recalc()">
+      <span class="fp" id="shkpp${si}">${arr[idx].p.toLocaleString('ru')}₸</span>
+    </div>`;
+    sc.appendChild(fd);
+    uC('shk', si);
+    const qEl = $('shkq' + si);
+    if (qEl) qEl.value = qty;
+    const cb = $('cb-shk');
+    if (cb && !cb.classList.contains('op')) tog('shk');
+    imported++;
+  }
+
   // ── Хелпер: добавить строку фурнитуры в furn-list ──────────
   function addFurnRow(catName, qty) {
     if (!qty || qty <= 0) return;
@@ -1332,14 +1367,14 @@ function sendConfToCalc() {
     });
   }
 
-  // ── Штанга ─────────────────────────────────────────────────
+  // ── Штанга → Фурнитура шкаф ────────────────────────────────
   if ((d.totalRods || 0) > 0) {
-    addFurnRow('Штанга', d.totalRods);
+    addSHKRow('Штанга', d.totalRods);
   }
 
-  // ── Ножки ──────────────────────────────────────────────────
+  // ── Ножки → Фурнитура шкаф ─────────────────────────────────
   if ((d.totalLegs || 0) > 0) {
-    addFurnRow('Ножки', d.totalLegs);
+    addSHKRow('Ножки', d.totalLegs);
   }
 
   // ── Клиент из проекта ──────────────────────────────────────
