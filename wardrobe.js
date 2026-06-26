@@ -4514,211 +4514,289 @@ function kShowSpec(){
 }
 function kShowCut(){
   const modal = document.getElementById('k-cut-modal');
-  const content2 = document.getElementById('k-cut-content');
-  if(!modal || !content2) return;
+  const el = document.getElementById('k-cut-content');
+  if(!modal || !el) return;
 
-  const depth  = parseInt(document.getElementById('k-depth')?.value || 501);
-  const floorH = parseInt(document.getElementById('k-floor-h')?.value || 850);
+  const depth   = parseInt(document.getElementById('k-depth')?.value || 501);
+  const floorH  = parseInt(document.getElementById('k-floor-h')?.value || 850);
   const sheetFmt = document.getElementById('k-sheet-fmt')?.value || '2750x1830';
   const [LDSP_W, LDSP_H] = sheetFmt === '2800x2070' ? [2800,2070] : [2750,1830];
-  const LEG_H = 100, T = K_BOARD, upperD = 350;
+  const HDF_W = 2800, HDF_H = 2070;
+  const T = K_BOARD;     // 16мм — толщина ЛДСП
+  const T_PLAN = 71;     // ширина верхней планки
+  const upperD = 350;    // глубина верхних шкафов
+  const LEG_H = 100;
+  const CORP_H = floorH - K_TOP - LEG_H;  // 712мм
+  const SAW_EXT = 7;     // рез снаружи листа
+  const SAW_INT = 12;    // рез между деталями
+
   const kFacadeMat = document.getElementById('k-facade-mat')?.value || 'ldsp';
 
-  // ── Собираем детали корпуса (ЛДСП) ───────────────────────
-  const corpusParts = [];
-  const facadeParts = [];
-  const hdfParts = [];
-
-  function addC(name, w, h){ corpusParts.push({name, w:Math.round(w), h:Math.round(h)}); }
-  function addF(name, w, h){ facadeParts.push({name, w:Math.round(w), h:Math.round(h)}); }
+  // ── Добавление деталей ─────────────────────────────────
+  const corpParts = [], facParts = [], hdfParts = [];
+  function addC(name, w, h){ corpParts.push({name, w:Math.round(w), h:Math.round(h)}); }
+  function addF(name, w, h){ facParts.push({name, w:Math.round(w), h:Math.round(h)}); }
   function addHDF(name, w, h){ hdfParts.push({name, w:Math.round(w), h:Math.round(h)}); }
 
-  // Нижние
-  KitchenState.lower.forEach((m,mi)=>{
-    const W=m.width, H=floorH-K_TOP-LEG_H, D=depth;
+  // ── НИЖНИЕ ШКАФЫ ────────────────────────────────────────
+  KitchenState.lower.forEach((m, mi)=>{
+    const W=m.width, D=depth, H=CORP_H;
     const lbl = `Н${mi+1}(${W})`;
+    // Боковины: высота = H-T (без дна), глубина = D
+    addC(`${lbl} Боковина`, D, H-T);  // 2 штуки
+    addC(`${lbl} Боковина`, D, H-T);
+    // Верхние планки: ширина = W, глубина = T_PLAN (перед и зад)
+    addC(`${lbl} Планка верх`, W, T_PLAN);
+    addC(`${lbl} Планка верх`, W, T_PLAN);
+    // Дно накладное: ширина = W, глубина = D
     addC(`${lbl} Дно`, W, D);
-    addC(`${lbl} Верх`, W, D);
-    addC(`${lbl} Бок`, T, D); addC(`${lbl} Бок`, T, D);
-    if(m.type==='shelves'){ addC(`${lbl} Полка`, W-T*2, D); addC(`${lbl} Полка`, W-T*2, D); }
-    if(m.type==='drawers'){ addC(`${lbl} Дно яш`, W-T*2, D-30); addC(`${lbl} Дно яш`, W-T*2, D-30); addC(`${lbl} Дно яш`, W-T*2, D-30); }
-    // Задник ХДФ
-    addHDF(`${lbl} Задник`, W-T*2, H-T*2);
+    // Тип модуля
+    if(m.type === 'shelves'){
+      // Полка между боковинами
+      addC(`${lbl} Полка`, W - T*2, D);
+      addC(`${lbl} Полка`, W - T*2, D);
+    }
+    if(m.type === 'drawers'){
+      // Дно ящиков (3 шт), уже за вычетом боковин и зазора
+      addC(`${lbl} Дно яш`, W - T*2, D - 30);
+      addC(`${lbl} Дно яш`, W - T*2, D - 30);
+      addC(`${lbl} Дно яш`, W - T*2, D - 30);
+    }
+    if(m.type === 'sink' || m.type === 'appliance'){
+      // Только корпус без полок
+    }
+    // ХДФ задник
+    addHDF(`${lbl} Задник`, W - T*2, H);
     // Фасад
-    if(m.facade === 'door') addF(`${lbl} Фасад`, W-4, H-4);
+    if(m.facade === 'door' && m.type !== 'sink' && m.type !== 'appliance'){
+      addF(`${lbl} Фасад`, W - 4, H - 4);
+    }
   });
 
-  // Верхние
-  KitchenState.upper.forEach((m,mi)=>{
-    const W=m.width, H=m.height, D=upperD;
+  // ── ВЕРХНИЕ ШКАФЫ ────────────────────────────────────────
+  KitchenState.upper.forEach((m, mi)=>{
+    const W=m.width, D=upperD, H=m.height;
     const lbl = `В${mi+1}(${W})`;
+    // Боковины
+    addC(`${lbl} Боковина`, D, H-T);
+    addC(`${lbl} Боковина`, D, H-T);
+    // Верхние планки
+    addC(`${lbl} Планка верх`, W, T_PLAN);
+    addC(`${lbl} Планка верх`, W, T_PLAN);
+    // Дно накладное
     addC(`${lbl} Дно`, W, D);
-    addC(`${lbl} Верх`, W, D);
-    addC(`${lbl} Бок`, T, D); addC(`${lbl} Бок`, T, D);
-    if(m.type !== 'upperOpen') addC(`${lbl} Полка`, W-T*2, D);
-    addHDF(`${lbl} Задник`, W-T*2, H-T*2);
-    if(m.facade === 'door') addF(`${lbl} Фасад`, W-4, H-4);
+    // Полки (кроме открытого)
+    if(m.type !== 'upperOpen'){
+      addC(`${lbl} Полка`, W - T*2, D);
+    }
+    // ХДФ задник
+    addHDF(`${lbl} Задник`, W - T*2, H);
+    // Фасад
+    if(m.facade === 'door'){
+      addF(`${lbl} Фасад`, W - 4, H - 4);
+    }
   });
 
-  // Пеналы
-  KitchenState.penal.forEach((m,mi)=>{
-    const W=m.width, H=m.height, D=depth;
+  // ── ПЕНАЛЫ ──────────────────────────────────────────────
+  KitchenState.penal.forEach((m, mi)=>{
+    const W=m.width, D=depth, H=m.height;
     const lbl = `П${mi+1}(${W})`;
+    // Боковины
+    addC(`${lbl} Боковина`, D, H-T);
+    addC(`${lbl} Боковина`, D, H-T);
+    // Верхние планки
+    addC(`${lbl} Планка верх`, W, T_PLAN);
+    addC(`${lbl} Планка верх`, W, T_PLAN);
+    // Дно накладное
     addC(`${lbl} Дно`, W, D);
-    addC(`${lbl} Верх`, W, D);
-    addC(`${lbl} Бок`, T, D); addC(`${lbl} Бок`, T, D);
-    addC(`${lbl} Полка`, W-T*2, D);
-    addHDF(`${lbl} Задник`, W-T*2, H-T*2);
-    if(m.facade === 'door') addF(`${lbl} Фасад`, W-4, H-4);
+    // Полки
+    addC(`${lbl} Полка`, W - T*2, D);
+    addC(`${lbl} Полка`, W - T*2, D);
+    // ХДФ задник
+    addHDF(`${lbl} Задник`, W - T*2, H);
+    // Фасад
+    if(m.facade === 'door'){
+      addF(`${lbl} Фасад`, W - 4, H - 4);
+    }
   });
 
-  if(!corpusParts.length){ content2.innerHTML='<p class="hint">Нет модулей</p>'; modal.style.display='flex'; return; }
+  if(!corpParts.length){ el.innerHTML='<p class="hint">Нет модулей</p>'; modal.style.display='flex'; return; }
 
-  // ── Упаковка на листы ─────────────────────────────────────
+  // ── Упаковка на листы с учётом реза ───────────────────
+  // Доступная площадь с учётом внешнего реза
   function packParts(parts, SW, SH){
-    const sorted = [...parts].sort((a,b) => Math.max(b.w,b.h) - Math.max(a.w,a.h));
+    const sorted = [...parts].sort((a,b)=>{
+      const maxA = Math.max(a.w,a.h), maxB = Math.max(b.w,b.h);
+      return maxB - maxA;
+    });
     const sheets = [];
+    // Рабочая область листа с учётом внешнего реза
+    const RW = SW - SAW_EXT*2;
+    const RH = SH - SAW_EXT*2;
+
     sorted.forEach(part=>{
-      // Пробуем разместить на существующих листах
       let placed = false;
+      // Пробуем оба варианта ориентации
+      const variants = [{w:part.w, h:part.h, rot:false}];
+      if(part.w !== part.h) variants.push({w:part.h, h:part.w, rot:true});
+
       for(const sh of sheets){
-        for(let ri=0; ri<sh.rows.length; ri++){
-          const row = sh.rows[ri];
-          if(row.x + part.w <= SW && part.h <= row.h){
-            sh.items.push({...part, x:row.x, y:row.y});
-            row.x += part.w + 4;
-            placed = true; break;
-          }
-          // Попробуем повёрнутую
-          if(row.x + part.h <= SW && part.w <= row.h){
-            sh.items.push({...part, w:part.h, h:part.w, x:row.x, y:row.y, rotated:true, origW:part.w, origH:part.h});
-            row.x += part.h + 4;
-            placed = true; break;
-          }
-        }
         if(placed) break;
-        // Новая строка на этом листе
-        const lastRow = sh.rows[sh.rows.length-1];
-        const newY = lastRow.y + lastRow.h + 4;
-        if(newY + part.h <= SH){
-          sh.rows.push({x:0, y:newY, h:part.h});
-          const row = sh.rows[sh.rows.length-1];
-          sh.items.push({...part, x:row.x, y:row.y});
-          row.x += part.w + 4;
-          placed = true; break;
-        }
-        if(newY + part.w <= SH && part.h <= SW){
-          sh.rows.push({x:0, y:newY, h:part.w});
-          const row = sh.rows[sh.rows.length-1];
-          sh.items.push({...part, w:part.h, h:part.w, x:row.x, y:row.y, rotated:true, origW:part.w, origH:part.h});
-          row.x += part.h + 4;
-          placed = true; break;
+        for(const v of variants){
+          if(placed) break;
+          // Пробуем строки листа
+          for(let ri=0; ri<sh.rows.length; ri++){
+            const row = sh.rows[ri];
+            if(row.x + v.w <= RW && v.h <= row.h){
+              sh.items.push({...part, w:v.w, h:v.h, x:row.x+SAW_EXT, y:row.y+SAW_EXT, rotated:v.rot});
+              row.x += v.w + SAW_INT;
+              placed = true; break;
+            }
+          }
+          if(placed) break;
+          // Новая строка
+          const lastRow = sh.rows[sh.rows.length-1];
+          const newY = lastRow.y + lastRow.h + SAW_INT;
+          if(newY + v.h <= RH){
+            sh.rows.push({x:0, y:newY, h:v.h, usedH:v.h});
+            const row = sh.rows[sh.rows.length-1];
+            sh.items.push({...part, w:v.w, h:v.h, x:SAW_EXT, y:newY+SAW_EXT, rotated:v.rot});
+            row.x += v.w + SAW_INT;
+            placed = true;
+          }
         }
       }
       if(!placed){
-        const sh = {items:[{...part, x:0, y:0}], rows:[{x:part.w+4, y:0, h:part.h}]};
-        sheets.push(sh);
+        // Новый лист
+        for(const v of variants){
+          if(v.w <= RW && v.h <= RH){
+            const sh = {
+              items:[{...part, w:v.w, h:v.h, x:SAW_EXT, y:SAW_EXT, rotated:v.rot}],
+              rows:[{x:v.w+SAW_INT, y:0, h:v.h}]
+            };
+            sheets.push(sh);
+            placed = true; break;
+          }
+        }
+        if(!placed){
+          // Деталь больше листа — добавляем как есть
+          const sh = {items:[{...part, x:SAW_EXT, y:SAW_EXT, rotated:false}], rows:[{x:part.w+SAW_INT, y:0, h:part.h}]};
+          sheets.push(sh);
+        }
       }
     });
     return sheets;
   }
 
-  // ── Рендер листов ─────────────────────────────────────────
-  const SCALE = Math.min(300/LDSP_W, 180/LDSP_H);
-  const SW = Math.round(LDSP_W*SCALE), SH = Math.round(LDSP_H*SCALE);
-
-  function renderSheets(parts, label, color, sheetW, sheetH){
+  // ── Рендер секции раскроя ──────────────────────────────
+  function renderSection(parts, title, color, SW, SH){
     if(!parts.length) return '';
-    const sheets = packParts(parts, sheetW, sheetH);
-    const sc = Math.min(300/sheetW, 180/sheetH);
-    const sw = Math.round(sheetW*sc), sh2 = Math.round(sheetH*sc);
-    let html = `<div style="margin-bottom:16px">`;
-    html += `<div style="font-size:12px;font-weight:700;color:#333;margin-bottom:8px;padding:6px 10px;background:#f0f0f0;border-radius:6px">${label} — ${sheets.length} лист(ов) ${sheetW}×${sheetH}мм</div>`;
-    sheets.forEach((sh,si)=>{
-      const used = sh.items.reduce((a,it)=>a+it.w*it.h,0)/(sheetW*sheetH)*100;
-      html += `<div style="display:inline-block;vertical-align:top;margin:0 10px 12px 0">`;
-      html += `<div style="font-size:10px;color:#666;margin-bottom:3px">Лист ${si+1} — ${used.toFixed(0)}% заполнено</div>`;
-      // Лист SVG
-      html += `<svg width="${sw}" height="${sh2}" style="border:2px solid #666;border-radius:3px;background:#f9f9f9;display:block">`;
-      // Фон листа
-      html += `<rect x="0" y="0" width="${sw}" height="${sh2}" fill="#f9f9f9"/>`;
-      // Детали
-      sh.items.forEach((it,ii)=>{
+    const sheets = packParts(parts, SW, SH);
+    const sc = Math.min(280/SW, 170/SH);
+    const svgW = Math.round(SW*sc), svgH = Math.round(SH*sc);
+
+    let html = `<div style="margin-bottom:20px">`;
+    html += `<div style="font-size:13px;font-weight:700;color:#333;margin-bottom:10px;padding:7px 12px;background:#f0f0f0;border-radius:6px;border-left:4px solid ${color}">${title} — ${sheets.length} лист(ов) ${SW}×${SH}мм</div>`;
+    html += `<div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px">`;
+
+    sheets.forEach((sh, si)=>{
+      const used = sh.items.reduce((a,it)=>a+it.w*it.h,0)/(SW*SH)*100;
+      html += `<div>`;
+      html += `<div style="font-size:10px;color:#666;margin-bottom:3px;font-weight:600">Лист ${si+1} — ${used.toFixed(0)}% заполнено</div>`;
+      html += `<svg width="${svgW}" height="${svgH}" style="border:2px solid #555;border-radius:3px;background:#f5f5f0;display:block">`;
+      // Внешний рез (7мм)
+      const extX = Math.round(SAW_EXT*sc), extW = Math.round((SW-SAW_EXT*2)*sc);
+      const extH = Math.round((SH-SAW_EXT*2)*sc);
+      html += `<rect x="${extX}" y="${extX}" width="${extW}" height="${extH}" fill="none" stroke="#aaa" stroke-width="0.5" stroke-dasharray="4,2"/>`;
+
+      sh.items.forEach((it, ii)=>{
         const x=Math.round(it.x*sc), y=Math.round(it.y*sc);
-        const w=Math.max(2,Math.round(it.w*sc)-1), h=Math.max(2,Math.round(it.h*sc)-1);
-        html += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}" stroke="#555" stroke-width="0.8" rx="1"/>`;
-        // Название
-        if(w>25 && h>12){
-          const fs = Math.max(5, Math.min(8, w/10));
-          const nm = it.rotated ? it.name+'↻' : it.name;
-          html += `<text x="${x+w/2}" y="${y+h/2-fs/2}" text-anchor="middle" font-size="${fs}" fill="#222" style="pointer-events:none">${nm}</text>`;
-          html += `<text x="${x+w/2}" y="${y+h/2+fs}" text-anchor="middle" font-size="${fs-1}" fill="#555" style="pointer-events:none">${it.w}×${it.h}</text>`;
+        const w=Math.max(2,Math.round(it.w*sc)), h=Math.max(2,Math.round(it.h*sc));
+        // Линии реза (12мм)
+        const sawW = Math.round(SAW_INT*sc);
+        html += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}" stroke="#444" stroke-width="0.8" rx="1" opacity="0.85"/>`;
+        // Метки с именем и размером
+        if(w > 22 && h > 12){
+          const fs = Math.max(4.5, Math.min(7, Math.min(w,h)/8));
+          const nm = it.name + (it.rotated ? '↻' : '');
+          html += `<text x="${x+w/2}" y="${y+h/2-fs*0.6}" text-anchor="middle" font-size="${fs}" fill="#111">${nm}</text>`;
+          html += `<text x="${x+w/2}" y="${y+h/2+fs*0.8}" text-anchor="middle" font-size="${fs-0.5}" fill="#444">${it.w}×${it.h}</text>`;
         }
-        // Размер справа вверху
-        if(w>30){ html += `<text x="${x+w-2}" y="${y+7}" text-anchor="end" font-size="4.5" fill="#333">${it.w}</text>`; }
-        if(h>15){ html += `<text x="${x+5}" y="${y+h-3}" text-anchor="start" font-size="4.5" fill="#333">${it.h}</text>`; }
+        // Размер справа и снизу
+        if(w>30){ html += `<text x="${x+w-1}" y="${y+6}" text-anchor="end" font-size="4" fill="#333">${it.w}</text>`; }
+        if(h>20){ html += `<text x="${x+2}" y="${y+h-2}" text-anchor="start" font-size="4" fill="#333">${it.h}</text>`; }
       });
-      // Остаток (последняя строка)
+
+      // Остатки — штриховка
       const lastRow = sh.rows[sh.rows.length-1];
       if(lastRow){
-        // Свободное место в последней строке
-        if(lastRow.x < sheetW-10){
-          const rx=Math.round(lastRow.x*sc), ry=Math.round(lastRow.y*sc);
-          const rw=Math.round((sheetW-lastRow.x)*sc), rh=Math.round(lastRow.h*sc);
-          if(rw>5 && rh>5){
+        const freeX = lastRow.x + SAW_EXT;
+        const rowY = lastRow.y + SAW_EXT;
+        if(freeX < SW - SAW_EXT - 10){
+          const rx=Math.round(freeX*sc), ry=Math.round(rowY*sc);
+          const rw=Math.round((SW-SAW_EXT-freeX)*sc), rh=Math.round(lastRow.h*sc);
+          if(rw>4 && rh>4){
             html += `<rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="none" stroke="#bbb" stroke-width="0.5" stroke-dasharray="3,2"/>`;
             html += `<line x1="${rx}" y1="${ry}" x2="${rx+rw}" y2="${ry+rh}" stroke="#ccc" stroke-width="0.5"/>`;
             html += `<line x1="${rx+rw}" y1="${ry}" x2="${rx}" y2="${ry+rh}" stroke="#ccc" stroke-width="0.5"/>`;
           }
         }
-        // Свободное место снизу
-        const freeY = lastRow.y + lastRow.h;
-        if(freeY < sheetH - 10){
-          const fy = Math.round(freeY*sc);
-          const fh = Math.round((sheetH-freeY)*sc);
-          html += `<rect x="0" y="${fy}" width="${sw}" height="${fh}" fill="none" stroke="#bbb" stroke-width="0.5" stroke-dasharray="3,2"/>`;
-          html += `<line x1="0" y1="${fy}" x2="${sw}" y2="${fy+fh}" stroke="#ccc" stroke-width="0.5"/>`;
-          html += `<line x1="${sw}" y1="${fy}" x2="0" y2="${fy+fh}" stroke="#ccc" stroke-width="0.5"/>`;
+        const freeY = lastRow.y + lastRow.h + SAW_INT + SAW_EXT;
+        if(freeY < SH - SAW_EXT - 10){
+          const fy=Math.round(freeY*sc);
+          const fh=Math.round((SH-SAW_EXT-freeY)*sc);
+          const fw=Math.round((SW-SAW_EXT*2)*sc);
+          if(fh>4){
+            html += `<rect x="${extX}" y="${fy}" width="${fw}" height="${fh}" fill="none" stroke="#bbb" stroke-width="0.5" stroke-dasharray="3,2"/>`;
+            html += `<line x1="${extX}" y1="${fy}" x2="${extX+fw}" y2="${fy+fh}" stroke="#ccc" stroke-width="0.5"/>`;
+            html += `<line x1="${extX+fw}" y1="${fy}" x2="${extX}" y2="${fy+fh}" stroke="#ccc" stroke-width="0.5"/>`;
+          }
         }
       }
       html += `</svg></div>`;
     });
+    html += `</div>`;
+
     // Таблица деталей
-    html += `<table style="width:100%;border-collapse:collapse;font-size:10px;margin-top:6px">`;
-    html += `<thead><tr style="background:#eee"><th style="text-align:left;padding:3px 6px">Деталь</th><th style="padding:3px 6px">Ш×Г (мм)</th></tr></thead><tbody>`;
-    // Группируем одинаковые
     const grouped = {};
-    parts.forEach(p=>{ const key=p.name+p.w+p.h; if(!grouped[key]) grouped[key]={name:p.name,w:p.w,h:p.h,qty:0}; grouped[key].qty++; });
+    parts.forEach(p=>{
+      const key = p.name+'_'+p.w+'_'+p.h;
+      if(!grouped[key]) grouped[key]={name:p.name, w:p.w, h:p.h, qty:0};
+      grouped[key].qty++;
+    });
+    html += `<table style="border-collapse:collapse;font-size:11px;width:100%;margin-bottom:8px">`;
+    html += `<thead><tr style="background:#eee"><th style="text-align:left;padding:4px 8px">Деталь</th><th style="padding:4px 8px;text-align:right">Ш×Г (мм)</th><th style="padding:4px 8px;text-align:center">Кол.</th></tr></thead><tbody>`;
     Object.values(grouped).forEach(p=>{
-      html += `<tr><td style="padding:2px 6px">${p.name}</td><td style="padding:2px 6px;text-align:center">${p.w}×${p.h}</td><td style="padding:2px 6px;text-align:center">${p.qty>1?p.qty+'шт':''}</td></tr>`;
+      html += `<tr style="border-bottom:1px solid #f0f0f0"><td style="padding:3px 8px">${p.name}</td><td style="padding:3px 8px;text-align:right">${p.w}×${p.h}</td><td style="padding:3px 8px;text-align:center">${p.qty}</td></tr>`;
     });
     html += `</tbody></table></div>`;
     return html;
   }
 
-  // ХДФ листы 2800×2070
-  const HDF_W = 2800, HDF_H = 2070;
+  let html = `<div style="font-size:11px;color:#888;margin-bottom:12px">Рез: снаружи ${SAW_EXT}мм, внутри ${SAW_INT}мм</div>`;
+  html += renderSection(corpParts, '🟩 Корпус ЛДСП', '#b8d8b8', LDSP_W, LDSP_H);
 
-  let html = '';
-  html += renderSheets(corpusParts, '🟩 Корпус ЛДСП', '#c8dfc8', LDSP_W, LDSP_H);
-  if(facadeParts.length && kFacadeMat === 'ldsp')
-    html += renderSheets(facadeParts, '🟦 Фасад ЛДСП', '#c8d4e8', LDSP_W, LDSP_H);
-  if(facadeParts.length && kFacadeMat !== 'ldsp' && kFacadeMat !== 'none'){
-    const matLabel = kFacadeMat === 'mdf_plen' ? 'МДФ Плёнка' : 'МДФ Краска';
-    const mdfArea = facadeParts.reduce((s,p)=>s+p.w*p.h,0)/1e6;
-    html += `<div style="margin-bottom:16px;padding:10px;background:#fdf8ec;border-radius:6px;font-size:12px">`;
-    html += `<div style="font-weight:700;margin-bottom:4px">🟨 Фасад ${matLabel}</div>`;
-    html += `<div style="color:#666">Площадь: ${mdfArea.toFixed(2)} м²</div>`;
-    let fhtml = `<table style="width:100%;border-collapse:collapse;font-size:10px;margin-top:6px">`;
-    fhtml += `<thead><tr style="background:#eee"><th style="text-align:left;padding:3px 6px">Деталь</th><th style="padding:3px 6px">Ш×Г (мм)</th></tr></thead><tbody>`;
-    facadeParts.forEach(p=>{ fhtml += `<tr><td style="padding:2px 6px">${p.name}</td><td style="padding:2px 6px;text-align:center">${p.w}×${p.h}</td></tr>`; });
-    fhtml += '</tbody></table></div>';
-    html += fhtml;
+  if(facParts.length){
+    if(kFacadeMat === 'ldsp'){
+      html += renderSection(facParts, '🟦 Фасад ЛДСП', '#b8c8e8', LDSP_W, LDSP_H);
+    } else {
+      const matLabel = kFacadeMat === 'mdf_plen' ? 'МДФ Плёнка' : 'МДФ Краска';
+      const area = facParts.reduce((s,p)=>s+p.w*p.h/1e6, 0);
+      html += `<div style="margin-bottom:20px;padding:12px;background:#fdf8ec;border-radius:6px;border-left:4px solid #e8c84a">`;
+      html += `<div style="font-size:13px;font-weight:700;margin-bottom:8px">🟨 Фасад ${matLabel} — площадь: ${area.toFixed(2)} м²</div>`;
+      const grouped = {};
+      facParts.forEach(p=>{ const k=p.name+'_'+p.w+'_'+p.h; if(!grouped[k]) grouped[k]={name:p.name,w:p.w,h:p.h,qty:0}; grouped[k].qty++; });
+      html += `<table style="border-collapse:collapse;font-size:11px;width:100%"><thead><tr style="background:#eee"><th style="text-align:left;padding:4px 8px">Деталь</th><th style="padding:4px 8px;text-align:right">Ш×Г (мм)</th><th style="padding:4px 8px;text-align:center">Кол.</th></tr></thead><tbody>`;
+      Object.values(grouped).forEach(p=>{ html += `<tr><td style="padding:3px 8px">${p.name}</td><td style="padding:3px 8px;text-align:right">${p.w}×${p.h}</td><td style="padding:3px 8px;text-align:center">${p.qty}</td></tr>`; });
+      html += `</tbody></table></div>`;
+    }
   }
-  if(hdfParts.length)
-    html += renderSheets(hdfParts, '🟫 ХДФ задники', '#e8d4b8', HDF_W, HDF_H);
 
-  content2.innerHTML = html;
+  if(hdfParts.length){
+    html += renderSection(hdfParts, '🟫 ХДФ задники', '#e0c89a', HDF_W, HDF_H);
+  }
+
+  el.innerHTML = html;
   modal.style.display = 'flex';
 }
 
