@@ -3534,188 +3534,81 @@ function kUpdateUpper(id, field, val){
 }
 
 // ── Рендер панели ─────────────────────────────────────────────
-const TYPE_LABELS = {shelves:'Полки', drawers:'Ящики', sink:'Мойка', appliance:'Техника', corner:'Угловой', penal:'Пенал'};
-const TYPE_ICONS  = {shelves:'📦', drawers:'🗄️', sink:'🚿', appliance:'🔌', corner:'🔲', penal:'📐'};
-
-// ── SVG иконки модулей ────────────────────────────────────────
-const K_MOD_SVG = {
-  shelves:   `<svg viewBox="0 0 48 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="44" height="36" rx="2" stroke="#1a5252" stroke-width="1.5" fill="#f0f8f8"/><line x1="2" y1="20" x2="46" y2="20" stroke="#1a5252" stroke-width="1"/><rect x="20" y="2" width="2" height="36" fill="#1a5252" opacity=".3"/><line x1="24" y1="6" x2="24" y2="34" stroke="#888" stroke-width="1" stroke-dasharray="2,2"/></svg>`,
-  drawers:   `<svg viewBox="0 0 48 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="44" height="36" rx="2" stroke="#1a5252" stroke-width="1.5" fill="#f0f8f8"/><rect x="2" y="13" width="44" height="1" fill="#1a5252" opacity=".4"/><rect x="2" y="26" width="44" height="1" fill="#1a5252" opacity=".4"/><rect x="18" y="6" width="12" height="4" rx="2" fill="#1a5252" opacity=".4"/><rect x="18" y="18" width="12" height="4" rx="2" fill="#1a5252" opacity=".4"/><rect x="18" y="29" width="12" height="4" rx="2" fill="#1a5252" opacity=".4"/></svg>`,
-  sink:      `<svg viewBox="0 0 48 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="44" height="36" rx="2" stroke="#1a5252" stroke-width="1.5" fill="#f0f8f8"/><rect x="8" y="8" width="32" height="22" rx="3" stroke="#1a5252" stroke-width="1.5" fill="#fff"/><circle cx="24" cy="19" r="5" stroke="#1a5252" stroke-width="1" fill="none"/><line x1="24" y1="4" x2="24" y2="8" stroke="#1a5252" stroke-width="1.5"/></svg>`,
-  appliance: `<svg viewBox="0 0 48 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="44" height="36" rx="2" stroke="#1a5252" stroke-width="1.5" fill="#f0f8f8"/><rect x="6" y="6" width="36" height="26" rx="2" stroke="#888" stroke-width="1" fill="#fff"/><rect x="8" y="8" width="32" height="10" rx="1" fill="#e0e0e0"/><circle cx="12" cy="28" r="3" stroke="#888" stroke-width="1" fill="none"/><circle cx="24" cy="28" r="3" stroke="#888" stroke-width="1" fill="none"/><circle cx="36" cy="28" r="3" stroke="#888" stroke-width="1" fill="none"/></svg>`,
-  corner:    `<svg viewBox="0 0 48 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 2h22v36H2z" stroke="#1a5252" stroke-width="1.5" fill="#f0f8f8"/><path d="M24 2h22v22H24z" stroke="#1a5252" stroke-width="1.5" fill="#e8f5f0"/><circle cx="24" cy="24" r="10" stroke="#1a5252" stroke-width="1" fill="none" stroke-dasharray="3,2"/></svg>`,
-  upper1:    `<svg viewBox="0 0 48 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="44" height="28" rx="2" stroke="#7a5c2e" stroke-width="1.5" fill="#f8f4ec"/><line x1="24" y1="6" x2="24" y2="34" stroke="#7a5c2e" stroke-width="1" opacity=".4"/><line x1="2" y1="20" x2="46" y2="20" stroke="#7a5c2e" stroke-width="1" opacity=".3"/></svg>`,
-  upper2:    `<svg viewBox="0 0 48 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="44" height="28" rx="2" stroke="#7a5c2e" stroke-width="1.5" fill="#f8f4ec"/><line x1="24" y1="6" x2="24" y2="34" stroke="#7a5c2e" stroke-width="1.5"/></svg>`,
-  upperOpen: `<svg viewBox="0 0 48 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="44" height="28" rx="2" stroke="#7a5c2e" stroke-width="1.5" fill="#f8f4ec" stroke-dasharray="4,2"/><line x1="2" y1="20" x2="46" y2="20" stroke="#7a5c2e" stroke-width="1" opacity=".4"/></svg>`,
-  penal:     `<svg viewBox="0 0 28 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="24" height="36" rx="2" stroke="#534AB7" stroke-width="1.5" fill="#f4f3ff"/><line x1="2" y1="20" x2="26" y2="20" stroke="#534AB7" stroke-width="1" opacity=".4"/><rect x="10" y="8" width="8" height="5" rx="2" fill="#534AB7" opacity=".4"/><rect x="10" y="24" width="8" height="5" rx="2" fill="#534AB7" opacity=".4"/></svg>`,
-};
-
-// ── Каталог типов модулей ─────────────────────────────────────
-const K_LOWER_TYPES = [
-  {type:'shelves',   label:'Полки',    sizes:[300,400,450,500,600,800]},
-  {type:'drawers',   label:'Ящики',    sizes:[300,400,450,500,600]},
-  {type:'sink',      label:'Мойка',    sizes:[500,600,800]},
-  {type:'appliance', label:'Техника',  sizes:[600]},
-  {type:'corner',    label:'Угловой',  sizes:[900]},
-];
-const K_UPPER_TYPES = [
-  {type:'upper1',    label:'1 дверь',  sizes:[300,400,450,500,600]},
-  {type:'upper2',    label:'2 двери',  sizes:[600,700,800,900]},
-  {type:'upperOpen', label:'Открытый', sizes:[300,400,450,500,600]},
-];
-const K_PENAL_TYPES = [
-  {type:'penal',     label:'Пенал',    sizes:[300,400,450,600]},
-];
-
-// Стандартные ширины для ручного ввода
-const K_STD_SIZES = [300,400,450,500,600,800];
-
-// ── Переключение таба категорий модулей ──────────────────────
-let kCurrentModTab = 'lower';
-function kModTab(tab){
-  kCurrentModTab = tab;
-  ['lower','upper','penal'].forEach(t=>{
-    const btn = document.getElementById('kmt-'+t);
-    const cat = document.getElementById('k-cat-'+t);
-    if(btn) btn.classList.toggle('active', t===tab);
-    if(cat) cat.style.display = t===tab ? '' : 'none';
-  });
-}
-window.kModTab = kModTab;
-
-// ── Рендер каталога модулей ───────────────────────────────────
-function kRenderCatalog(){
-  kRenderCatalogFor('k-lower-catalog', K_LOWER_TYPES, 'lower');
-  kRenderCatalogFor('k-upper-catalog', K_UPPER_TYPES, 'upper');
-  kRenderCatalogFor('k-penal-catalog', K_PENAL_TYPES, 'penal');
-}
-
-function kRenderCatalogFor(containerId, types, category){
-  const el = document.getElementById(containerId); if(!el) return;
-  el.innerHTML = types.map(t=>{
-    const svg = K_MOD_SVG[t.type] || K_MOD_SVG.shelves;
-    const sizeBtns = t.sizes.map(s=>
-      `<button class="k-mod-size-btn" onclick="event.stopPropagation();kAddModuleByType('${category}','${t.type}',${s})">${s}</button>`
-    ).join('');
-    return `<div class="k-mod-card" onclick="kAddModuleByType('${category}','${t.type}',600)">
-      ${svg}
-      <div class="k-mod-card-label">${t.label}</div>
-      <div class="k-mod-size-row">
-        ${sizeBtns}
-        <input class="k-mod-size-custom" type="number" placeholder="мм" min="200" max="1500"
-          onclick="event.stopPropagation()"
-          onkeydown="if(event.key==='Enter'){event.preventDefault();kAddModuleByType('${category}','${t.type}',+this.value||600);this.value=''}"
-          title="Введите размер и нажмите Enter">
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ── Добавить модуль по типу и размеру ────────────────────────
-function kAddModuleByType(category, type, width){
-  width = Math.max(200, parseInt(width)||600);
-  if(category === 'lower'){
-    const m = {id: KitchenState.lId++, width, type, facade: type==='sink'||type==='appliance'?'none':'door'};
-    KitchenState.lower.push(m);
-  } else if(category === 'upper' || category === 'penal'){
-    const isOpen = type==='upperOpen';
-    const isPenal = type==='penal';
-    const h = isPenal ? 2200 : 720;
-    const m = {id: KitchenState.uId++, width, height:h, type, facade: isOpen?'none':'door'};
-    KitchenState.upper.push(m);
-  }
-  kRenderPanel(); kRender(); kUpdateTopSelect(); kProjMarkUnsaved();
-}
-window.kAddModuleByType = kAddModuleByType;
-window.kRenderCatalog = kRenderCatalog;
+const TYPE_LABELS = {shelves:'Полки', drawers:'Ящики', sink:'Мойка', appliance:'Техника'};
+const TYPE_ICONS  = {shelves:'📦', drawers:'🗄️', sink:'🚿', appliance:'🔌'};
 
 function kRenderPanel(){
+  // Нижние — рендерим в оба контейнера (новый аккордеон + старый pane)
+  const lowerContainers = [
+    document.getElementById('k-lower-list'),
+    document.getElementById('kpane-lower')?.querySelector('#k-lower-list-old')
+  ].filter(Boolean);
+
   const ll = document.getElementById('k-lower-list');
   if(ll){
     if(!KitchenState.lower.length){ ll.innerHTML='<p class="hint">Нет нижних модулей</p>'; }
-    else { ll.innerHTML = KitchenState.lower.map(m=>{
-      const svg = K_MOD_SVG[m.type] || K_MOD_SVG.shelves;
-      const hasFacadeOpt = m.type!=='sink' && m.type!=='appliance';
-      return `<div class="km-card" id="km-l-${m.id}">
+    else { ll.innerHTML = KitchenState.lower.map(m=>`
+      <div class="km-card" id="km-l-${m.id}">
         <div class="km-hdr" onclick="kToggle('kml${m.id}')">
-          <span style="display:flex;align-items:center;gap:6px">
-            <span style="width:28px;height:22px;flex-shrink:0">${svg}</span>
-            <span class="km-title">${m.width}мм — ${TYPE_LABELS[m.type]||m.type}</span>
-          </span>
+          <span class="km-title"><i class="ti ti-rectangle"></i> ${TYPE_ICONS[m.type]||''} ${m.width}мм — ${TYPE_LABELS[m.type]||m.type}</span>
           <button class="km-del" onclick="event.stopPropagation();kRemoveLower(${m.id})">✕</button>
         </div>
         <div class="km-body" id="kml${m.id}">
           <div class="km-row">
-            <span class="km-lbl">Ширина</span>
-            <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
-              ${K_STD_SIZES.map(s=>`<button class="k-mod-size-btn${m.width===s?' active':''}" onclick="kUpdateLower(${m.id},'width',${s})">${s}</button>`).join('')}
-              <input class="k-mod-size-custom" type="number" value="${m.width}" min="200" max="1500"
-                onchange="kUpdateLower(${m.id},'width',this.value)" title="Произвольный размер">
-            </div>
+            <span class="km-lbl">Ширина (мм)</span>
+            <input class="km-inp" type="number" value="${m.width}" min="200" max="1200" onchange="kUpdateLower(${m.id},'width',this.value);this.closest('.km-title')&&(this.closest('.km-card').querySelector('.km-title').textContent='${m.width}мм')">
           </div>
-          ${hasFacadeOpt ? `<div class="km-row" style="margin-top:6px">
+          <div style="font-size:11px;color:#666;margin-top:8px;margin-bottom:4px">Тип:</div>
+          <div class="km-type-grid">
+            ${['shelves','drawers','sink','appliance'].map(t=>`
+            <button class="km-type-btn ${m.type===t?'active':''}" onclick="kUpdateLower(${m.id},'type','${t}');kRenderPanel()">${TYPE_ICONS[t]} ${TYPE_LABELS[t]}</button>
+            `).join('')}
+          </div>
+          ${m.type==='sink'||m.type==='appliance' ? '' : `
+          <div class="km-row" style="margin-top:8px">
             <span class="km-lbl">Фасад</span>
             <select class="km-sel" onchange="kUpdateLower(${m.id},'facade',this.value)">
               <option value="door" ${m.facade==='door'?'selected':''}>С дверью</option>
               <option value="none" ${m.facade==='none'?'selected':''}>Без двери</option>
             </select>
-          </div>` : ''}
+          </div>`}
         </div>
-      </div>`;
-    }).join(''); }
+      </div>`).join(''); }
   }
-
-  // Верхние + Пеналы — все в KitchenState.upper
-  const ul = document.getElementById('k-upper-list');
-  const pl = document.getElementById('k-penal-list');
-  const upperMods = KitchenState.upper.filter(m=>m.type!=='penal');
-  const penalMods = KitchenState.upper.filter(m=>m.type==='penal');
-
-  const renderUpperItem = m => {
-    const svg = K_MOD_SVG[m.type] || K_MOD_SVG.upper1;
-    const isOpen = m.type==='upperOpen';
-    const isPenal = m.type==='penal';
-    const sizes = isPenal ? [300,400,450,600] : K_STD_SIZES;
-    return `<div class="km-card" id="km-u-${m.id}">
-      <div class="km-hdr" onclick="kToggle('kmu${m.id}')">
-        <span style="display:flex;align-items:center;gap:6px">
-          <span style="width:28px;height:22px;flex-shrink:0">${svg}</span>
-          <span class="km-title">${m.width}мм × ${m.height}мм — ${TYPE_LABELS[m.type]||'Верхний'}</span>
-        </span>
-        <button class="km-del" onclick="event.stopPropagation();kRemoveUpper(${m.id})">✕</button>
-      </div>
-      <div class="km-body" id="kmu${m.id}">
-        <div class="km-row">
-          <span class="km-lbl">Ширина</span>
-          <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
-            ${sizes.map(s=>`<button class="k-mod-size-btn${m.width===s?' active':''}" onclick="kUpdateUpper(${m.id},'width',${s})">${s}</button>`).join('')}
-            <input class="k-mod-size-custom" type="number" value="${m.width}" min="200" max="1500"
-              onchange="kUpdateUpper(${m.id},'width',this.value)">
+  // Верхние
+  const ul=document.getElementById('k-upper-list');
+  if(ul){
+    if(!KitchenState.upper.length){ ul.innerHTML='<p class="hint">Нет верхних модулей</p>'; }
+    else { ul.innerHTML = KitchenState.upper.map(m=>`
+      <div class="km-card" id="km-u-${m.id}">
+        <div class="km-hdr" onclick="kToggle('kmu${m.id}')">
+          <span class="km-title"><i class="ti ti-rectangle" style="opacity:.6"></i> ${m.width}мм × ${m.height}мм выс.</span>
+          <button class="km-del" onclick="event.stopPropagation();kRemoveUpper(${m.id})">✕</button>
+        </div>
+        <div class="km-body" id="kmu${m.id}">
+          <div class="km-row">
+            <span class="km-lbl">Ширина (мм)</span>
+            <input class="km-inp" type="number" value="${m.width}" min="200" max="1200" onchange="kUpdateUpper(${m.id},'width',this.value)">
+          </div>
+          <div class="km-row">
+            <span class="km-lbl">Высота (мм)</span>
+            <input class="km-inp" type="number" value="${m.height}" min="300" max="1100" onchange="kUpdateUpper(${m.id},'height',this.value)">
+          </div>
+          <div class="km-row">
+            <span class="km-lbl">Фасад</span>
+            <select class="km-sel" onchange="kUpdateUpper(${m.id},'facade',this.value)">
+              <option value="door" ${m.facade==='door'?'selected':''}>С дверью</option>
+              <option value="none" ${m.facade==='none'?'selected':''}>Без двери</option>
+            </select>
           </div>
         </div>
-        ${!isPenal ? `<div class="km-row" style="margin-top:6px">
-          <span class="km-lbl">Высота</span>
-          <input class="km-inp" type="number" value="${m.height}" min="300" max="1100" onchange="kUpdateUpper(${m.id},'height',this.value)">
-        </div>` : ''}
-        ${!isOpen ? `<div class="km-row" style="margin-top:6px">
-          <span class="km-lbl">Фасад</span>
-          <select class="km-sel" onchange="kUpdateUpper(${m.id},'facade',this.value)">
-            <option value="door" ${m.facade==='door'?'selected':''}>С дверью</option>
-            <option value="none" ${m.facade==='none'?'selected':''}>Без двери</option>
-          </select>
-        </div>` : ''}
-      </div>
-    </div>`;
-  };
-
-  if(ul){ ul.innerHTML = upperMods.length ? upperMods.map(renderUpperItem).join('') : '<p class="hint">Нет верхних модулей</p>'; }
-  if(pl){ pl.innerHTML = penalMods.length ? penalMods.map(renderUpperItem).join('') : '<p class="hint">Нет пеналов</p>'; }
-
-  // Счётчики
-  const lLen=KitchenState.lower.reduce((s,m)=>s+m.width,0);
-  const uLen=KitchenState.upper.reduce((s,m)=>s+m.width,0);
+      </div>`).join(''); }
+  }
+  // ── Счётчики в заголовках аккордеонов ────────────────────────
   const lCnt=document.getElementById('kacc-lower-cnt');
   const uCnt=document.getElementById('kacc-upper-cnt');
+  const lLen=KitchenState.lower.reduce((s,m)=>s+m.width,0);
+  const uLen=KitchenState.upper.reduce((s,m)=>s+m.width,0);
   if(lCnt) lCnt.textContent=KitchenState.lower.length?`${KitchenState.lower.length} мод · ${lLen}мм`:'';
   if(uCnt) uCnt.textContent=KitchenState.upper.length?`${KitchenState.upper.length} мод · ${uLen}мм`:'';
 }
@@ -3764,28 +3657,19 @@ let kFacadeColorName = 'Белый';
 let kCorpusColorName = 'Бежевый';
 
 function kSetFacadeColor(hexVal, name, btn){
-  // Если hexVal не передан — ищем по имени
-  if(hexVal === null && name){
-    const found = kColorByName(name);
-    hexVal = found || kFacadeColorHex;
-  }
-  if(hexVal !== null) kFacadeColorHex = hexVal;
+  kFacadeColorHex = hexVal;
   kFacadeColorName = name||'';
   document.querySelectorAll('#k-facade-colors .kcolor-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  if(kMats && hexVal !== null){ kMats.door.color.setHex(hexVal); }
+  if(kMats){ kMats.door.color.setHex(hexVal); }
   kRender();
 }
 function kSetCorpusColor(hexVal, name, btn){
-  if(hexVal === null && name){
-    const found = kColorByName(name);
-    hexVal = found || kCorpusColorHex;
-  }
-  if(hexVal !== null) kCorpusColorHex = hexVal;
+  kCorpusColorHex = hexVal;
   kCorpusColorName = name||'';
   document.querySelectorAll('#k-corpus-colors .kcolor-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  if(kMats && hexVal !== null){ kMats.corpus.color.setHex(hexVal); }
+  if(kMats){ kMats.corpus.color.setHex(hexVal); }
   kRender();
 }
 // Рендер пикеров цвета из DB.ldsp
@@ -4153,7 +4037,6 @@ function initKitchen(){
     kInitThree();
     kRenderColorPickers();
     kFillTopSelect();
-    kRenderCatalog(); // рендер каталога модулей
     // Инициализация системы проектов кухни
     const kidx = kProjGetIndex();
     if(kidx.length > 0){
