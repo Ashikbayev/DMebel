@@ -255,121 +255,168 @@ function kpToggleStyle(){
 }
 
 function showKP(showL=true, showP=true, showK=false){
-  const client=$("kp-client")?.value||"—", obj=$("kp-object")?.value||"—", num=$("kp-num")?.value||"001";
+  const client=$("kp-client")?.value||"—",obj=$("kp-object")?.value||"—",num=$("kp-num")?.value||"001";
   const today=new Date().toLocaleDateString("ru-RU",{day:"numeric",month:"long",year:"numeric"});
-  const cols=[showL,showP,showK];
-  const nV=cols.filter(Boolean).length;
 
-  // Варианты цен
-  const varNames=["ЛДСП","МДФ Плёнка","МДФ Краска"];
-  const varTots=[C.BL.tot,C.BP.tot,C.BK.tot];
-  const varCreds=[C.BL.credit,C.BP.credit,C.BK.credit];
-  const varColors=["#1a5252","#065f46","#92400e"];
+  // Строка комплектации
+  const cols = [showL,showP,showK];
+  const nCols = cols.filter(Boolean).length;
+  const colStyle = `grid-template-columns:1fr${' 54px'.repeat(nCols)}`;
 
-  // Строки таблицы
-  function row(name,vals,bold){
-    const cells=cols.map((on,i)=>on?`<td style="text-align:right;padding:3px 8px;${bold?'font-weight:700':''}">${vals[i]||"—"}</td>`:"").join("");
-    return `<tr style="${bold?'background:#f0f8f8':''}"><td style="padding:3px 8px">${name}</td>${cells}</tr>`;
+  function mkR(n,q){
+    const checks = [
+      showL?'<div class="kck">OK</div>':'',
+      showP?'<div class="kck">OK</div>':'',
+      showK?'<div class="kck">OK</div>':''
+    ].filter((_,i)=>cols[i]).join('');
+    return `<div class="kr" style="${colStyle}"><div><div class="krn">${n}</div></div>${checks}</div>`;
   }
-  function section(title){
-    return `<tr><td colspan="${1+nV}" style="padding:5px 8px 2px;font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;border-top:1px solid #e0e0e0">${title}</td></tr>`;
-  }
-
-  let rows="";
-
-  // Корпус
-  if(C.ldspIt.length||C.hdfQ||C.kromQ){
-    rows+=section("Корпус / Материалы");
-    C.ldspIt.forEach(it=>{ rows+=row(it.n,[it.q,it.q,it.q]); });
-    if(C.hdfQ) rows+=row("ХДФ задняя стенка",cols.map(()=>C.hdfQ.toFixed(2)));
-    if(C.kromQ) rows+=row("Кромка 1мм, "+C.kromQ+"пм",cols.map(()=>C.kromQ+"пм"));
+  function mkF(n, li, pi, ki){
+    const lc=li?`<div class="kvv" style="background:#ede9ff;color:#5b21b6">OK</div>`:`<div class="kck d">—</div>`;
+    const pc=pi?`<div class="kvv" style="background:#d1fae5;color:#065f46">OK</div>`:`<div class="kck d">—</div>`;
+    const kc=ki?`<div class="kvv" style="background:#fef3c7;color:#92400e">OK</div>`:`<div class="kck d">—</div>`;
+    const cells=[showL?lc:'',showP?pc:'',showK?kc:''].filter((_,i)=>cols[i]).join('');
+    return `<div class="kr" style="${colStyle}"><div><div class="krn">${n}</div></div>${cells}</div>`;
   }
 
-  // Фасад
-  const hasF=C.fldspIt.length||C.fplenIt.length||C.fkrIt.length;
-  if(hasF){
-    rows+=section("Фасад");
-    C.fldspIt.forEach(it=>{ rows+=row(it.n,[it.q,"—","—"]); });
-    C.fplenIt.forEach(it=>{ rows+=row(it.n,["—",it.q,"—"]); });
-    C.fkrIt.forEach(it=>{ rows+=row(it.n,["—","—",it.q]); });
-  }
+  let kR="";
+  C.ldspIt.forEach(it=>{kR+=mkR(it.n,it.q);});
+  if(C.hdfQ>0)kR+=mkR("ХДФ (задняя стенка)",C.hdfQ);
+  if(C.kromQ>0)kR+=mkR("Кромка (пм)",C.kromQ);
 
-  // Фурнитура
-  const allFu=[...C.fuIt,...C.kuIt,...C.shIt];
-  if(allFu.length){
-    rows+=section("Фурнитура и аксессуары");
-    allFu.forEach(it=>{ rows+=row(it.n,cols.map(()=>it.q+' шт')); });
-  }
-
-  // Доставка
-  if(C.vDel>0){ rows+=section("Доставка"); rows+=row("Доставка по Сатпаеву и ПДМ",cols.map(()=>"✓")); }
-
-  // Доп позиции
+  const fL=C.fldspIt.map(it=>mkF(it.n,true,false,false)).join("");
+  const fP=C.fplenIt.map(it=>mkF(it.n,false,true,false)).join("");
+  const fK=C.fkrIt.map(it=>mkF(it.n,false,false,true)).join("");
+  const allF=[...C.fuIt,...C.kuIt,...C.shIt];
+  const fRows=allF.map(it=>mkR(it.n,it.q)).join("");
+  const dRow=C.vDel>0?mkR("Доставка по Сатпаеву и ПДМ",1):"";
   const allE=[...C.svIt,...C.vitIt,...C.wkIt,...C.dpIt];
-  if(allE.length){ rows+=section("Дополнительно"); allE.forEach(it=>{ rows+=row(it.n,cols.map(()=>it.q)); }); }
+  const eRows=allE.map(it=>mkR(it.n,it.q)).join("");
 
-  // Итог
-  rows+=`<tr style="background:#1a5252;color:#fff"><td style="padding:6px 8px;font-weight:700;font-size:13px">ИТОГО</td>${cols.map((on,i)=>on?`<td style="text-align:right;padding:6px 8px;font-weight:700;font-size:13px">${fm(varTots[i])}</td>`:"").join("")}</tr>`;
-  rows+=`<tr style="background:#f0f8f8"><td style="padding:3px 8px;font-size:11px;color:#666">💳 Кредит / рассрочка</td>${cols.map((on,i)=>on?`<td style="text-align:right;padding:3px 8px;font-size:11px;color:#666">${fm(varCreds[i])}</td>`:"").join("")}</tr>`;
+  // Шапка колонок
+  const hdrCols=[
+    showL?'<div class="kchv" style="color:#a8c4ff">ЛДСП</div>':'',
+    showP?'<div class="kchv" style="color:#7dd5b0">Плёнка</div>':'',
+    showK?'<div class="kchv" style="color:#e8b07a">Краска</div>':''
+  ].filter((_,i)=>cols[i]).join('');
+  const hdrStyle=`display:grid;${colStyle};padding:8px 14px;background:#111827;border-radius:10px 10px 0 0;margin:10px 10px 0`;
 
-  // Заголовки вариантов
-  const vHdrs=cols.map((on,i)=>on?`<th style="text-align:right;padding:4px 8px;font-size:11px;font-weight:700;color:${varColors[i]};white-space:nowrap">${varNames[i]}</th>`:"").join("");
+  // Итоговые колонки
+  const totCols=[
+    showL?`<div class="ktrv" style="color:#a8c4ff">${fm(C.BL.tot)}</div>`:'',
+    showP?`<div class="ktrv" style="color:#7dd5b0">${fm(C.BP.tot)}</div>`:'',
+    showK?`<div class="ktrv" style="color:#e8b07a">${fm(C.BK.tot)}</div>`:''
+  ].filter((_,i)=>cols[i]).join('');
+  const crCols=[
+    showL?`<div class="kcrv">${fm(C.BL.credit)}</div>`:'',
+    showP?`<div class="kcrv">${fm(C.BP.credit)}</div>`:'',
+    showK?`<div class="kcrv">${fm(C.BK.credit)}</div>`:''
+  ].filter((_,i)=>cols[i]).join('');
+  const thCols=[
+    showL?'<div class="kthv" style="color:#a8c4ff">ЛДСП</div>':'',
+    showP?'<div class="kthv" style="color:#7dd5b0">Плёнка</div>':'',
+    showK?'<div class="kthv" style="color:#e8b07a">Краска</div>':''
+  ].filter((_,i)=>cols[i]).join('');
+  const totStyle=`display:grid;${colStyle};align-items:center;padding:4px 0`;
+  const crStyle=`display:grid;${colStyle};padding:4px 0`;
+  const thStyle=`display:grid;${colStyle};margin-bottom:8px`;
 
   $("kp-doc").innerHTML=`
-<div style="max-width:700px;margin:0 auto;font-family:'Inter',system-ui,sans-serif;font-size:12px;color:#111;background:#fff;padding:20px 24px">
-
-  <!-- ШАПКА -->
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid #1a5252">
-    <div>
-      <div style="font-size:22px;font-weight:900;letter-spacing:-.5px;color:#0a2e2e">Mebel<span style="color:#1a5252">OFF</span><span style="color:#888;font-size:14px;font-weight:600">.kz</span></div>
-      <div style="font-size:11px;color:#666;margin-top:2px">Мебель на заказ · Сатпаев, Казахстан</div>
-      <div style="font-size:11px;color:#1a5252;margin-top:2px">@mebeloff.kz &nbsp;·&nbsp; +7 707 540 7626</div>
+  <div class="kh">
+    <div class="kh-glass"></div>
+    <div class="kh-orb1"></div>
+    <div class="kh-orb2"></div>
+    <div class="kh-inner">
+      <div class="klr">
+        <div class="klb"><div class="klm">M</div><div class="kld"></div></div>
+        <div>
+          <div class="kbn">MEBEL<span>OFF</span></div>
+          <div class="kbs">Мебель на заказ · Сатпаев</div>
+        </div>
+      </div>
+      <div class="khb">
+        <div class="kct">
+          <strong>+7 707 540 7626</strong>
+          <div>mebeloff.kz</div>
+          <div>Абая 68, БЦ, каб. 4</div>
+        </div>
+        <div class="kdi">
+          <div class="kdl">Коммерческое предложение</div>
+          <div class="kdn">#${num}</div>
+          <div class="kdd">${today}</div>
+        </div>
+      </div>
     </div>
-    <div style="text-align:right">
-      <div style="font-size:11px;color:#666;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Коммерческое предложение</div>
-      <div style="font-size:18px;font-weight:800;color:#0a2e2e">#${num}</div>
-      <div style="font-size:11px;color:#888">${today}</div>
+  </div>
+
+  <div class="kcb">
+    <div class="kcl"><div class="kcll">Клиент</div><div class="kclv">${client}</div></div>
+    <div class="kcl"><div class="kcll">Объект</div><div class="kclv">${obj}</div></div>
+    <div class="kcl"><div class="kcll">Менеджер</div><div class="kclv">Дали</div></div>
+  </div>
+
+  <div class="kvw">
+    <div class="kvt">Варианты исполнения</div>
+    <div class="kvs">
+      ${showL?`<div class="kv${showP||showK?'':' pop'}">
+        <div class="kv-tag ldsp">⬡ ЛДСП</div>
+        <div class="kvp">${fm(C.BL.tot)}</div>
+        <div class="kvc">кредит / рассрочка: <span>${fm(C.BL.credit)}</span></div>
+      </div>`:''}
+      ${showP?`<div class="kv pop">
+        <div class="kvbg"> Популярный</div>
+        <div class="kv-tag plen">◈ МДФ Плёнка</div>
+        <div class="kvp">${fm(C.BP.tot)}</div>
+        <div class="kvc">кредит / рассрочка: <span>${fm(C.BP.credit)}</span></div>
+      </div>`:''}
+      ${showK?`<div class="kv">
+        <div class="kv-tag kr">◆ МДФ Краска</div>
+        <div class="kvp">${fm(C.BK.tot)}</div>
+        <div class="kvc">кредит / рассрочка: <span>${fm(C.BK.credit)}</span></div>
+      </div>`:''}
     </div>
   </div>
 
-  <!-- КЛИЕНТ -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;padding:10px 12px;background:#f8f8f8;border-radius:6px;border:1px solid #e8e8e8">
-    <div><div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;margin-bottom:2px">Клиент</div><div style="font-weight:600">${client}</div></div>
-    <div><div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;margin-bottom:2px">Объект</div><div style="font-weight:600">${obj||"—"}</div></div>
-    <div><div style="font-size:10px;color:#888;font-weight:600;text-transform:uppercase;margin-bottom:2px">Менеджер</div><div style="font-weight:600">Дали</div></div>
+  <div style="${hdrStyle}">
+    <div class="kchl">Комплектация</div>
+    ${hdrCols}
+  </div>
+  ${kR?`<div class="ksl t"> Корпус</div>${kR}`:""}
+  ${(showL&&fL)||(showP&&fP)||(showK&&fK)?`<div class="ksl t"> Фасад</div>${showL?fL:""}${showP?fP:""}${showK?fK:""}`:""}
+  ${fRows?`<div class="ksl t"> Фурнитура</div>${fRows}`:""}
+  ${dRow?`<div class="ksl t"> Доставка</div>${dRow}`:""}
+  ${eRows?`<div class="ksl g">✦ Дополнительно</div>${eRows}`:""}
+  <div class="kf-spacer"></div>
+
+  <div class="kt">
+    <div style="${thStyle}"><div></div>${thCols}</div>
+    <div style="${totStyle}"><div class="ktrl">Итого клиенту</div>${totCols}</div>
+    <div class="ktd"></div>
+    <div style="${crStyle}"><div class="kcrl">💳 Кредит / рассрочка</div>${crCols}</div>
   </div>
 
-  <!-- ТАБЛИЦА КОМПЛЕКТАЦИИ -->
-  <table style="width:100%;border-collapse:collapse;margin-bottom:14px">
-    <thead>
-      <tr style="background:#0a2e2e;color:#fff">
-        <th style="text-align:left;padding:6px 8px;font-size:11px;font-weight:700">Комплектация</th>
-        ${vHdrs}
-      </tr>
-    </thead>
-    <tbody style="font-size:11px">
-      ${rows}
-    </tbody>
-  </table>
-
-  <!-- УСЛОВИЯ -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px">
-    <div style="display:flex;align-items:center;gap:6px;font-size:11px"><span style="width:16px;height:16px;background:#1a5252;color:#fff;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0">✓</span>Срок изготовления 15–45 рабочих дней</div>
-    <div style="display:flex;align-items:center;gap:6px;font-size:11px"><span style="width:16px;height:16px;background:#1a5252;color:#fff;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0">✓</span>Предоплата 50% при подписании договора</div>
-    <div style="display:flex;align-items:center;gap:6px;font-size:11px"><span style="width:16px;height:16px;background:#1a5252;color:#fff;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0">✓</span>Остаток оплачивается при доставке</div>
-    <div style="display:flex;align-items:center;gap:6px;font-size:11px"><span style="width:16px;height:16px;background:#1a5252;color:#fff;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0">✓</span>КП действительно 7 календарных дней</div>
-  </div>
-
-  <!-- ПОДПИСЬ -->
-  <div style="display:flex;justify-content:space-between;align-items:flex-end;padding-top:10px;border-top:1px solid #e0e0e0;margin-top:4px">
-    <div>
-      <div style="font-size:13px;font-weight:700;color:#0a2e2e">Дали</div>
-      <div style="font-size:11px;color:#666">Менеджер MebelOFF.kz</div>
-      <div style="font-size:11px;color:#1a5252;margin-top:2px">+7 707 540 7626 · Абая 68, БЦ каб. 4, Сатпаев</div>
+  <div class="kco">
+    <div class="kcot">Условия сотрудничества</div>
+    <div class="kcog">
+      <div class="kcon"><div class="kcd">OK</div><span>Срок изготовления 15–45 рабочих дней</span></div>
+      <div class="kcon"><div class="kcd">OK</div><span>Предоплата 50% при подписании договора</span></div>
+      <div class="kcon"><div class="kcd">OK</div><span>Остаток оплачивается при доставке</span></div>
+      <div class="kcon"><div class="kcd">OK</div><span>КП действительно 7 календарных дней</span></div>
     </div>
-    <div style="font-size:10px;color:#bbb;text-align:right;max-width:200px">КП не является публичной офертой.<br>Цены действительны на дату выдачи.</div>
   </div>
-</div>`;
+
+  <div class="kf">
+    <div class="kfl">
+      <strong>Дали</strong>
+      <div class="kf-contacts">
+        <div class="kf-contact"><i class="ti ti-phone"></i>+7 707 540 7626</div>
+        <div class="kf-contact"><i class="ti ti-world"></i>mebeloff.kz</div>
+        <div class="kf-contact"><i class="ti ti-map-pin"></i>Абая 68, БЦ, каб. 4, Сатпаев</div>
+      </div>
+    </div>
+    <div class="kfr">КП не является публичной офертой. Цены действительны на дату выдачи.</div>
+  </div>
+  <div style="height:16px"></div>`;
 
   page("kp");
   window.scrollTo(0,0);
@@ -594,9 +641,8 @@ function aiExecuteActions(actionsJson){
 
         case 'clearKitchen':
           if(typeof KitchenState!=='undefined'){
-            KitchenState.lower=[]; KitchenState.upper=[]; KitchenState.penal=[];
-            KitchenState.lId=0; KitchenState.uId=0; KitchenState.pId=0;
-            KitchenState.globalUpperH=750;
+            KitchenState.lower=[]; KitchenState.upper=[];
+            KitchenState.lId=0; KitchenState.uId=0;
             needKitchenRender=true; applied++;
           }
           break;
@@ -622,40 +668,12 @@ function aiExecuteActions(actionsJson){
         case 'addKitchenUpper':
           if(typeof KitchenState!=='undefined' && typeof kMkUpper==='function'){
             const m=kMkUpper(act.width||600);
-            m.height=act.height||(KitchenState.globalUpperH||750);
-            m.type=act.type||'upper1';
+            m.height=act.height||720;
             m.facade=act.facade||'door';
             KitchenState.upper.push(m);
             needKitchenRender=true; applied++;
           }
           break;
-
-        case 'addKitchenPenal':
-          if(typeof KitchenState!=='undefined' && typeof kMkPenal==='function'){
-            const mp=kMkPenal(act.width||600);
-            mp.height=act.height||2140;
-            mp.facade=act.facade||'door';
-            KitchenState.penal.push(mp);
-            needKitchenRender=true; applied++;
-          }
-          break;
-
-        case 'setKitchenUpperHeight':
-          if(typeof kSetUpperHeight==='function'){
-            kSetUpperHeight(act.height||750);
-            needKitchenRender=true; applied++;
-          }
-          break;
-
-        case 'setKitchenFacadeMat':{
-          var fmEl=document.getElementById('k-facade-mat');
-          if(fmEl && act.mat){
-            fmEl.value=act.mat;
-            if(typeof kRenderColorPickers==='function') kRenderColorPickers();
-            applied++;
-          }
-          break;
-        }
 
         case 'clearWardrobe':{
           // Используем сеттер: sections=[] в module через defineProperty
@@ -701,81 +719,6 @@ function aiExecuteActions(actionsJson){
             kAddFurnRow(act.cat, act.qty||1); applied++;
           }
           break;
-
-        case 'addKitchenAccessory':{
-          // Аксессуар кухни -> kuh-list
-          if(!DB.kuh||!DB.kuh.length||!act.cat) break;
-          var kiArr=DB.kuh;
-          var kiIdx=kiArr.findIndex(function(x){return x.cat.toLowerCase().indexOf(act.cat.toLowerCase())>=0;});
-          if(kiIdx<0) break;
-          var kiI=ST.kuh.length; ST.kuh.push({p:kiArr[kiIdx].p});
-          var kiC=document.getElementById('kuh-list'); if(!kiC) break;
-          if(kiI===0) kiC.innerHTML='';
-          var kiCats=[...new Set(kiArr.map(function(x){return x.cat;}))];
-          var kiD=document.createElement('div');
-          kiD.id='kuhr'+kiI; if(kiI>0) kiD.className='ib'; kiD.style.marginTop='8px';
-          var kiO=kiCats.map(function(c){return '<option value="'+c+'"'+(c===kiArr[kiIdx].cat?' selected':'')+'>'+c+'</option>';}).join('');
-          kiD.innerHTML='<div class="fr"><select id="kuhc'+kiI+'" onchange="uC('kuh','+kiI+')">'+kiO+'</select>'
-            +'<button class="db" onclick="$('kuhr'+kiI+'').style.display='none';ST.kuh['+kiI+']=null;recalc()">✕</button></div>'
-            +'<div class="fr" id="kuhvf'+kiI+'"></div>'
-            +'<div class="fr"><span class="lb">Кол-во</span>'
-            +'<input class="qi" type="number" inputmode="decimal" id="kuhq'+kiI+'" placeholder="0" min="0" onchange="recalc()">'
-            +'<span class="fp" id="kuhpp'+kiI+'">'+kiArr[kiIdx].p.toLocaleString('ru')+'₸</span></div>';
-          kiC.appendChild(kiD); uC('kuh',kiI);
-          var kiQ=document.getElementById('kuhq'+kiI); if(kiQ) kiQ.value=act.qty||1;
-          var kiCb=document.getElementById('cb-kuh'); if(kiCb&&!kiCb.classList.contains('op')) tog('kuh');
-          applied++; break;
-        }
-
-        case 'addWardrobeAccessory':{
-          // Аксессуар шкафа -> shk-list
-          if(!DB.shk||!DB.shk.length||!act.cat) break;
-          var skArr=DB.shk;
-          var skIdx=skArr.findIndex(function(x){return x.cat.toLowerCase().indexOf(act.cat.toLowerCase())>=0;});
-          if(skIdx<0) break;
-          var skI=ST.shk.length; ST.shk.push({p:skArr[skIdx].p});
-          var skC=document.getElementById('shk-list'); if(!skC) break;
-          if(skI===0) skC.innerHTML='';
-          var skCats=[...new Set(skArr.map(function(x){return x.cat;}))];
-          var skD=document.createElement('div');
-          skD.id='shkr'+skI; if(skI>0) skD.className='ib'; skD.style.marginTop='8px';
-          var skO=skCats.map(function(c){return '<option value="'+c+'"'+(c===skArr[skIdx].cat?' selected':'')+'>'+c+'</option>';}).join('');
-          skD.innerHTML='<div class="fr"><select id="shkc'+skI+'" onchange="uC('shk','+skI+')">'+skO+'</select>'
-            +'<button class="db" onclick="$('shkr'+skI+'').style.display='none';ST.shk['+skI+']=null;recalc()">✕</button></div>'
-            +'<div class="fr" id="shkvf'+skI+'"></div>'
-            +'<div class="fr"><span class="lb">Кол-во</span>'
-            +'<input class="qi" type="number" inputmode="decimal" id="shkq'+skI+'" placeholder="0" min="0" onchange="recalc()">'
-            +'<span class="fp" id="shkpp'+skI+'">'+skArr[skIdx].p.toLocaleString('ru')+'₸</span></div>';
-          skC.appendChild(skD); uC('shk',skI);
-          var skQ=document.getElementById('shkq'+skI); if(skQ) skQ.value=act.qty||1;
-          var skCb=document.getElementById('cb-shk'); if(skCb&&!skCb.classList.contains('op')) tog('shk');
-          applied++; break;
-        }
-
-        case 'addWardrobeFurn':{
-          // Фурнитура шкафа -> furn-list (Петля, Телескоп, Ручки...)
-          if(!DB.furn||!DB.furn.length||!act.cat) break;
-          var fkArr=DB.furn;
-          var fkIdx=fkArr.findIndex(function(x){return x.cat.toLowerCase().indexOf(act.cat.toLowerCase())>=0;});
-          if(fkIdx<0) break;
-          var fkI=ST.furn.length; ST.furn.push({p:fkArr[fkIdx].p});
-          var fkC=document.getElementById('furn-list'); if(!fkC) break;
-          if(fkI===0) fkC.innerHTML='';
-          var fkCats=[...new Set(fkArr.map(function(x){return x.cat;}))];
-          var fkD=document.createElement('div');
-          fkD.id='furnr'+fkI; if(fkI>0) fkD.className='ib'; fkD.style.marginTop='8px';
-          var fkO=fkCats.map(function(c){return '<option value="'+c+'"'+(c===fkArr[fkIdx].cat?' selected':'')+'>'+c+'</option>';}).join('');
-          fkD.innerHTML='<div class="fr"><select id="furnc'+fkI+'" onchange="uC('furn','+fkI+')">'+fkO+'</select>'
-            +'<button class="db" onclick="$('furnr'+fkI+'').style.display='none';ST.furn['+fkI+']=null;recalc()">✕</button></div>'
-            +'<div class="fr" id="furnvf'+fkI+'"></div>'
-            +'<div class="fr"><span class="lb">Кол-во</span>'
-            +'<input class="qi" type="number" inputmode="decimal" id="furnq'+fkI+'" placeholder="0" min="0" onchange="recalc()">'
-            +'<span class="fp" id="furnpp'+fkI+'">'+fkArr[fkIdx].p.toLocaleString('ru')+'₸</span></div>';
-          fkC.appendChild(fkD); uC('furn',fkI);
-          var fkQ=document.getElementById('furnq'+fkI); if(fkQ) fkQ.value=act.qty||1;
-          var fkCb=document.getElementById('cb-furn'); if(fkCb&&!fkCb.classList.contains('op')) tog('furn');
-          applied++; break;
-        }
 
         case 'setHdfQty':{
           const e=$('hdf-qty'); if(e){e.value=act.qty||0; applied++;}
