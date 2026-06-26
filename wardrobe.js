@@ -364,6 +364,11 @@ function pickSlideByBrand(sectionDepth, brand){
     .filter(s=>s.brand===brand && s.type==='Телескоп' && s.length<=maxLen)
     .sort((a,b)=>b.length-a.length);
   if(matches.length) return matches[0];
+  // Фирма не найдена — показываем предупреждение
+  if(typeof showStatus === 'function'){
+    showStatus(`⚠ Телескопы "${brand}" не найдены в каталоге — подобран ближайший аналог`, '#BA7517');
+    setTimeout(hideStatus, 4000);
+  }
   // Fallback: любой телескоп подходящей длины
   matches = slideCatalog
     .filter(s=>s.type==='Телескоп' && s.length<=maxLen)
