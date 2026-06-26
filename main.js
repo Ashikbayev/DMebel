@@ -641,9 +641,8 @@ function aiExecuteActions(actionsJson){
 
         case 'clearKitchen':
           if(typeof KitchenState!=='undefined'){
-            KitchenState.lower=[]; KitchenState.upper=[]; KitchenState.penal=[];
-            KitchenState.lId=0; KitchenState.uId=0; KitchenState.pId=0;
-            KitchenState.globalUpperH=750;
+            KitchenState.lower=[]; KitchenState.upper=[];
+            KitchenState.lId=0; KitchenState.uId=0;
             needKitchenRender=true; applied++;
           }
           break;
@@ -669,40 +668,12 @@ function aiExecuteActions(actionsJson){
         case 'addKitchenUpper':
           if(typeof KitchenState!=='undefined' && typeof kMkUpper==='function'){
             const m=kMkUpper(act.width||600);
-            m.height=act.height||(KitchenState.globalUpperH||750);
-            m.type=act.type||'upper1';
+            m.height=act.height||720;
             m.facade=act.facade||'door';
             KitchenState.upper.push(m);
             needKitchenRender=true; applied++;
           }
           break;
-
-        case 'addKitchenPenal':
-          if(typeof KitchenState!=='undefined' && typeof kMkPenal==='function'){
-            const mp=kMkPenal(act.width||600);
-            mp.height=act.height||2140;
-            mp.facade=act.facade||'door';
-            KitchenState.penal.push(mp);
-            needKitchenRender=true; applied++;
-          }
-          break;
-
-        case 'setKitchenUpperHeight':
-          if(typeof kSetUpperHeight==='function'){
-            kSetUpperHeight(act.height||750);
-            needKitchenRender=true; applied++;
-          }
-          break;
-
-        case 'setKitchenFacadeMat':{
-          var fmEl=document.getElementById('k-facade-mat');
-          if(fmEl && act.mat){
-            fmEl.value=act.mat;
-            if(typeof kRenderColorPickers==='function') kRenderColorPickers();
-            applied++;
-          }
-          break;
-        }
 
         case 'clearWardrobe':{
           // Используем сеттер: sections=[] в module через defineProperty
@@ -748,81 +719,6 @@ function aiExecuteActions(actionsJson){
             kAddFurnRow(act.cat, act.qty||1); applied++;
           }
           break;
-
-        case 'addKitchenAccessory':{
-          // Аксессуар кухни -> kuh-list
-          if(!DB.kuh||!DB.kuh.length||!act.cat) break;
-          var kiArr=DB.kuh;
-          var kiIdx=kiArr.findIndex(function(x){return x.cat.toLowerCase().indexOf(act.cat.toLowerCase())>=0;});
-          if(kiIdx<0) break;
-          var kiI=ST.kuh.length; ST.kuh.push({p:kiArr[kiIdx].p});
-          var kiC=document.getElementById('kuh-list'); if(!kiC) break;
-          if(kiI===0) kiC.innerHTML='';
-          var kiCats=[...new Set(kiArr.map(function(x){return x.cat;}))];
-          var kiD=document.createElement('div');
-          kiD.id='kuhr'+kiI; if(kiI>0) kiD.className='ib'; kiD.style.marginTop='8px';
-          var kiO=kiCats.map(function(c){return '<option value="'+c+'"'+(c===kiArr[kiIdx].cat?' selected':'')+'>'+c+'</option>';}).join('');
-          kiD.innerHTML='<div class="fr"><select id="kuhc'+kiI+'" onchange="uC('kuh','+kiI+')">'+kiO+'</select>'
-            +'<button class="db" onclick="$('kuhr'+kiI+'').style.display='none';ST.kuh['+kiI+']=null;recalc()">✕</button></div>'
-            +'<div class="fr" id="kuhvf'+kiI+'"></div>'
-            +'<div class="fr"><span class="lb">Кол-во</span>'
-            +'<input class="qi" type="number" inputmode="decimal" id="kuhq'+kiI+'" placeholder="0" min="0" onchange="recalc()">'
-            +'<span class="fp" id="kuhpp'+kiI+'">'+kiArr[kiIdx].p.toLocaleString('ru')+'₸</span></div>';
-          kiC.appendChild(kiD); uC('kuh',kiI);
-          var kiQ=document.getElementById('kuhq'+kiI); if(kiQ) kiQ.value=act.qty||1;
-          var kiCb=document.getElementById('cb-kuh'); if(kiCb&&!kiCb.classList.contains('op')) tog('kuh');
-          applied++; break;
-        }
-
-        case 'addWardrobeAccessory':{
-          // Аксессуар шкафа -> shk-list
-          if(!DB.shk||!DB.shk.length||!act.cat) break;
-          var skArr=DB.shk;
-          var skIdx=skArr.findIndex(function(x){return x.cat.toLowerCase().indexOf(act.cat.toLowerCase())>=0;});
-          if(skIdx<0) break;
-          var skI=ST.shk.length; ST.shk.push({p:skArr[skIdx].p});
-          var skC=document.getElementById('shk-list'); if(!skC) break;
-          if(skI===0) skC.innerHTML='';
-          var skCats=[...new Set(skArr.map(function(x){return x.cat;}))];
-          var skD=document.createElement('div');
-          skD.id='shkr'+skI; if(skI>0) skD.className='ib'; skD.style.marginTop='8px';
-          var skO=skCats.map(function(c){return '<option value="'+c+'"'+(c===skArr[skIdx].cat?' selected':'')+'>'+c+'</option>';}).join('');
-          skD.innerHTML='<div class="fr"><select id="shkc'+skI+'" onchange="uC('shk','+skI+')">'+skO+'</select>'
-            +'<button class="db" onclick="$('shkr'+skI+'').style.display='none';ST.shk['+skI+']=null;recalc()">✕</button></div>'
-            +'<div class="fr" id="shkvf'+skI+'"></div>'
-            +'<div class="fr"><span class="lb">Кол-во</span>'
-            +'<input class="qi" type="number" inputmode="decimal" id="shkq'+skI+'" placeholder="0" min="0" onchange="recalc()">'
-            +'<span class="fp" id="shkpp'+skI+'">'+skArr[skIdx].p.toLocaleString('ru')+'₸</span></div>';
-          skC.appendChild(skD); uC('shk',skI);
-          var skQ=document.getElementById('shkq'+skI); if(skQ) skQ.value=act.qty||1;
-          var skCb=document.getElementById('cb-shk'); if(skCb&&!skCb.classList.contains('op')) tog('shk');
-          applied++; break;
-        }
-
-        case 'addWardrobeFurn':{
-          // Фурнитура шкафа -> furn-list (Петля, Телескоп, Ручки...)
-          if(!DB.furn||!DB.furn.length||!act.cat) break;
-          var fkArr=DB.furn;
-          var fkIdx=fkArr.findIndex(function(x){return x.cat.toLowerCase().indexOf(act.cat.toLowerCase())>=0;});
-          if(fkIdx<0) break;
-          var fkI=ST.furn.length; ST.furn.push({p:fkArr[fkIdx].p});
-          var fkC=document.getElementById('furn-list'); if(!fkC) break;
-          if(fkI===0) fkC.innerHTML='';
-          var fkCats=[...new Set(fkArr.map(function(x){return x.cat;}))];
-          var fkD=document.createElement('div');
-          fkD.id='furnr'+fkI; if(fkI>0) fkD.className='ib'; fkD.style.marginTop='8px';
-          var fkO=fkCats.map(function(c){return '<option value="'+c+'"'+(c===fkArr[fkIdx].cat?' selected':'')+'>'+c+'</option>';}).join('');
-          fkD.innerHTML='<div class="fr"><select id="furnc'+fkI+'" onchange="uC('furn','+fkI+')">'+fkO+'</select>'
-            +'<button class="db" onclick="$('furnr'+fkI+'').style.display='none';ST.furn['+fkI+']=null;recalc()">✕</button></div>'
-            +'<div class="fr" id="furnvf'+fkI+'"></div>'
-            +'<div class="fr"><span class="lb">Кол-во</span>'
-            +'<input class="qi" type="number" inputmode="decimal" id="furnq'+fkI+'" placeholder="0" min="0" onchange="recalc()">'
-            +'<span class="fp" id="furnpp'+fkI+'">'+fkArr[fkIdx].p.toLocaleString('ru')+'₸</span></div>';
-          fkC.appendChild(fkD); uC('furn',fkI);
-          var fkQ=document.getElementById('furnq'+fkI); if(fkQ) fkQ.value=act.qty||1;
-          var fkCb=document.getElementById('cb-furn'); if(fkCb&&!fkCb.classList.contains('op')) tog('furn');
-          applied++; break;
-        }
 
         case 'setHdfQty':{
           const e=$('hdf-qty'); if(e){e.value=act.qty||0; applied++;}
