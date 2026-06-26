@@ -3764,19 +3764,28 @@ let kFacadeColorName = 'Белый';
 let kCorpusColorName = 'Бежевый';
 
 function kSetFacadeColor(hexVal, name, btn){
-  kFacadeColorHex = hexVal;
+  // Если hexVal не передан — ищем по имени
+  if(hexVal === null && name){
+    const found = kColorByName(name);
+    hexVal = found || kFacadeColorHex;
+  }
+  if(hexVal !== null) kFacadeColorHex = hexVal;
   kFacadeColorName = name||'';
   document.querySelectorAll('#k-facade-colors .kcolor-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  if(kMats){ kMats.door.color.setHex(hexVal); }
+  if(kMats && hexVal !== null){ kMats.door.color.setHex(hexVal); }
   kRender();
 }
 function kSetCorpusColor(hexVal, name, btn){
-  kCorpusColorHex = hexVal;
+  if(hexVal === null && name){
+    const found = kColorByName(name);
+    hexVal = found || kCorpusColorHex;
+  }
+  if(hexVal !== null) kCorpusColorHex = hexVal;
   kCorpusColorName = name||'';
   document.querySelectorAll('#k-corpus-colors .kcolor-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  if(kMats){ kMats.corpus.color.setHex(hexVal); }
+  if(kMats && hexVal !== null){ kMats.corpus.color.setHex(hexVal); }
   kRender();
 }
 // Рендер пикеров цвета из DB.ldsp
