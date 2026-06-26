@@ -4512,6 +4512,161 @@ function kShowSpec(){
   `;
   modal.style.display='flex';
 }
+// ── Переключение вкладок раскроя ─────────────────────────────
+function kCutTab(tab){
+  const sheets = document.getElementById('k-cut-content');
+  const list   = document.getElementById('k-cut-list-content');
+  const tb1    = document.getElementById('kcut-tab-sheets');
+  const tb2    = document.getElementById('kcut-tab-list');
+  if(tab === 'sheets'){
+    if(sheets) sheets.style.display = '';
+    if(list)   list.style.display   = 'none';
+    if(tb1){ tb1.style.color='#1a5252'; tb1.style.borderBottomColor='#1a5252'; }
+    if(tb2){ tb2.style.color='#888';    tb2.style.borderBottomColor='transparent'; }
+  } else {
+    if(sheets) sheets.style.display = 'none';
+    if(list)   list.style.display   = '';
+    if(tb1){ tb1.style.color='#888';    tb1.style.borderBottomColor='transparent'; }
+    if(tb2){ tb2.style.color='#1a5252'; tb2.style.borderBottomColor='#1a5252'; }
+    kRenderDetailList();
+  }
+}
+window.kCutTab = kCutTab;
+
+// ── Список деталей кухни ──────────────────────────────────────
+function kRenderDetailList(){
+  const el = document.getElementById('k-cut-list-content');
+  if(!el) return;
+
+  const depth   = parseInt(document.getElementById('k-depth')?.value || 501);
+  const floorH  = parseInt(document.getElementById('k-floor-h')?.value || 850);
+  const T = K_BOARD, T_PLAN = 71, upperD = 350;
+  const CORP_H = floorH - K_TOP - 100;
+  const kFacadeMat = document.getElementById('k-facade-mat')?.value || 'ldsp';
+
+  // Собираем все детали с материалом
+  const rows = [];
+  function add(name, w, h, qty, mat){
+    // Группируем одинаковые
+    const key = name+'_'+w+'_'+h+'_'+mat;
+    const ex = rows.find(r=>r.key===key);
+    if(ex){ ex.qty+=qty; }
+    else rows.push({key, name, w:Math.round(w), h:Math.round(h), qty, mat});
+  }
+
+  // ── НИЖНИЕ ────────────────────────────────────────────────
+  KitchenState.lower.forEach((m,mi)=>{
+    const W=m.width, D=depth, H=CORP_H;
+    const lbl = `Н${mi+1}(${W}мм)`;
+    add(`${lbl} Боковина`,        H-T, D,   2, 'ЛДСП корпус');
+    add(`${lbl} Планка верхняя`,  W,   T_PLAN, 2, 'ЛДСП корпус');
+    add(`${lbl} Дно накладное`,   W,   D,   1, 'ЛДСП корпус');
+    if(m.type==='shelves'){
+      add(`${lbl} Полка`,         W-T*2, D, 2, 'ЛДСП корпус');
+    }
+    if(m.type==='drawers'){
+      add(`${lbl} Дно ящика`,     W-T*2, D-30, 3, 'ЛДСП корпус');
+    }
+    add(`${lbl} Задник`,          W-T*2, H,   1, 'ХДФ');
+    if(m.facade==='door' && m.type!=='sink' && m.type!=='appliance'){
+      const facMat = kFacadeMat==='ldsp'?'ЛДСП фасад':kFacadeMat==='mdf_plen'?'МДФ Плёнка':'МДФ Краска';
+      add(`${lbl} Фасад`,         W-4, H-4, 1, facMat);
+    }
+  });
+
+  // ── ВЕРХНИЕ ───────────────────────────────────────────────
+  KitchenState.upper.forEach((m,mi)=>{
+    const W=m.width, D=upperD, H=m.height;
+    const lbl = `В${mi+1}(${W}мм)`;
+    add(`${lbl} Боковина`,        H,     D,   2, 'ЛДСП корпус');
+    add(`${lbl} Верх вкладной`,   W-T*2, D,   1, 'ЛДСП корпус');
+    add(`${lbl} Дно вкладное`,    W-T*2, D,   2, 'ЛДСП корпус');
+    if(m.type!=='upperOpen') add(`${lbl} Полка`, W-T*2, D, 1, 'ЛДСП корпус');
+    add(`${lbl} Задник`,          W-T*2, H-T*2, 1, 'ХДФ');
+    if(m.facade==='door'){
+      const facMat = kFacadeMat==='ldsp'?'ЛДСП фасад':kFacadeMat==='mdf_plen'?'МДФ Плёнка':'МДФ Краска';
+      add(`${lbl} Фасад`,         W-4, H-4, 1, facMat);
+    }
+  });
+
+  // ── ПЕНАЛЫ ────────────────────────────────────────────────
+  KitchenState.penal.forEach((m,mi)=>{
+    const W=m.width, D=depth, H=m.height;
+    const lbl = `П${mi+1}(${W}мм)`;
+    add(`${lbl} Боковина`,        H,     D,   2, 'ЛДСП корпус');
+    add(`${lbl} Верх вкладной`,   W-T*2, D,   1, 'ЛДСП корпус');
+    add(`${lbl} Дно вкладное`,    W-T*2, D,   2, 'ЛДСП корпус');
+    add(`${lbl} Полка`,           W-T*2, D,   2, 'ЛДСП корпус');
+    add(`${lbl} Задник`,          W-T*2, H-T*2, 1, 'ХДФ');
+    if(m.facade==='door'){
+      const facMat = kFacadeMat==='ldsp'?'ЛДСП фасад':kFacadeMat==='mdf_plen'?'МДФ Плёнка':'МДФ Краска';
+      add(`${lbl} Фасад`,         W-4, H-4, 1, facMat);
+    }
+  });
+
+  if(!rows.length){ el.innerHTML='<p class="hint">Нет модулей</p>'; return; }
+
+  // Итоги по материалам
+  const matTotals = {};
+  rows.forEach(r=>{ matTotals[r.mat] = (matTotals[r.mat]||0) + r.qty; });
+  const totalParts = rows.reduce((s,r)=>s+r.qty, 0);
+
+  // Группируем по материалу для отображения
+  const matColors = {
+    'ЛДСП корпус': '#e8f5e9',
+    'ЛДСП фасад':  '#e3f2fd',
+    'МДФ Плёнка':  '#fff8e1',
+    'МДФ Краска':  '#fff3e0',
+    'ХДФ':         '#fbe9e7',
+  };
+  const matGroups = {};
+  rows.forEach(r=>{
+    if(!matGroups[r.mat]) matGroups[r.mat] = [];
+    matGroups[r.mat].push(r);
+  });
+
+  let html = `<div style="margin-bottom:12px;font-size:12px;color:#666">`;
+  html += `Всего деталей: <b>${totalParts} шт</b> | `;
+  html += Object.entries(matTotals).map(([m,q])=>`${m}: <b>${q}шт</b>`).join(' | ');
+  html += `</div>`;
+
+  // Кнопка копирования
+  html += `<button onclick="kCopyDetailList()" style="margin-bottom:12px;padding:6px 14px;font-size:11px;border:1px solid #1a5252;border-radius:6px;background:#f0f8f8;color:#1a5252;cursor:pointer"><i class="ti ti-copy"></i> Копировать таблицу</button>`;
+
+  Object.entries(matGroups).forEach(([mat, matRows])=>{
+    const color = matColors[mat] || '#f5f5f5';
+    html += `<div style="margin-bottom:16px">`;
+    html += `<div style="font-size:12px;font-weight:700;padding:6px 10px;background:${color};border-radius:6px 6px 0 0;border:1px solid #ddd">${mat} — ${matRows.reduce((s,r)=>s+r.qty,0)} шт</div>`;
+    html += `<table style="width:100%;border-collapse:collapse;font-size:11px;border:1px solid #ddd;border-top:none">`;
+    html += `<thead><tr style="background:#f8f8f8"><th style="text-align:left;padding:5px 8px;border-bottom:1px solid #ddd">Деталь</th><th style="padding:5px 8px;border-bottom:1px solid #ddd;text-align:right">Длина (мм)</th><th style="padding:5px 8px;border-bottom:1px solid #ddd;text-align:right">Ширина (мм)</th><th style="padding:5px 8px;border-bottom:1px solid #ddd;text-align:center">Кол.</th></tr></thead><tbody>`;
+    matRows.forEach((r,i)=>{
+      const bg = i%2===0 ? '#fff' : '#fafafa';
+      html += `<tr style="background:${bg}"><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">${r.name}</td><td style="padding:4px 8px;text-align:right;border-bottom:1px solid #f0f0f0;font-family:monospace">${r.w}</td><td style="padding:4px 8px;text-align:right;border-bottom:1px solid #f0f0f0;font-family:monospace">${r.h}</td><td style="padding:4px 8px;text-align:center;border-bottom:1px solid #f0f0f0;font-weight:600">${r.qty}</td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  });
+
+  el.innerHTML = html;
+}
+window.kRenderDetailList = kRenderDetailList;
+
+// Копирование таблицы деталей в буфер
+function kCopyDetailList(){
+  const el = document.getElementById('k-cut-list-content');
+  if(!el) return;
+  const rows = el.querySelectorAll('tr');
+  const lines = [];
+  rows.forEach(row=>{
+    const cells = row.querySelectorAll('th,td');
+    lines.push(Array.from(cells).map(c=>c.textContent.trim()).join('\t'));
+  });
+  navigator.clipboard?.writeText(lines.join('\n')).then(()=>{
+    showStatus('✓ Таблица скопирована в буфер', '#1a5252');
+    setTimeout(hideStatus, 2000);
+  });
+}
+window.kCopyDetailList = kCopyDetailList;
+
 // ── Общие функции раскроя кухни (используются в kShowCut и sendKitchenToCalc) ──
 
 // Система "Четверть": до 25% → 0.25, 25-75% → как есть, >75% → 1.0

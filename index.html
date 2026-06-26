@@ -684,12 +684,22 @@
 
 <!-- KITCHEN CUT MODAL -->
 <div id="k-cut-modal" class="modal-wrap" style="display:none">
-  <div class="modal-inner">
+  <div class="modal-inner" style="max-width:1100px;width:95vw">
     <div class="modal-hdr">
       <span>Раскрой кухни</span>
       <button class="closebtn" onclick="kCloseCut()"><i class="ti ti-x"></i></button>
     </div>
+    <!-- Табы -->
+    <div style="display:flex;gap:0;border-bottom:2px solid #e0e0e0;padding:0 14px;background:#fafafa">
+      <button id="kcut-tab-sheets" onclick="kCutTab('sheets')" style="padding:9px 18px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;color:#1a5252;border-bottom:2px solid #1a5252;margin-bottom:-2px">
+        <i class="ti ti-layout-grid"></i> Раскрой листов
+      </button>
+      <button id="kcut-tab-list" onclick="kCutTab('list')" style="padding:9px 18px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-2px">
+        <i class="ti ti-list"></i> Список деталей
+      </button>
+    </div>
     <div style="padding:14px;overflow-y:auto;max-height:75vh" id="k-cut-content"></div>
+    <div style="padding:14px;overflow-y:auto;max-height:75vh;display:none" id="k-cut-list-content"></div>
   </div>
 </div>
 
