@@ -550,7 +550,13 @@ select{width:100%;font-size:12px;padding:5px 6px;border:1px solid #ddd;border-ra
   .modal-wrap{position:static;background:none;padding:0}
   #kp-modal .modal-inner{max-width:100%;box-shadow:none;border-radius:0}
   .kp-close-btn,.kp-print-btn{display:none}
-  body>*:not(#kp-modal){display:none}
+  /* Скрываем всё кроме КП страницы */
+  body>*{display:none!important}
+  #pg-kp{display:block!important;position:static!important;overflow:visible!important;height:auto!important;width:100%!important}
+  .kp-back-bar{display:none!important}
+  .kp-doc{display:block!important;background:#fff!important;overflow:visible!important}
+  .bar{display:none!important}
+  @page{margin:10mm}
 }
 
 /* ── KITCHEN PROJECTS BAR ─────────────────────────────────── */
