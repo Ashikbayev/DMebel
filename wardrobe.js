@@ -4456,72 +4456,203 @@ function kAddExtra(){ kAddAccItem(); }
 window.kAddExtra=kAddExtra; window.kRenderExtras=kRenderExtras;
 window.kRenderPricesPreview=kRenderPricesPreview;
 
-// ── Смета ─────────────────────────────────────────────────────
+// ── Смета кухни ───────────────────────────────────────────────
 function kShowSpec(){
-  const modal=document.getElementById('k-spec-modal');
-  const content=document.getElementById('k-spec-content');
-  if(!modal||!content) return;
+  const modal   = document.getElementById('k-spec-modal');
+  const content = document.getElementById('k-spec-content');
+  if(!modal || !content) return;
 
-  const depth  = parseInt(document.getElementById('k-depth')?.value||600);
-  const floorH = parseInt(document.getElementById('k-floor-h')?.value||850);
-  const uGap   = parseInt(document.getElementById('k-upper-gap')?.value||600);
-  const T=K_BOARD/1000, upperD=350/1000;
+  const depth    = parseInt(document.getElementById('k-depth')?.value  || 501);
+  const floorH   = parseInt(document.getElementById('k-floor-h')?.value || 850);
+  const sheetFmt = document.getElementById('k-sheet-fmt')?.value || '2750x1830';
+  const [LDSP_W, LDSP_H] = sheetFmt === '2800x2070' ? [2800,2070] : [2750,1830];
+  const facadeMat = document.getElementById('k-facade-mat')?.value || 'ldsp';
+  const T = K_BOARD, LEG_H = 100, upperD = 350;
+  const CORP_H = floorH - K_TOP - LEG_H;
 
-  // Считаем площадь ЛДСП (в кв.м → листах)
-  let lowerParts=[], upperParts=[];
-  KitchenState.lower.forEach((m,i)=>{
-    const W=m.width/1000, H=(floorH-K_TOP)/1000, D=depth/1000;
-    lowerParts.push({n:`Нижний ${i+1} (${m.width}мм)`, parts:[
-      {n:'Дно',    w:W,    h:T,    d:D},
-      {n:'Верх',   w:W,    h:T,    d:D},
-      {n:'Бок×2',  w:T,    h:H,    d:D, qty:2},
-      {n:'Полка',  w:W-T*2,h:T,    d:D-(4/1000), skip: m.type!=='shelves'},
-    ]});
+  // ── Расчёт листов (Четверть) ──────────────────────────────
+  const corpParts2 = kBuildCorpusParts(depth, floorH);
+  const facParts2  = kBuildFacadeParts(depth, floorH);
+  const hdfParts2  = kBuildHdfParts(depth, floorH);
+  const corpSheets = kCalcSheets(corpParts2, LDSP_W, LDSP_H, false);
+  const facSheets  = kCalcSheets(facParts2,  LDSP_W, LDSP_H, false);
+  const hdfSheets  = kCalcSheets(hdfParts2,  2800, 2070, true);
+  const facM2 = facParts2.reduce((s,p)=>s+p.w*p.h/1e6, 0);
+
+  // ── Кромка (1мм, по видимым торцам) ──────────────────────
+  const T_m = T/1000, CORP_Hm = CORP_H/1000, D_m = depth/1000, UD_m = upperD/1000;
+  let edgePm = 0;
+  KitchenState.lower.forEach(m=>{
+    const W=m.width/1000, H=CORP_Hm, D=D_m;
+    edgePm += 2*((H-T_m)+D) + W + 2*W;
+    if(m.type==='shelves') edgePm += 2*(W-T_m*2);
+    if(m.type==='drawers') edgePm += 3*(W-T_m*2);
+    if(m.facade==='door'&&m.type!=='sink'&&m.type!=='appliance')
+      edgePm += 2*((W-0.004)+(H-0.004));
   });
-  KitchenState.upper.forEach((m,i)=>{
-    const W=m.width/1000, H=m.height/1000, D=upperD;
-    upperParts.push({n:`Верхний ${i+1} (${m.width}мм)`, parts:[
-      {n:'Дно',   w:W,    h:T,    d:D},
-      {n:'Верх',  w:W,    h:T,    d:D},
-      {n:'Бок×2', w:T,    h:H,    d:D, qty:2},
-      {n:'Полка', w:W-T*2,h:T,    d:D-0.004},
-    ]});
+  KitchenState.upper.forEach(m=>{
+    const W=m.width/1000, H=m.height/1000, D=UD_m;
+    edgePm += 2*(H+D) + (W-T_m*2) + 2*(W-T_m*2);
+    if(m.type!=='upperOpen') edgePm += (W-T_m*2);
+    if(m.facade==='door') edgePm += 2*((W-0.004)+(H-0.004));
   });
-
-  // Суммируем площадь ЛДСП
-  let totalM2=0;
-  const fmt2=n=>n.toFixed(3);
-  let rows='';
-  [...lowerParts,...upperParts].forEach(mod=>{
-    mod.parts.forEach(p=>{
-      if(p.skip) return;
-      const qty=p.qty||1;
-      const s=p.w*p.d*qty; // ЛДСП — ширина × глубина
-      totalM2+=s;
-      rows+=`<tr><td>${mod.n} — ${p.n}</td><td>${qty}</td><td>${fmt2(p.w*1000)}×${fmt2(p.d*1000)}</td><td>${fmt2(s)}</td></tr>`;
-    });
+  KitchenState.penal.forEach(m=>{
+    const W=m.width/1000, H=m.height/1000, D=D_m;
+    edgePm += 2*(H+D) + (W-T_m*2) + 2*(W-T_m*2) + 2*(W-T_m*2);
+    if(m.facade==='door') edgePm += 2*((W-0.004)+(H-0.004));
   });
-  const LDSP_SHEET_M2 = 2.75*1.83; // 5.0325 м²
-  const sheets = totalM2/LDSP_SHEET_M2;
+  edgePm = Math.ceil(edgePm);
 
-  content.innerHTML=`
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="background:#f0f0f0">
-        <th style="text-align:left;padding:5px">Деталь</th>
-        <th style="padding:5px">Кол</th>
-        <th style="padding:5px">Ш×Г (мм)</th>
-        <th style="padding:5px">м²</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-      <tfoot><tr style="background:#e8f4f4;font-weight:700">
-        <td colspan="3" style="padding:6px">ИТОГО ЛДСП</td>
-        <td style="padding:6px">${fmt2(totalM2)} м² ≈ ${sheets.toFixed(2)} л</td>
-      </tr></tfoot>
-    </table>
-    <div style="margin-top:12px;font-size:11px;color:#888">* Без учёта отходов. Нижние модули глубина ${depth}мм, верхние 350мм.</div>
-  `;
-  modal.style.display='flex';
+  // ── Петли и ручки ────────────────────────────────────────
+  let hinges=0, handles=0;
+  const countDoors = m => {
+    if(m.facade!=='door') return 0;
+    if(m.type==='upper2') return 2;
+    return 1;
+  };
+  KitchenState.lower.forEach(m=>{ const d=countDoors(m); hinges+=d*2; handles+=d+(m.type==='drawers'?3:0); });
+  KitchenState.upper.forEach(m=>{ const d=countDoors(m); hinges+=d*2; handles+=d; });
+  KitchenState.penal.forEach(m=>{ const d=countDoors(m); hinges+=d*2; handles+=d; });
+
+  const totalModules = KitchenState.lower.length + KitchenState.upper.length + KitchenState.penal.length;
+  const totalLowerW  = KitchenState.lower.reduce((s,m)=>s+m.width,0);
+
+  // ── Цены из DB (если загружены) ──────────────────────────
+  const fmt = n => n ? Math.round(n).toLocaleString('ru')+'₸' : '—';
+  const ldspP   = typeof DB!=='undefined' && DB.ldsp?.[0]?.p || 0;
+  const hdfP    = typeof DB!=='undefined' && DB.hdf_p || 0;
+  const kromP   = typeof DB!=='undefined' && DB.krom_p || 0;
+  const mdfPlenP = typeof DB!=='undefined' && DB.fas_plen?.[0]?.p || 0;
+  const mdfKrP   = typeof DB!=='undefined' && DB.fas_kr?.[0]?.p || 0;
+  const facLdspP = typeof DB!=='undefined' && DB.fldsp?.[0]?.p || ldspP;
+
+  // Стоимость материалов
+  const corpCost = corpSheets * ldspP;
+  const hdfCost  = hdfSheets  * hdfP;
+  const kromCost = edgePm     * kromP;
+  const facLdspCost = facadeMat==='ldsp'     ? facSheets*facLdspP : 0;
+  const facMdfCost  = facadeMat==='mdf_plen' ? facM2*mdfPlenP :
+                      facadeMat==='mdf_kr'   ? facM2*mdfKrP   : 0;
+  const matTotal = corpCost + hdfCost + kromCost + facLdspCost + facMdfCost;
+
+  // ── HTML ─────────────────────────────────────────────────
+  const dot = c => `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c};margin-right:6px;vertical-align:middle"></span>`;
+
+  let html = `<div style="font-size:11px;font-weight:700;color:#1a5252;text-transform:uppercase;letter-spacing:.05em;padding:4px 0 8px">
+    <i class="ti ti-package" style="margin-right:4px"></i> Материалы
+  </div>`;
+  html += `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:0">
+    <thead><tr style="background:#f0f0f0">
+      <th style="text-align:left;padding:6px 8px">Материал</th>
+      <th style="padding:6px 8px;text-align:right">Кол-во</th>
+      <th style="padding:6px 8px;text-align:center">Ед.</th>
+      <th style="padding:6px 8px;text-align:right">Цена</th>
+      <th style="padding:6px 8px;text-align:right">Сумма</th>
+    </tr></thead><tbody>`;
+
+  // ЛДСП корпус
+  html += `<tr><td style="padding:5px 8px">${dot('#4caf50')}ЛДСП корпус ${LDSP_W}×${LDSP_H}<br>
+    <span style="font-size:10px;color:#888">~${corpSheets} листов по ширине (Четверть)</span></td>
+    <td style="padding:5px 8px;text-align:right">${corpSheets}</td>
+    <td style="padding:5px 8px;text-align:center">лист</td>
+    <td style="padding:5px 8px;text-align:right">${ldspP?Math.round(ldspP).toLocaleString('ru')+'₸':'—'}</td>
+    <td style="padding:5px 8px;text-align:right"><b>${corpCost?Math.round(corpCost).toLocaleString('ru')+'₸':'—'}</b></td></tr>`;
+
+  // ХДФ
+  html += `<tr style="background:#fafafa"><td style="padding:5px 8px">${dot('#ff9800')}ХДФ задники 2800×2070<br>
+    <span style="font-size:10px;color:#888">~${hdfSheets} листов</span></td>
+    <td style="padding:5px 8px;text-align:right">${hdfSheets}</td>
+    <td style="padding:5px 8px;text-align:center">лист</td>
+    <td style="padding:5px 8px;text-align:right">${hdfP?Math.round(hdfP).toLocaleString('ru')+'₸':'—'}</td>
+    <td style="padding:5px 8px;text-align:right"><b>${hdfCost?Math.round(hdfCost).toLocaleString('ru')+'₸':'—'}</b></td></tr>`;
+
+  // Кромка
+  html += `<tr><td style="padding:5px 8px">${dot('#e53935')}Кромка ПВХ 1мм<br>
+    <span style="font-size:10px;color:#888">видимые торцы деталей + фасады</span></td>
+    <td style="padding:5px 8px;text-align:right">${edgePm}</td>
+    <td style="padding:5px 8px;text-align:center">пм</td>
+    <td style="padding:5px 8px;text-align:right">${kromP?Math.round(kromP).toLocaleString('ru')+'₸':'—'}</td>
+    <td style="padding:5px 8px;text-align:right"><b>${kromCost?Math.round(kromCost).toLocaleString('ru')+'₸':'—'}</b></td></tr>`;
+
+  // Фасад
+  if(facadeMat === 'ldsp'){
+    html += `<tr style="background:#fafafa"><td style="padding:5px 8px">${dot('#2196f3')}Фасад ЛДСП ${LDSP_W}×${LDSP_H}<br>
+      <span style="font-size:10px;color:#888">~${facSheets} листов, без поворота</span></td>
+      <td style="padding:5px 8px;text-align:right">${facSheets}</td>
+      <td style="padding:5px 8px;text-align:center">лист</td>
+      <td style="padding:5px 8px;text-align:right">${facLdspP?Math.round(facLdspP).toLocaleString('ru')+'₸':'—'}</td>
+      <td style="padding:5px 8px;text-align:right"><b>${facLdspCost?Math.round(facLdspCost).toLocaleString('ru')+'₸':'—'}</b></td></tr>`;
+  } else if(facadeMat === 'mdf_plen' || facadeMat === 'mdf_kr'){
+    const matName = facadeMat==='mdf_plen' ? 'МДФ Плёнка' : 'МДФ Краска';
+    const matP    = facadeMat==='mdf_plen' ? mdfPlenP : mdfKrP;
+    html += `<tr style="background:#fafafa"><td style="padding:5px 8px">${dot('#9c27b0')}Фасад ${matName}<br>
+      <span style="font-size:10px;color:#888">${facM2.toFixed(2)} м²</span></td>
+      <td style="padding:5px 8px;text-align:right">${facM2.toFixed(2)}</td>
+      <td style="padding:5px 8px;text-align:center">м²</td>
+      <td style="padding:5px 8px;text-align:right">${matP?Math.round(matP).toLocaleString('ru')+'₸':'—'}</td>
+      <td style="padding:5px 8px;text-align:right"><b>${facMdfCost?Math.round(facMdfCost).toLocaleString('ru')+'₸':'—'}</b></td></tr>`;
+  }
+
+  html += `</tbody></table>`;
+  html += `<div style="background:#1a5252;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;font-weight:700;font-size:13px">
+    <span>Итого материалы</span><span>${matTotal?Math.round(matTotal).toLocaleString('ru')+'₸':'—'}</span>
+  </div>`;
+
+  // ── Работы ───────────────────────────────────────────────
+  html += `<div style="font-size:11px;font-weight:700;color:#1a5252;text-transform:uppercase;letter-spacing:.05em;padding:12px 0 8px;border-top:1px solid #eee;margin-top:8px">
+    <i class="ti ti-tools" style="margin-right:4px"></i> Стоимость работ
+  </div>`;
+  html += `<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#f0f0f0">
+      <th style="text-align:left;padding:6px 8px">Вид работ</th>
+      <th style="padding:6px 8px;text-align:right">Кол.</th>
+      <th style="padding:6px 8px;text-align:center">Ед.</th>
+      <th style="padding:6px 8px;text-align:right">Расценка</th>
+      <th style="padding:6px 8px;text-align:right">Сумма</th>
+    </tr></thead><tbody>`;
+
+  const wp = typeof prices!=='undefined' ? prices : {};
+  const workRows = [
+    {name:'Раскрой ЛДСП',      q:corpSheets, unit:'лист',   rate:wp.workCut||0},
+    {name:'Кромкование',        q:edgePm,     unit:'пм',     rate:wp.workEdge||0},
+    {name:'Сборка корпусов',    q:totalModules, unit:'мод.', rate:wp.workAssembly||0},
+    {name:'Установка фасадов',  q:handles,    unit:'шт',     rate:wp.workFacade||0},
+    {name:'Установка на месте', q:1,          unit:'проект', rate:wp.workInstall||0},
+  ];
+  let workTotal = 0;
+  workRows.forEach((r,i)=>{
+    const cost = r.q * r.rate;
+    workTotal += cost;
+    const np = r.rate===0;
+    html += `<tr${i%2?'':' style="background:#fafafa"'}${np?' style="color:#bbb"':''}>
+      <td style="padding:5px 8px">${r.name}${np?'<span style="font-size:10px;color:#ccc;margin-left:6px">— не задана</span>':''}</td>
+      <td style="padding:5px 8px;text-align:right">${typeof r.q==='number'?r.q.toFixed(r.unit==='пм'?0:2):r.q}</td>
+      <td style="padding:5px 8px;text-align:center">${r.unit}</td>
+      <td style="padding:5px 8px;text-align:right">${np?'—':Math.round(r.rate).toLocaleString('ru')+'₸'}</td>
+      <td style="padding:5px 8px;text-align:right"><b>${np?'—':Math.round(cost).toLocaleString('ru')+'₸'}</b></td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  html += `<div style="background:#2a4a8a;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;font-weight:700;font-size:13px">
+    <span>Итого работы</span><span>${workTotal?Math.round(workTotal).toLocaleString('ru')+'₸':'—'+' (расценки не заданы)'}</span>
+  </div>`;
+  html += `<div style="background:#1a3060;color:#fff;padding:12px 14px;display:flex;justify-content:space-between;font-weight:700;font-size:15px;border-radius:0 0 8px 8px">
+    <span>ИТОГО (материалы + работы)</span>
+    <span>${Math.round(matTotal+workTotal).toLocaleString('ru')}₸</span>
+  </div>`;
+
+  // Краткая сводка
+  html += `<div style="margin-top:10px;font-size:10px;color:#aaa;padding:0 4px">
+    Нижние: ${KitchenState.lower.length} мод. ${totalLowerW}мм |
+    Верхние: ${KitchenState.upper.length} мод. |
+    Пеналы: ${KitchenState.penal.length} мод. |
+    Петли: ${hinges} шт | Ручки: ${handles} шт
+  </div>`;
+
+  content.innerHTML = html;
+  modal.style.display = 'flex';
 }
+window.kShowSpec = kShowSpec;
 // ── Переключение вкладок раскроя ─────────────────────────────
 function kCutTab(tab){
   const sheets = document.getElementById('k-cut-content');
