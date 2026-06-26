@@ -505,13 +505,6 @@
                   <option value="none">Без фасада</option>
                 </select>
               </div>
-              <div style="display:flex;align-items:center;gap:8px">
-                <span style="font-size:11px;color:#555;width:56px;flex-shrink:0">Столешн.</span>
-                <select id="k-top-type" style="font-size:12px;border:1px solid #e0e0e0;border-radius:6px;padding:4px 8px;background:#fff;flex:1" onchange="kUpdateTopSelect()">
-                  <option value="none">Без столешницы</option>
-                </select>
-              </div>
-              <div id="k-top-len-lbl" style="font-size:10px;color:#1a5252;padding-left:64px;margin-top:-4px"></div>
               <div>
                 <div style="font-size:10px;color:#888;margin-bottom:4px">Цвет фасада</div>
                 <div class="kcolor-row" id="k-facade-colors" style="flex-wrap:wrap;gap:4px"></div>
@@ -562,15 +555,42 @@
           </div>
         </div>
 
-        <!-- Аккордеон: Доп. аксессуары -->
+        <!-- Аккордеон: Столешница -->
         <div class="kacc">
-          <div class="kacc-hdr" onclick="kAccToggle('kacc-extras');kRenderExtras()">
-            <span><i class="ti ti-armchair"></i> Доп. аксессуары</span><span class="kacc-arr">▾</span>
+          <div class="kacc-hdr" onclick="kAccToggle('kacc-top')">
+            <span><i class="ti ti-layers-subtract"></i> Столешница</span><span class="kacc-arr">▾</span>
           </div>
-          <div class="kacc-body" id="kacc-extras">
+          <div class="kacc-body" id="kacc-top">
+            <div style="padding:8px 10px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:11px;color:#555;width:56px;flex-shrink:0">Тип</span>
+                <select id="k-top-type" style="font-size:12px;border:1px solid #e0e0e0;border-radius:6px;padding:4px 8px;background:#fff;flex:1" onchange="kUpdateTopSelect()">
+                  <option value="none">Без столешницы</option>
+                </select>
+              </div>
+              <div id="k-top-len-lbl" style="font-size:10px;color:#1a5252;padding-left:64px;margin-top:-4px"></div>
+              <div style="display:flex;align-items:center;gap:8px" id="k-top-len-row" style="display:none">
+                <span style="font-size:11px;color:#555;width:56px;flex-shrink:0">Длина, пм</span>
+                <input class="kglobal-inp" style="width:80px;box-sizing:border-box" type="number" id="k-top-len" min="0.1" step="0.1" onchange="kProjMarkUnsaved()">
+                <span style="font-size:11px;color:#888">пм</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Аккордеон: Аксессуары (без наценки) -->
+        <div class="kacc">
+          <div class="kacc-hdr" onclick="kAccToggle('kacc-acc');kRenderAccItems()">
+            <span><i class="ti ti-tool"></i> Аксессуары</span>
+            <span style="display:flex;align-items:center;gap:6px">
+              <span id="kacc-acc-cnt" style="font-size:10px;color:#7a5c2e;font-weight:600"></span>
+              <span class="kacc-arr">▾</span>
+            </span>
+          </div>
+          <div class="kacc-body" id="kacc-acc">
             <div style="padding:8px 10px">
-              <div id="k-extras-list"></div>
-              <button onclick="kAddExtra()" style="width:100%;padding:7px;border-radius:8px;font-size:12px;cursor:pointer;border:1px dashed #7a5c2e;background:#f8f4ec;color:#7a5c2e;margin-top:6px;display:flex;align-items:center;justify-content:center;gap:5px">
+              <div id="k-acc-list"></div>
+              <button onclick="kAddAccItem()" style="width:100%;padding:7px;border-radius:8px;font-size:12px;cursor:pointer;border:1px dashed #7a5c2e;background:#f8f4ec;color:#7a5c2e;margin-top:6px;display:flex;align-items:center;justify-content:center;gap:5px">
                 <i class="ti ti-plus"></i> Добавить аксессуар
               </button>
             </div>

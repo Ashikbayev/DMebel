@@ -3112,6 +3112,8 @@ function kProjSnapshot(){
     sheetFmt:  document.getElementById('k-sheet-fmt')?.value  || '2750x1830',
     facadeColorName: kFacadeColorName,
     corpusColorName: kCorpusColorName,
+    accItems: JSON.parse(JSON.stringify(kAccItems)),
+    accId: kAccId,
   };
 }
 
@@ -3127,6 +3129,8 @@ function kProjRestore(snap){
   const sf = document.getElementById('k-sheet-fmt'); if(sf) sf.value = snap.sheetFmt||'2750x1830';
   if(snap.facadeColorName) kSetFacadeColor(null, snap.facadeColorName, null);
   if(snap.corpusColorName) kSetCorpusColor(null, snap.corpusColorName, null);
+  kAccItems = snap.accItems ? JSON.parse(JSON.stringify(snap.accItems)) : [];
+  kAccId    = snap.accId    || 0;
 }
 
 function kProjSave(){
@@ -3217,6 +3221,8 @@ function kProjNew(){
   KitchenState.upper = [];
   KitchenState.lId = 0;
   KitchenState.uId = 0;
+  kAccItems = [];
+  kAccId = 0;
   const today = new Date().toISOString().split('T')[0];
   const ni = document.getElementById('k-proj-name-inp');   if(ni) ni.value = 'Новая кухня';
   const ci = document.getElementById('k-proj-client-inp'); if(ci) ci.value = '';
@@ -3942,6 +3948,8 @@ async function kLoadFromSheets(){
     if(d.fas_kr&&d.fas_kr.length)    { DB.fas_kr=d.fas_kr;     updated++; }
     if(d.furn&&d.furn.length)        { DB.furn=d.furn;          updated++; }
     if(d.kuh&&d.kuh.length)          { DB.kuh=d.kuh;            updated++; }
+    if(d.shk&&d.shk.length)          { DB.shk=d.shk;            updated++; }
+    if(d.acc&&d.acc.length)          { DB.acc=d.acc;            updated++; }
     if(d.hingeCatalog&&d.hingeCatalog.length) hingeCatalog=d.hingeCatalog;
     if(d.slideCatalog&&d.slideCatalog.length) slideCatalog=d.slideCatalog;
     kRenderColorPickers();
@@ -3970,59 +3978,99 @@ function kRenderPricesPreview(){
 }
 
 // ── Доп. аксессуары кухни ─────────────────────────────────────
-let kExtraItems = []; // [{id, cat, vid, qty}]
+let kExtraItems = []; // совместимость
 let kExtraId = 0;
 
-function kRenderExtras(){
-  const list=document.getElementById('k-extras-list'); if(!list) return;
-  if(!kExtraItems.length){ list.innerHTML='<p class="hint">Нет позиций — нажмите «Добавить»</p>'; return; }
-  const kuh = DB.kuh||[];
-  const cats = [...new Set(kuh.map(x=>x.cat))];
-  list.innerHTML = kExtraItems.map(item=>{
-    const vids = kuh.filter(x=>x.cat===item.cat);
-    const price = (kuh.find(x=>x.cat===item.cat&&x.vid===item.vid)||{p:0}).p;
-    return `<div class="km-card" style="margin-bottom:6px;padding:8px 10px" id="kextra-${item.id}">
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <select class="km-sel" style="flex:1;min-width:100px" onchange="kExtraSetCat(${item.id},this.value)">
-          ${cats.map(c=>`<option value="${c}"${c===item.cat?' selected':''}>${c}</option>`).join('')}
-        </select>
-        <select class="km-sel" style="flex:1;min-width:80px" id="kextra-vid-${item.id}" onchange="kExtraSetVid(${item.id},this.value)">
-          ${vids.map(v=>`<option value="${v.vid}"${v.vid===item.vid?' selected':''}>${v.vid} — ${v.p.toLocaleString('ru')}₸</option>`).join('')}
-        </select>
-        <input class="km-inp" type="number" value="${item.qty}" min="1" style="width:50px" onchange="kExtraSetQty(${item.id},this.value)">
-        <button class="km-del" onclick="kExtraRemove(${item.id})">✕</button>
-      </div>
-      <div style="font-size:10px;color:#888;margin-top:3px">${price.toLocaleString('ru')}₸ × ${item.qty} = ${(price*item.qty).toLocaleString('ru')}₸</div>
-    </div>`;
+// ── Аксессуары кухни (DB.acc -> Доп.Позиции без наценки) ─────
+let kAccItems = []; // [{id, cat, vid, qty}]
+let kAccId = 0;
+
+function kRenderAccItems(){
+  const list = document.getElementById('k-acc-list'); if(!list) return;
+  const cnt  = document.getElementById('kacc-acc-cnt');
+  if(!kAccItems.length){
+    list.innerHTML = '<p class="hint">Нет позиций — нажмите «Добавить»</p>';
+    if(cnt) cnt.textContent = '';
+    return;
+  }
+  const acc = DB.acc || [];
+  const cats = [...new Set(acc.map(x=>x.cat))];
+  list.innerHTML = kAccItems.map(item=>{
+    const vids = acc.filter(x=>x.cat===item.cat);
+    const price = (acc.find(x=>x.cat===item.cat&&x.vid===item.vid)||{p:0}).p;
+    return '<div class="km-card" style="margin-bottom:6px;padding:8px 10px" id="kacc-item-'+item.id+'">' +
+      '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' +
+        '<select class="km-sel" style="flex:1;min-width:100px" onchange="kAccSetCat('+item.id+',this.value)">' +
+          cats.map(c=>'<option value="'+c+'"'+(c===item.cat?' selected':'')+'>'+c+'</option>').join('') +
+        '</select>' +
+        '<select class="km-sel" style="flex:1;min-width:80px" onchange="kAccSetVid('+item.id+',this.value)">' +
+          vids.map(v=>'<option value="'+v.vid+'"'+(v.vid===item.vid?' selected':'')+'>'+v.vid+' — '+v.p.toLocaleString('ru')+'₸</option>').join('') +
+        '</select>' +
+        '<input class="km-inp" type="number" value="'+item.qty+'" min="1" style="width:50px" onchange="kAccSetQty('+item.id+',this.value)">' +
+        '<button class="km-del" onclick="kAccRemove('+item.id+')">✕</button>' +
+      '</div>' +
+      '<div style="font-size:10px;color:#888;margin-top:3px">'+price.toLocaleString('ru')+'₸ × '+item.qty+' = '+(price*item.qty).toLocaleString('ru')+'₸</div>' +
+    '</div>';
   }).join('');
+  if(cnt) cnt.textContent = kAccItems.length ? kAccItems.length+' поз.' : '';
 }
-function kAddExtra(){
-  const kuh=DB.kuh||[]; if(!kuh.length){ alert('Загрузите цены из Google Sheets'); return; }
-  const cat=kuh[0].cat, vid=kuh[0].vid;
-  kExtraItems.push({id:kExtraId++, cat, vid, qty:1});
-  kRenderExtras();
+function kAddAccItem(){
+  const acc = DB.acc||[];
+  if(!acc.length){ alert('Загрузите цены (Синхронизация цен -> Кухня-безнаценки)'); return; }
+  kAccItems.push({id:kAccId++, cat:acc[0].cat, vid:acc[0].vid, qty:1});
+  kRenderAccItems(); kProjMarkUnsaved();
 }
-function kExtraSetCat(id, cat){
-  const item=kExtraItems.find(x=>x.id===id); if(!item) return;
-  item.cat=cat;
-  const first=(DB.kuh||[]).find(x=>x.cat===cat);
-  item.vid=first?first.vid:'—';
-  kRenderExtras();
+function kAccSetCat(id, cat){
+  const item = kAccItems.find(x=>x.id===id); if(!item) return;
+  item.cat = cat;
+  const first = (DB.acc||[]).find(x=>x.cat===cat);
+  item.vid = first ? first.vid : '';
+  kRenderAccItems(); kProjMarkUnsaved();
 }
-function kExtraSetVid(id, vid){
-  const item=kExtraItems.find(x=>x.id===id); if(!item) return;
-  item.vid=vid; kRenderExtras();
+function kAccSetVid(id, vid){
+  const item = kAccItems.find(x=>x.id===id); if(!item) return;
+  item.vid = vid; kRenderAccItems(); kProjMarkUnsaved();
 }
-function kExtraSetQty(id, qty){
-  const item=kExtraItems.find(x=>x.id===id); if(!item) return;
-  item.qty=Math.max(1,parseInt(qty)||1);
+function kAccSetQty(id, qty){
+  const item = kAccItems.find(x=>x.id===id); if(!item) return;
+  item.qty = Math.max(1, parseInt(qty)||1); kProjMarkUnsaved();
 }
-function kExtraRemove(id){
-  kExtraItems=kExtraItems.filter(x=>x.id!==id); kRenderExtras();
+function kAccRemove(id){
+  kAccItems = kAccItems.filter(x=>x.id!==id); kRenderAccItems(); kProjMarkUnsaved();
 }
-window.kAddExtra=kAddExtra; window.kExtraSetCat=kExtraSetCat;
-window.kExtraSetVid=kExtraSetVid; window.kExtraSetQty=kExtraSetQty;
-window.kExtraRemove=kExtraRemove; window.kRenderExtras=kRenderExtras;
+window.kAddAccItem=kAddAccItem; window.kAccSetCat=kAccSetCat;
+window.kAccSetVid=kAccSetVid; window.kAccSetQty=kAccSetQty;
+window.kAccRemove=kAccRemove; window.kRenderAccItems=kRenderAccItems;
+
+// ── Столешница: обновление длины ─────────────────────────────
+function kUpdateTopLen(){
+  const sel = document.getElementById('k-top-type');
+  const lenRow = document.getElementById('k-top-len-row');
+  const lenInp = document.getElementById('k-top-len');
+  const lenLbl = document.getElementById('k-top-len-lbl');
+  if(!sel) return;
+  const hasTop = sel.value && sel.value !== 'none';
+  if(lenRow) lenRow.style.display = hasTop ? 'flex' : 'none';
+  if(hasTop && lenInp){
+    if(!lenInp.value || parseFloat(lenInp.value) === 0){
+      const autoLen = Math.round(KitchenState.lower.reduce((s,m)=>s+m.width,0)/1000*100)/100;
+      lenInp.value = autoLen;
+    }
+    if(lenLbl){
+      const autoLen = Math.round(KitchenState.lower.reduce((s,m)=>s+m.width,0)/1000*100)/100;
+      lenLbl.textContent = 'Авто: '+autoLen+' пм по нижним модулям';
+    }
+  } else {
+    if(lenLbl) lenLbl.textContent = '';
+  }
+  kProjMarkUnsaved();
+}
+window.kUpdateTopLen = kUpdateTopLen;
+
+// ── Совместимость со старым кодом ────────────────────────────
+function kRenderExtras(){ kRenderAccItems(); }
+function kAddExtra(){ kAddAccItem(); }
+window.kAddExtra=kAddExtra; window.kRenderExtras=kRenderExtras;
 window.kRenderPricesPreview=kRenderPricesPreview;
 
 // ── Смета ─────────────────────────────────────────────────────
@@ -4814,14 +4862,18 @@ function sendKitchenToCalc(){
   // ── ХДФ задние стенки ────────────────────────────────────────
   if(hdfSheets>0){ const e=$('hdf-qty'); if(e){ e.value=hdfSheets; imported++; } }
 
-  // ── Столешница (авто по суммарной ширине нижних) ─────────────
+  // ── Столешница (длина: ручная из k-top-len или авто по нижним) ─
   const topSel=document.getElementById('k-top-type');
   const topVid=topSel?.value;
   if(topVid && topVid!=='none'){
     const kuh=DB.kuh||[];
     const topRow=kuh.find(x=>x.cat==='Столешница'&&x.vid===topVid);
     if(topRow){
-      const totalM=Math.round(KitchenState.lower.reduce((s,m)=>s+m.width,0)/1000*100)/100;
+      // Длина: ручная если задана, иначе авто
+      const lenInp = document.getElementById('k-top-len');
+      const manualLen = lenInp ? parseFloat(lenInp.value)||0 : 0;
+      const autoLen = Math.round(KitchenState.lower.reduce((s,m)=>s+m.width,0)/1000*100)/100;
+      const totalM = manualLen > 0 ? manualLen : autoLen;
       const kuhCats=[...new Set(kuh.map(x=>x.cat))];
       const ki=ST.kuh.length; ST.kuh.push({cat:'Столешница',vid:topVid,p:topRow.p});
       const kl=$('kuh-list');
@@ -4918,30 +4970,31 @@ function sendKitchenToCalc(){
     }
   }
 
-  // ── Аксессуары кухни (kExtraItems → kuh-list) ──────────────
-  if(kExtraItems.length){
-    const kuh = DB.kuh||[];
-    const kuhCats = [...new Set(kuh.map(x=>x.cat))];
-    const kl=$('kuh-list');
-    if(kl){
-      if(!ST.kuh.length) kl.innerHTML='';
-      kExtraItems.forEach(item=>{
-        const dbIdx = kuh.findIndex(x=>x.cat===item.cat&&x.vid===item.vid);
-        if(dbIdx<0) return;
-        const ki=ST.kuh.length; ST.kuh.push({cat:item.cat,vid:item.vid,p:kuh[dbIdx].p});
-        const fd=document.createElement('div');
-        fd.id='kuhr'+ki; if(ki>0) fd.className='ib'; fd.style.marginTop='8px';
-        // Строим селект категорий
-        const catOpts=kuhCats.map(c=>`<option value="${c}"${c===item.cat?' selected':''}>${c}</option>`).join('');
-        // Строим селект видов
-        const vidItems=kuh.filter(x=>x.cat===item.cat);
-        const vidOpts=vidItems.map((v,j)=>`<option value="${kuh.indexOf(v)}"${kuh.indexOf(v)===dbIdx?' selected':''}>${v.vid} — ${v.p.toLocaleString('ru')}₸</option>`).join('');
-        fd.innerHTML=`<div class="fr"><select id="kuhc${ki}" onchange="uC('kuh',${ki})">${catOpts}</select><button class="db" onclick="$('kuhr${ki}').style.display='none';ST.kuh[${ki}]=null;recalc()">✕</button></div><div class="fr" id="kuhvf${ki}"></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" id="kuhq${ki}" value="${item.qty}" min="0" onchange="recalc()"><span class="fp" id="kuhpp${ki}">${kuh[dbIdx].p.toLocaleString('ru')}₸</span></div>`;
-        kl.appendChild(fd);
-        uC('kuh', ki);
-        setTimeout(()=>{ $('kuhq'+ki).value=item.qty; recalc(); },0);
+  // ── Аксессуары кухни (kAccItems → Доп.Позиции без наценки) ──
+  if(kAccItems.length){
+    const acc = DB.acc||[];
+    const dl = $('dop-list');
+    if(dl){
+      if(!ST.dop.length) dl.innerHTML='';
+      kAccItems.forEach(item=>{
+        const row = acc.find(x=>x.cat===item.cat&&x.vid===item.vid);
+        if(!row) return;
+        const di = ST.dop.length; ST.dop.push(null);
+        const fd = document.createElement('div');
+        fd.id = 'dpr'+di; if(di>0) fd.className='ib'; fd.style.marginTop='8px';
+        fd.innerHTML =
+          `<div class="fr">` +
+          `<input class="qt" id="dn${di}" value="${item.cat} ${item.vid}" style="flex:2">` +
+          `<button class="db" onclick="$('dpr${di}').style.display='none';ST.dop[${di}]=null;recalc()">✕</button></div>` +
+          `<div class="fr"><span class="lb">Цена</span>` +
+          `<input class="qi" type="number" id="dp${di}" value="${row.p}" min="0" onchange="recalc()">` +
+          `<span class="lb">Кол-во</span>` +
+          `<input class="qi" type="number" id="dq${di}" value="${item.qty}" min="0" onchange="recalc()"></div>`;
+        dl.appendChild(fd);
+        ST.dop[di] = null; // addDop хранит null, цена берётся из dp+i
+        recalc();
       });
-      const kuhCb=$('cb-kuh'); if(kuhCb&&!kuhCb.classList.contains('op')) tog('kuh');
+      const dopCb=$('cb-dop'); if(dopCb&&!dopCb.classList.contains('op')) tog('dop');
     }
     imported++;
   }
