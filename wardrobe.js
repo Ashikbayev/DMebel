@@ -2800,30 +2800,8 @@ function drawSheet(sh,SW,SH,scale,showEdge,matColor){
       <text x="2" y="${ph-3}" font-size="6" fill="#bbb">${SW}×${SH}мм</text>
     </svg>
   </div>`;
-    // Стрелка волокна: если текстурная деталь — вертикальная стрелка
-    const hasGrain=item.tex&&!item.rotated;
-    const grainArrow=hasGrain&&iw>20&&ih>20
-      ?`<line x1="${ix+iw/2}" y1="${iy+6}" x2="${ix+iw/2}" y2="${iy+ih-6}" stroke="rgba(0,0,0,0.35)" stroke-width="1.5" marker-end="url(#arr)"/>`
-      :'';
-    // Кромка — подсветка торцов
-    let edgeMarkup='';
-    if(showEdge&&item.edgeFront){
-      // Лицевая кромка (2мм) — жёлтая полоса по переднему торцу (левый край)
-      edgeMarkup+=`<rect x="${ix}" y="${iy}" width="3" height="${ih}" fill="#f0c040" opacity="0.9"/>`;
-    }
-    if(showEdge&&item.edgeBack){
-      // Скрытая кромка (0.4мм) — серая полоса по заднему торцу (правый край)
-      edgeMarkup+=`<rect x="${ix+iw-2}" y="${iy}" width="2" height="${ih}" fill="#aaa" opacity="0.7"/>`;
-    }
-    svgItems+=`<g>
-      <rect x="${ix}" y="${iy}" width="${iw}" height="${ih}" fill="${col}" stroke="rgba(0,0,0,0.15)" stroke-width="1"/>
-      ${edgeMarkup}
-      ${grainArrow}
-      <text x="${ix+iw/2}" y="${iy+8}" text-anchor="middle" font-size="9" font-weight="bold" fill="#222">${num}</text>
-      <text x="${ix+iw/2}" y="${iy+ih/2}" text-anchor="middle" font-size="7" fill="#333">${item.name}</text>
-      <text x="${ix+iw/2}" y="${iy+ih-5}" text-anchor="middle" font-size="7" fill="#555">${item.w}×${item.h}</text>
-
 }
+
 // helper для легенды — вызывается отдельно
 function sheetHasGrain(sh){ return sh.items.some(it=>it.tex&&!it.rotated); }
 
