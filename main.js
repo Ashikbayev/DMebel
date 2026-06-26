@@ -1282,101 +1282,106 @@ function sendConfToCalc() {
   }
 
   // ── Телескопы (направляющие) ──────────────────────────────
-  // Считаем суммарное кол-во ящиков по всем секциям
   if (d.slideDetails && d.slideDetails.length > 0) {
-    // Группируем по типу телескопа — обычно один тип
     d.slideDetails.forEach(function(sl) {
       if (!sl.count) return;
       var catName = sl.type || 'Телескоп';
-      // Ищем точную позицию в DB.furn по cat+vid+brand
       var vidName = sl.length + 'мм';
+      var brandName = sl.brand || '—';
       var arr = DB.furn;
-      // Находим индекс с нужным vid и brand
-      var exactIdx = arr.findIndex(function(x) {
-        return x.cat === catName && x.vid === vidName && x.firm === sl.brand;
-      });
-      // Fallback: только по cat+vid
-      if (exactIdx < 0) exactIdx = arr.findIndex(function(x) {
-        return x.cat === catName && x.vid === vidName;
-      });
-      // Fallback: только по cat
-      if (exactIdx < 0) exactIdx = arr.findIndex(function(x) {
-        return x.cat === catName;
-      });
-      if (exactIdx < 0) return; // не нашли
 
-      var fi = ST.furn.length;
-      ST.furn.push({ p: arr[exactIdx].p });
-      var fc = $('furn-list');
-      if (!fc) return;
-      if (fi === 0) fc.innerHTML = '';
-
+      // Все категории для первого селекта
       var cats = [];
       var seen = {};
-      arr.forEach(function(x) { if (!seen[x.cat]) { seen[x.cat]=1; cats.push(x.cat); } });
+      arr.forEach(function(x){ if(!seen[x.cat]){ seen[x.cat]=1; cats.push(x.cat); } });
 
-      // Строим DOM
+      // Все виды для данной категории
+      var rows = arr.filter(function(x){ return x.cat===catName; });
+      var vids = [...new Set(rows.map(function(x){ return x.vid; }))];
+
+      // Все фирмы для данного вида
+      var vidRows = rows.filter(function(x){ return x.vid===vidName; });
+      var firms = [...new Set(vidRows.map(function(x){ return x.firm; }).filter(function(f){ return f && f!=='—'; }))];
+
+      // Находим цену по cat+vid+brand
+      var priceRow = arr.find(function(x){ return x.cat===catName && x.vid===vidName && x.firm===brandName; });
+      if(!priceRow) priceRow = arr.find(function(x){ return x.cat===catName && x.vid===vidName; });
+      if(!priceRow) priceRow = arr.find(function(x){ return x.cat===catName; });
+      if(!priceRow) return;
+
+      var fi = ST.furn.length;
+      ST.furn.push({ p: priceRow.p });
+      var fc = $('furn-list');
+      if(!fc) return;
+      if(fi===0) fc.innerHTML='';
+
       var fd = document.createElement('div');
       fd.id = 'furnr'+fi;
-      if (fi > 0) fd.className = 'ib';
-      fd.style.marginTop = '8px';
+      if(fi>0) fd.className='ib';
+      fd.style.marginTop='8px';
 
-      var row1 = document.createElement('div'); row1.className = 'fr';
+      // Строка 1: селект категории
+      var row1 = document.createElement('div'); row1.className='fr';
       var catSel = document.createElement('select');
       catSel.id = 'furnc'+fi;
       catSel.setAttribute('onchange', "uC('furn',"+fi+")");
-      cats.forEach(function(c) {
-        var o = document.createElement('option');
-        o.value = c; o.textContent = c;
-        if (c === catName) o.selected = true;
+      cats.forEach(function(c){
+        var o=document.createElement('option'); o.value=c; o.textContent=c;
+        if(c===catName) o.selected=true;
         catSel.appendChild(o);
       });
       var delBtn = document.createElement('button');
-      delBtn.className = 'db'; delBtn.textContent = '✕';
-      delBtn.setAttribute('onclick', "$('furnr"+fi+"').style.display='none';ST.furn["+fi+"]=null;recalc()");
+      delBtn.className='db'; delBtn.textContent='✕';
+      delBtn.setAttribute('onclick',"$('furnr"+fi+"').style.display='none';ST.furn["+fi+"]=null;recalc()");
       row1.appendChild(catSel); row1.appendChild(delBtn);
 
-      var vidDiv = document.createElement('div'); vidDiv.className = 'fr'; vidDiv.id = 'furnvf'+fi;
+      // Строка 2: вид + фирма
+      var vidFirmDiv = document.createElement('div'); vidFirmDiv.className='fr'; vidFirmDiv.id='furnvf'+fi;
+      // Вид
+      if(vids.length > 0){
+        var vidSel = document.createElement('select');
+        vidSel.id = 'furnv'+fi;
+        vids.forEach(function(v){
+          var o=document.createElement('option'); o.value=v; o.textContent=v;
+          if(v===vidName) o.selected=true;
+          vidSel.appendChild(o);
+        });
+        vidSel.setAttribute('onchange',"uCP('furn',"+fi+")");
+        vidFirmDiv.appendChild(vidSel);
+      }
+      // Фирма
+      if(firms.length > 0){
+        var firmSel = document.createElement('select');
+        firmSel.id = 'furnf'+fi;
+        firms.forEach(function(f){
+          var o=document.createElement('option'); o.value=f; o.textContent=f;
+          if(f===brandName) o.selected=true;
+          firmSel.appendChild(o);
+        });
+        firmSel.setAttribute('onchange',"uCP('furn',"+fi+")");
+        vidFirmDiv.appendChild(firmSel);
+      }
 
-      var row2 = document.createElement('div'); row2.className = 'fr';
-      var lbl = document.createElement('span'); lbl.className = 'lb'; lbl.textContent = 'Кол-во';
+      // Строка 3: количество
+      var row3 = document.createElement('div'); row3.className='fr';
+      var lbl = document.createElement('span'); lbl.className='lb'; lbl.textContent='Кол-во';
       var qInp = document.createElement('input');
-      qInp.className = 'qi'; qInp.type = 'number'; qInp.id = 'furnq'+fi;
-      qInp.placeholder = '0'; qInp.min = '0';
-      qInp.setAttribute('onchange', 'recalc()');
-      qInp.value = sl.count;
-      var priceSpan = document.createElement('span');
-      priceSpan.className = 'fp'; priceSpan.id = 'furnpp'+fi;
-      priceSpan.textContent = arr[exactIdx].p.toLocaleString('ru') + '₸';
-      row2.appendChild(lbl); row2.appendChild(qInp); row2.appendChild(priceSpan);
+      qInp.className='qi'; qInp.type='number'; qInp.id='furnq'+fi;
+      qInp.placeholder='0'; qInp.min='0'; qInp.value=sl.count;
+      qInp.setAttribute('onchange','recalc()');
+      var ppSpan = document.createElement('span');
+      ppSpan.className='fp'; ppSpan.id='furnpp'+fi;
+      ppSpan.textContent = priceRow.p.toLocaleString('ru')+'₸';
+      row3.appendChild(lbl); row3.appendChild(qInp); row3.appendChild(ppSpan);
 
-      fd.appendChild(row1); fd.appendChild(vidDiv); fd.appendChild(row2);
+      fd.appendChild(row1); fd.appendChild(vidFirmDiv); fd.appendChild(row3);
       fc.appendChild(fd);
 
-      // uC строит подселект вида/бренда
-      uC('furn', fi);
-      // Выбираем нужный vid и brand через setTimeout чтобы DOM успел построиться
-      (function(idx, vn, bn, cnt, price){
-        setTimeout(function(){
-          var vSel = $('furnv'+idx);
-          var bSel = $('furnf'+idx);
-          if(vSel) { vSel.value = vn; }
-          if(bSel && bn && bn !== '—') { bSel.value = bn; }
-          uCP('furn', idx);
-          // Восстанавливаем qty и цену после uCP
-          var qEl = $('furnq'+idx);
-          if(qEl) qEl.value = cnt;
-          var ppEl = $('furnpp'+idx);
-          if(ppEl && price) ppEl.textContent = price.toLocaleString('ru')+'₸';
-          ST.furn[idx] = {p: price};
-          recalc();
-        }, 0);
-      })(fi, vidName, sl.brand, sl.count, arr[exactIdx].p);
-
-      var cb = $('cb-furn');
-      if (cb && !cb.classList.contains('op')) tog('furn');
+      var cb=$('cb-furn');
+      if(cb && !cb.classList.contains('op')) tog('furn');
       imported++;
     });
+    recalc();
   }
 
   // ── Штанга → Фурнитура шкаф ────────────────────────────────
