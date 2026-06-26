@@ -13,6 +13,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .scr{display:none;padding:10px 12px}.scr.on{display:block}
 /* KP PAGE */
 .pg{display:none}.pg.on{display:block}
+#pg-kitchen.on{display:block}
 /* CARD */
 .card{background:#fff;border:1px solid var(--bd);border-radius:10px;margin-bottom:8px;overflow:hidden}
 .ch{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:pointer;user-select:none}
@@ -236,8 +237,8 @@ input.qt{font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:6px
 .kacc-body{display:none;animation:kAccFade .15s ease}
 .kacc-body.open{display:block}
 @keyframes kAccFade{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
-#pg-kitchen{background:#f0f0f0;min-height:100vh}
-#pg-kitchen #kapp{display:grid;grid-template-columns:320px 1fr;height:calc(100vh - 52px)}
+#pg-kitchen{background:#f0f0f0}
+#pg-kitchen #kapp{display:grid;grid-template-columns:280px 1fr;height:calc(100vh - 90px)}
 #pg-kitchen #kpanel{background:#fff;border-right:1px solid #e0e0e0;display:flex;flex-direction:column;overflow:hidden;height:100%}
 #pg-kitchen #kpanel-body{flex:1;overflow-y:auto;padding:10px}
 #pg-kitchen #kvp{position:relative;overflow:hidden}
@@ -280,7 +281,7 @@ input.qt{font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:6px
   #pg-kitchen #kvp.mobile-open{display:block}
   #pg-kitchen #kvp #kc3d{width:100%!important;height:100%!important}
   #k-3d-close-btn{display:flex}
-  #pg-kitchen #kapp{display:block;height:auto}
+  #pg-kitchen #kapp{display:block;flex:none;overflow:visible}
   #pg-kitchen #kpanel{width:100%;height:auto;border-right:none;overflow:visible}
   #pg-kitchen #kpanel-body{overflow:visible;padding:10px}
 }
@@ -575,7 +576,6 @@ select{width:100%;font-size:12px;padding:5px 6px;border:1px solid #ddd;border-ra
 #k-client-mode-btn{flex-shrink:0;padding:0 10px;background:none;border:none;border-left:1px solid #e0e0e0;color:#aaa;cursor:pointer;font-size:16px;display:flex;align-items:center;transition:.15s}
 #k-client-mode-btn:hover{color:#1a5252;background:#f0f8f8}
 #k-client-mode-btn.active{color:#1a5252;background:#e8f5f0}
-#pg-kitchen #kpanel{display:flex;flex-direction:column}
 
 /* ── КНОПКА РЕЖИМ КЛИЕНТА (шкаф) ─────────────────────────── */
 #client-mode-btn{flex-shrink:0;padding:0 10px;background:none;border:none;border-left:1px solid #e0e0e0;color:#aaa;cursor:pointer;font-size:16px;display:flex;align-items:center;transition:.15s}
@@ -594,7 +594,6 @@ select{width:100%;font-size:12px;padding:5px 6px;border:1px solid #ddd;border-ra
 .kfoot-btn i{font-size:13px}
 
 /* kpanel — единый скролл */
-#pg-kitchen #kpanel{display:flex;flex-direction:column;height:100%;overflow:hidden}
 #k-pane-constructor{flex:1;overflow-y:auto}
 #k-pane-prices{flex:1;overflow-y:auto}
 
@@ -609,3 +608,21 @@ select{width:100%;font-size:12px;padding:5px 6px;border:1px solid #ddd;border-ra
   .kfoot-btn{padding:10px 4px;font-size:11px}
   #k-panel-tabs .ptab{padding:11px 4px;font-size:12px}
 }
+
+/* ── НОВАЯ ПАНЕЛЬ КУХНИ — КАТАЛОГ МОДУЛЕЙ ───────────────────── */
+.k-mod-tab{flex:1;padding:8px 4px;font-size:11px;font-weight:600;border:none;background:none;cursor:pointer;color:#888;border-bottom:3px solid transparent;transition:.15s}
+.k-mod-tab.active{color:#1a5252;border-bottom-color:#1a5252;background:#fff}
+.k-mod-tab:hover:not(.active){color:#444;background:#f0f0f0}
+.k-mod-tab i{display:block;font-size:16px;margin-bottom:2px}
+.k-mod-catalog{flex:1;overflow-y:auto;padding:8px}
+.k-mod-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+.k-mod-card{background:#fff;border:1.5px solid #e0e0e0;border-radius:8px;padding:6px;cursor:pointer;transition:.15s;display:flex;flex-direction:column;align-items:center;gap:4px}
+.k-mod-card:hover{border-color:#1a5252;background:#f0f8f8}
+.k-mod-card svg{width:48px;height:40px}
+.k-mod-card-label{font-size:10px;font-weight:600;color:#333;text-align:center}
+.k-mod-size-row{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;margin-top:2px}
+.k-mod-size-btn{font-size:10px;padding:2px 5px;border:1px solid #ddd;border-radius:4px;background:#f8f8f8;cursor:pointer;color:#555;transition:.12s}
+.k-mod-size-btn:hover{background:#1a5252;color:#fff;border-color:#1a5252}
+.k-mod-size-custom{font-size:10px;width:52px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;text-align:center}
+.k-mod-added-title{font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;padding:6px 2px 4px;border-top:1px solid #f0f0f0;margin-top:4px}
+.k-mod-size-btn.active{background:#1a5252;color:#fff;border-color:#1a5252}
