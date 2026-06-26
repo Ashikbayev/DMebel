@@ -1380,6 +1380,45 @@ function sendConfToCalc() {
     addFurnRow('Ножки', d.totalLegs);
   }
 
+  // ── Доп. аксессуары шкафа (confExtras → Фурнитура шкаф) ────
+  const confExtras = window._confExtras ? window._confExtras() : [];
+  if(confExtras.length){
+    const shk = DB.shk||[];
+    const sc = $('shk-list');
+    if(sc){
+      confExtras.forEach(function(item){
+        const row = shk.find(function(x){ return x.cat===item.cat && x.vid===item.vid; });
+        if(!row) return;
+        const si = ST.shk.length;
+        ST.shk.push({p: row.p});
+        if(si===0) sc.innerHTML='';
+        const cats = [...new Set(shk.map(function(x){ return x.cat; }))];
+        const fd = document.createElement('div');
+        fd.id = 'shkr'+si; if(si>0) fd.className='ib'; fd.style.marginTop='8px';
+        fd.innerHTML =
+          '<div class="fr">' +
+          '<select id="shkc'+si+'" onchange="uC(\'shk\','+si+')">' +
+            cats.map(function(c){ return '<option value="'+c+'"'+(c===item.cat?' selected':'')+'>'+c+'</option>'; }).join('') +
+          '</select>' +
+          '<button class="db" onclick="$(\'shkr'+si+'\').style.display=\'none\';ST.shk['+si+']=null;recalc()">✕</button>' +
+          '</div>' +
+          '<div class="fr" id="shkvf'+si+'"></div>' +
+          '<div class="fr"><span class="lb">Кол-во</span>' +
+          '<input class="qi" type="number" inputmode="decimal" id="shkq'+si+'" value="'+item.qty+'" min="0" onchange="recalc()">' +
+          '<span class="fp" id="shkpp'+si+'">'+row.p.toLocaleString('ru')+'₸</span></div>';
+        sc.appendChild(fd);
+        uC('shk', si);
+        const vSel = $('shkv'+si);
+        if(vSel) vSel.value = item.vid;
+        $('shkq'+si).value = item.qty;
+        const cb = $('cb-shk');
+        if(cb && !cb.classList.contains('op')) tog('shk');
+        imported++;
+      });
+      recalc();
+    }
+  }
+
   // ── Клиент из проекта ──────────────────────────────────────
   const confClient = document.getElementById('proj-client-inp');
   const confName   = document.getElementById('proj-name-inp');

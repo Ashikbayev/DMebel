@@ -213,6 +213,23 @@
         <button id="add-section-btn" onclick="addSection()">
           <i class="ti ti-plus"></i> Добавить секцию
         </button>
+
+        <!-- Доп. аксессуары шкафа (DB.shk) -->
+        <div id="conf-extras-block" style="margin-top:10px;border-top:1px solid #f0f0f0;padding-top:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 2px;cursor:pointer;user-select:none" onclick="confExtrasToggle()">
+            <span style="font-size:12px;font-weight:600;color:#333"><i class="ti ti-armchair" style="margin-right:5px;color:#1a5252"></i>Доп. аксессуары</span>
+            <span style="display:flex;align-items:center;gap:6px">
+              <span id="conf-extras-cnt" style="font-size:10px;color:#1a5252;font-weight:600"></span>
+              <span id="conf-extras-arr" style="font-size:10px;color:#999">▾</span>
+            </span>
+          </div>
+          <div id="conf-extras-body">
+            <div id="conf-extras-list"></div>
+            <button onclick="confAddExtra()" style="width:100%;padding:7px;border-radius:8px;font-size:12px;cursor:pointer;border:1px dashed #1a5252;background:#f0f8f8;color:#1a5252;margin-top:6px;display:flex;align-items:center;justify-content:center;gap:5px">
+              <i class="ti ti-plus"></i> Добавить аксессуар
+            </button>
+          </div>
+        </div>
       </div>
       <!-- materials tab -->
       <div id="pane-prices" style="display:none">

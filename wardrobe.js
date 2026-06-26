@@ -45,6 +45,8 @@ function projSnapshot(){
     sections:   JSON.parse(JSON.stringify(sections)),
     secId:      secId,
     matChoice:  JSON.parse(JSON.stringify(matChoice)),
+    confExtras: JSON.parse(JSON.stringify(confExtras)),
+    confExtraId: confExtraId,
   };
 }
 
@@ -54,6 +56,8 @@ function projRestore(snap){
   if(!sections.length) sections=[mkSection()];
   secId     = snap.secId     || 0;
   Object.assign(matChoice, snap.matChoice || {});
+  confExtras  = snap.confExtras  ? JSON.parse(JSON.stringify(snap.confExtras)) : [];
+  confExtraId = snap.confExtraId || 0;
 }
 
 // Сохранить текущий проект
@@ -149,6 +153,7 @@ function projSwitchTo(id){
   renderMatCards();
   updateMaterials();
   projRenderTabs();
+  if(typeof confRenderExtras === 'function') confRenderExtras();
   projModalClose();
 }
 
@@ -164,6 +169,8 @@ function projNew(){
   // Сброс state
   secId = 0;
   sections = [];
+  confExtras = [];
+  confExtraId = 0;
   matChoice = { ldspName:'', ldspPrice:0, mdfType:'plenka', mdfName:'', mdfPrice:0,
     hingeBrand:'En-7', slideBrand:'En-7', slideType:'Телескоп' };
 
@@ -3072,6 +3079,82 @@ window._ai_render3D    = render3D;
 window._ai_updateStats = updateStats;
 
 
+
+// ═══════════════════════════════════════════════════════════════
+// ДОП. АКСЕССУАРЫ ШКАФА (DB.shk → Фурнитура шкаф)
+// ═══════════════════════════════════════════════════════════════
+let confExtras = []; // [{id, cat, vid, qty}]
+let confExtraId = 0;
+let confExtrasOpen = true;
+
+function confExtrasToggle(){
+  confExtrasOpen = !confExtrasOpen;
+  const body = document.getElementById('conf-extras-body');
+  const arr  = document.getElementById('conf-extras-arr');
+  if(body) body.style.display = confExtrasOpen ? '' : 'none';
+  if(arr)  arr.style.transform = confExtrasOpen ? '' : 'rotate(-90deg)';
+}
+
+function confRenderExtras(){
+  const list = document.getElementById('conf-extras-list'); if(!list) return;
+  const cnt  = document.getElementById('conf-extras-cnt');
+  if(!confExtras.length){
+    list.innerHTML = '<p style="font-size:11px;color:#aaa;padding:4px 0">Нет позиций</p>';
+    if(cnt) cnt.textContent = '';
+    return;
+  }
+  const shk = DB.shk || [];
+  const cats = [...new Set(shk.map(x=>x.cat))];
+  list.innerHTML = confExtras.map(item=>{
+    const vids  = shk.filter(x=>x.cat===item.cat);
+    const price = (shk.find(x=>x.cat===item.cat&&x.vid===item.vid)||{p:0}).p;
+    return '<div style="background:#f8f8f8;border:1px solid #eee;border-radius:8px;padding:8px;margin-bottom:6px" id="cex-'+item.id+'">' +
+      '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">' +
+        '<select style="font-size:11px;border:1px solid #e0e0e0;border-radius:6px;padding:3px 6px;background:#fff;flex:1;min-width:90px" onchange="confExtraSetCat('+item.id+',this.value)">' +
+          cats.map(c=>'<option value="'+c+'"'+(c===item.cat?' selected':'')+'>'+c+'</option>').join('') +
+        '</select>' +
+        '<select style="font-size:11px;border:1px solid #e0e0e0;border-radius:6px;padding:3px 6px;background:#fff;flex:1;min-width:70px" onchange="confExtraSetVid('+item.id+',this.value)">' +
+          vids.map(v=>'<option value="'+v.vid+'"'+(v.vid===item.vid?' selected':'')+'>'+v.vid+'</option>').join('') +
+        '</select>' +
+        '<input type="number" value="'+item.qty+'" min="1" style="width:44px;font-size:11px;border:1px solid #e0e0e0;border-radius:6px;padding:3px 5px;text-align:center" onchange="confExtraSetQty('+item.id+',this.value)">' +
+        '<button style="background:none;border:none;color:#ccc;cursor:pointer;font-size:14px;padding:0 2px" onclick="confExtraRemove('+item.id+')">✕</button>' +
+      '</div>' +
+      '<div style="font-size:10px;color:#888;margin-top:3px">'+price.toLocaleString('ru')+'₸ × '+item.qty+' = '+(price*item.qty).toLocaleString('ru')+'₸</div>' +
+    '</div>';
+  }).join('');
+  if(cnt) cnt.textContent = confExtras.length ? confExtras.length+' поз.' : '';
+}
+
+function confAddExtra(){
+  const shk = DB.shk||[];
+  if(!shk.length){ alert('Загрузите цены (таб Цены → Загрузить каталог)'); return; }
+  confExtras.push({id:confExtraId++, cat:shk[0].cat, vid:shk[0].vid, qty:1});
+  confRenderExtras(); projMarkUnsaved();
+}
+function confExtraSetCat(id, cat){
+  const item = confExtras.find(x=>x.id===id); if(!item) return;
+  item.cat = cat;
+  const first = (DB.shk||[]).find(x=>x.cat===cat);
+  item.vid = first ? first.vid : '—';
+  confRenderExtras(); projMarkUnsaved();
+}
+function confExtraSetVid(id, vid){
+  const item = confExtras.find(x=>x.id===id); if(!item) return;
+  item.vid = vid; confRenderExtras(); projMarkUnsaved();
+}
+function confExtraSetQty(id, qty){
+  const item = confExtras.find(x=>x.id===id); if(!item) return;
+  item.qty = Math.max(1, parseInt(qty)||1); projMarkUnsaved();
+}
+function confExtraRemove(id){
+  confExtras = confExtras.filter(x=>x.id!==id); confRenderExtras(); projMarkUnsaved();
+}
+
+window.confExtrasToggle=confExtrasToggle; window.confRenderExtras=confRenderExtras;
+window.confAddExtra=confAddExtra; window.confExtraSetCat=confExtraSetCat;
+window.confExtraSetVid=confExtraSetVid; window.confExtraSetQty=confExtraSetQty;
+window.confExtraRemove=confExtraRemove;
+window._confExtras = () => confExtras;
 
 // ═══════════════════════════════════════════════════════════════
 // KITCHEN PROJECTS SYSTEM
