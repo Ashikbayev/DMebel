@@ -545,3 +545,17 @@ select{width:100%;font-size:12px;padding:5px 6px;border:1px solid #ddd;border-ra
   .kp-close-btn,.kp-print-btn{display:none}
   body>*:not(#kp-modal){display:none}
 }
+
+/* ── KITCHEN PROJECTS BAR ─────────────────────────────────── */
+#pg-kitchen #k-projects-bar{background:#1a1a2e;color:#fff;display:flex;align-items:center;gap:0;flex-shrink:0;border-bottom:1px solid #0d0d1a;min-height:38px;position:relative;z-index:10}
+#k-proj-label{font-size:10px;font-weight:700;color:#6b7db3;padding:0 8px;white-space:nowrap;text-transform:uppercase;letter-spacing:.05em;flex-shrink:0}
+#k-proj-tabs-wrap{flex:1;overflow-x:auto;display:flex;align-items:stretch;scrollbar-width:none;min-width:0}
+#k-proj-tabs-wrap::-webkit-scrollbar{display:none}
+#k-proj-tabs{display:flex;align-items:stretch;gap:0}
+#k-proj-new-btn{flex-shrink:0;padding:0 10px;background:none;border:none;border-left:1px solid #2a2a4a;color:#6b7db3;cursor:pointer;font-size:18px;min-height:38px;transition:.12s;display:flex;align-items:center}
+#k-proj-new-btn:hover{background:#252540;color:#fff}
+#pg-kitchen #k-proj-meta-strip{background:#f4f6fb;border-bottom:1px solid #e0e4f0;padding:6px 10px;display:flex;flex-direction:column;gap:5px;flex-shrink:0}
+#k-proj-meta-strip input{font-size:12px;padding:3px 7px;border:1px solid #d0d8f0;border-radius:6px;background:#fff;color:#1a1a1a;min-width:0;flex:1}
+#k-proj-save-btn{padding:3px 10px;background:#1a5252;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:4px;white-space:nowrap;height:26px}
+#k-proj-save-btn:hover{background:#0f3838}
+#k-proj-saved-flash{font-size:10px;color:#27ae60;opacity:0;transition:opacity .3s;white-space:nowrap;flex-shrink:0}

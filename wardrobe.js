@@ -3059,6 +3059,229 @@ window._ai_updateStats = updateStats;
 
 
 // ═══════════════════════════════════════════════════════════════
+// KITCHEN PROJECTS SYSTEM
+// ═══════════════════════════════════════════════════════════════
+const K_PROJ_PREFIX    = 'k_proj_';
+const K_PROJ_INDEX_KEY = 'k_proj_index';
+
+let kActiveProjectId = null;
+let kProjUnsaved = false;
+let kAutoSaveTimer = null;
+
+function kProjGetIndex(){
+  try{ return JSON.parse(localStorage.getItem(K_PROJ_INDEX_KEY)||'[]'); }catch(e){ return []; }
+}
+function kProjSetIndex(idx){
+  try{ localStorage.setItem(K_PROJ_INDEX_KEY, JSON.stringify(idx)); }catch(e){}
+}
+function kProjGenId(){
+  return 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+}
+
+function kProjSnapshot(){
+  return {
+    meta: {
+      name:   (document.getElementById('k-proj-name-inp')  ||{}).value||'Новая кухня',
+      client: (document.getElementById('k-proj-client-inp')||{}).value||'',
+      date:   (document.getElementById('k-proj-date-inp')  ||{}).value||'',
+    },
+    lower:     JSON.parse(JSON.stringify(KitchenState.lower)),
+    upper:     JSON.parse(JSON.stringify(KitchenState.upper)),
+    lId:       KitchenState.lId,
+    uId:       KitchenState.uId,
+    facadeMat: document.getElementById('k-facade-mat')?.value || 'ldsp',
+    topType:   document.getElementById('k-top-type')?.value   || 'none',
+    floorH:    document.getElementById('k-floor-h')?.value    || '850',
+    depth:     document.getElementById('k-depth')?.value      || '501',
+    upperGap:  document.getElementById('k-upper-gap')?.value  || '600',
+    sheetFmt:  document.getElementById('k-sheet-fmt')?.value  || '2750x1830',
+    facadeColorName: kFacadeColorName,
+    corpusColorName: kCorpusColorName,
+  };
+}
+
+function kProjRestore(snap){
+  KitchenState.lower = snap.lower || [];
+  KitchenState.upper = snap.upper || [];
+  KitchenState.lId   = snap.lId   || 0;
+  KitchenState.uId   = snap.uId   || 0;
+  const fm = document.getElementById('k-facade-mat'); if(fm) fm.value = snap.facadeMat||'ldsp';
+  const fh = document.getElementById('k-floor-h');   if(fh) fh.value = snap.floorH||'850';
+  const dp = document.getElementById('k-depth');      if(dp) dp.value = snap.depth||'501';
+  const ug = document.getElementById('k-upper-gap'); if(ug) ug.value = snap.upperGap||'600';
+  const sf = document.getElementById('k-sheet-fmt'); if(sf) sf.value = snap.sheetFmt||'2750x1830';
+  if(snap.facadeColorName) kSetFacadeColor(null, snap.facadeColorName, null);
+  if(snap.corpusColorName) kSetCorpusColor(null, snap.corpusColorName, null);
+}
+
+function kProjSave(){
+  if(!kActiveProjectId) kActiveProjectId = kProjGenId();
+  const snap = kProjSnapshot();
+  const idx  = kProjGetIndex();
+  const existing = idx.find(p => p.id === kActiveProjectId);
+  const entry = {
+    id:      kActiveProjectId,
+    name:    snap.meta.name   || 'Без названия',
+    client:  snap.meta.client || '',
+    date:    snap.meta.date   || '',
+    savedAt: new Date().toISOString(),
+  };
+  if(existing) Object.assign(existing, entry);
+  else idx.unshift(entry);
+  kProjSetIndex(idx);
+  try{ localStorage.setItem(K_PROJ_PREFIX + kActiveProjectId, JSON.stringify(snap)); }catch(e){
+    alert('Ошибка сохранения: '+e.message); return;
+  }
+  kProjUnsaved = false;
+  kProjRenderTabs();
+  const fl = document.getElementById('k-proj-saved-flash');
+  if(fl){ fl.style.opacity='1'; setTimeout(()=>{ fl.style.opacity='0'; }, 1800); }
+}
+
+function kProjLoad(id){
+  try{
+    const raw = localStorage.getItem(K_PROJ_PREFIX + id);
+    if(!raw) return false;
+    const snap = JSON.parse(raw);
+    kProjRestore(snap);
+    kActiveProjectId = id;
+    kProjUnsaved = false;
+    const m = snap.meta||{};
+    const ni = document.getElementById('k-proj-name-inp');   if(ni) ni.value = m.name||'';
+    const ci = document.getElementById('k-proj-client-inp'); if(ci) ci.value = m.client||'';
+    const di = document.getElementById('k-proj-date-inp');   if(di) di.value = m.date||'';
+    return true;
+  }catch(e){ console.error('kProjLoad error',e); return false; }
+}
+
+function kProjDelete(id){
+  let idx = kProjGetIndex();
+  idx = idx.filter(p => p.id !== id);
+  kProjSetIndex(idx);
+  try{ localStorage.removeItem(K_PROJ_PREFIX + id); }catch(e){}
+  if(id === kActiveProjectId){
+    if(idx.length > 0) kProjSwitchTo(idx[0].id);
+    else kProjNew();
+  }
+}
+
+function kProjDuplicate(id){
+  try{
+    const raw = localStorage.getItem(K_PROJ_PREFIX + id);
+    if(!raw) return;
+    const snap = JSON.parse(raw);
+    const newId = kProjGenId();
+    snap.meta.name = (snap.meta.name||'Кухня') + ' (копия)';
+    const idx = kProjGetIndex();
+    idx.unshift({ id:newId, name:snap.meta.name, client:snap.meta.client||'', date:snap.meta.date||'', savedAt:new Date().toISOString() });
+    kProjSetIndex(idx);
+    localStorage.setItem(K_PROJ_PREFIX + newId, JSON.stringify(snap));
+    kProjSwitchTo(newId);
+    kProjModalOpen();
+  }catch(e){ console.error('kProjDuplicate error',e); }
+}
+
+function kProjSwitchTo(id){
+  if(kProjUnsaved && kActiveProjectId) kProjSave();
+  const ok = kProjLoad(id);
+  if(!ok) return;
+  kRenderPanel();
+  kRender();
+  kUpdateTopSelect();
+  kRenderColorPickers();
+  kProjRenderTabs();
+  kProjModalClose();
+}
+
+function kProjNew(){
+  if(kProjUnsaved && kActiveProjectId) kProjSave();
+  const newId = kProjGenId();
+  kActiveProjectId = newId;
+  kProjUnsaved = false;
+  KitchenState.lower = [];
+  KitchenState.upper = [];
+  KitchenState.lId = 0;
+  KitchenState.uId = 0;
+  const today = new Date().toISOString().split('T')[0];
+  const ni = document.getElementById('k-proj-name-inp');   if(ni) ni.value = 'Новая кухня';
+  const ci = document.getElementById('k-proj-client-inp'); if(ci) ci.value = '';
+  const di = document.getElementById('k-proj-date-inp');   if(di) di.value = today;
+  kRenderPanel();
+  kRender();
+  kProjRenderTabs();
+  kProjSave();
+}
+
+function kProjMarkUnsaved(){
+  if(!kProjUnsaved){
+    kProjUnsaved = true;
+    kProjRenderTabs();
+  }
+  clearTimeout(kAutoSaveTimer);
+  kAutoSaveTimer = setTimeout(()=>{ if(kProjUnsaved && kActiveProjectId) kProjSave(); }, 4000);
+}
+
+function kProjRenderTabs(){
+  const idx    = kProjGetIndex();
+  const tabsEl = document.getElementById('k-proj-tabs');
+  if(!tabsEl) return;
+  tabsEl.innerHTML = idx.map(p => {
+    const isActive = p.id === kActiveProjectId;
+    const isDirty  = isActive && kProjUnsaved;
+    return `<button class="proj-tab${isActive?' active':''}${isDirty?' unsaved':''}"
+        onclick="kProjSwitchTo('${p.id}')" title="${p.name}${p.client?' — '+p.client:''}">
+      <span class="proj-dot" title="Несохранённые изменения"></span>
+      <span class="proj-name-text">${p.name||'Без названия'}</span>
+      <button class="proj-close" onclick="event.stopPropagation();kProjDelete('${p.id}')" title="Закрыть">&times;</button>
+    </button>`;
+  }).join('');
+}
+
+function kProjModalOpen(){
+  const idx = kProjGetIndex();
+  const mc  = document.getElementById('k-proj-modal-content');
+  if(!mc) return;
+  if(!idx.length){
+    mc.innerHTML = '<p class="proj-empty">Нет сохранённых проектов</p>';
+  } else {
+    const rows = idx.map(p => {
+      const savedAt = p.savedAt ? new Date(p.savedAt).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+      const isActive = p.id === kActiveProjectId;
+      return `<tr>
+        <td><b>${p.name||'Без названия'}</b>${isActive?'<span style="margin-left:6px;font-size:10px;background:#e8f5e9;color:#1a7a3a;padding:1px 6px;border-radius:4px">открыт</span>':''}<br>
+          <span style="font-size:11px;color:#888">${p.client||'—'}</span></td>
+        <td style="font-size:11px;color:#888">${p.date||'—'}</td>
+        <td style="font-size:11px;color:#aaa">${savedAt}</td>
+        <td style="text-align:right;white-space:nowrap">
+          ${isActive?'':`<button class="proj-open-btn" onclick="kProjSwitchTo('${p.id}')">Открыть</button>&nbsp;`}
+          <button class="proj-dup-btn" onclick="kProjDuplicate('${p.id}')" title="Дублировать"><i class="ti ti-copy"></i></button>&nbsp;
+          <button class="proj-del-btn" onclick="if(confirm('Удалить «${(p.name||'').replace(/'/g,'&apos;')}»?')){kProjDelete('${p.id}');kProjModalOpen();}" title="Удалить"><i class="ti ti-trash"></i></button>
+        </td>
+      </tr>`;
+    }).join('');
+    mc.innerHTML = `
+      <div style="margin-bottom:10px;display:flex;justify-content:flex-end">
+        <button onclick="kProjNew();kProjModalClose()" style="padding:6px 14px;background:#1a5252;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">
+          <i class="ti ti-plus"></i> Новый проект
+        </button>
+      </div>
+      <table class="proj-list-table">
+        <thead><tr><th>Название / Клиент</th><th>Дата</th><th>Сохранён</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+  document.getElementById('k-proj-modal').style.display = 'block';
+}
+function kProjModalClose(){ document.getElementById('k-proj-modal').style.display = 'none'; }
+function kProjMetaChanged(){ kProjMarkUnsaved(); }
+
+// Экспорт
+window.kProjNew=kProjNew; window.kProjSave=kProjSave; window.kProjSwitchTo=kProjSwitchTo;
+window.kProjDelete=kProjDelete; window.kProjDuplicate=kProjDuplicate;
+window.kProjModalOpen=kProjModalOpen; window.kProjModalClose=kProjModalClose;
+window.kProjMetaChanged=kProjMetaChanged;
+
+// ═══════════════════════════════════════════════════════════════
 // KITCHEN 3D CONFIGURATOR
 // ═══════════════════════════════════════════════════════════════
 const KitchenState = {
@@ -3093,14 +3316,14 @@ function kSwitchTab(tab){
 // ── Добавить модули ───────────────────────────────────────────
 function kAddLower(){
   KitchenState.lower.push(kMkLower());
-  kRenderPanel(); kRender(); kUpdateTopSelect();
+  kRenderPanel(); kRender(); kUpdateTopSelect(); kProjMarkUnsaved();
 }
 function kAddUpper(){
   KitchenState.upper.push(kMkUpper());
-  kRenderPanel(); kRender();
+  kRenderPanel(); kRender(); kProjMarkUnsaved();
 }
-function kRemoveLower(id){ KitchenState.lower=KitchenState.lower.filter(m=>m.id!==id); kRenderPanel(); kRender(); kUpdateTopSelect(); }
-function kRemoveUpper(id){ KitchenState.upper=KitchenState.upper.filter(m=>m.id!==id); kRenderPanel(); kRender(); }
+function kRemoveLower(id){ KitchenState.lower=KitchenState.lower.filter(m=>m.id!==id); kRenderPanel(); kRender(); kUpdateTopSelect(); kProjMarkUnsaved(); }
+function kRemoveUpper(id){ KitchenState.upper=KitchenState.upper.filter(m=>m.id!==id); kRenderPanel(); kRender(); kProjMarkUnsaved(); }
 function kUpdateLower(id, field, val){
   const m=KitchenState.lower.find(x=>x.id===id); if(!m)return;
   if(field==='width'){
@@ -3109,19 +3332,18 @@ function kUpdateLower(id, field, val){
   }
   else if(field==='type'){
     m.type=val;
-    // sink и appliance — нет отдельного фасада-двери (фасад открытый/встроенный)
     if(val==='sink'||val==='appliance') m.facade='none';
-    else if(m.facade==='none') m.facade='door'; // восстановить при смене обратно
+    else if(m.facade==='none') m.facade='door';
   }
   else if(field==='facade') m.facade=val;
-  kRender();
+  kRender(); kProjMarkUnsaved();
 }
 function kUpdateUpper(id, field, val){
   const m=KitchenState.upper.find(x=>x.id===id); if(!m)return;
   if(field==='width') m.width=Math.max(200,parseInt(val)||600);
   else if(field==='height') m.height=Math.max(300,parseInt(val)||720);
   else if(field==='facade') m.facade=val;
-  kRender();
+  kRender(); kProjMarkUnsaved();
 }
 
 // ── Рендер панели ─────────────────────────────────────────────
@@ -3626,16 +3848,31 @@ function initKitchen(){
   if(!kInited){
     kInited = true;
     kInitThree();
-    // Стартовый набор: 3 нижних + 2 верхних
-    KitchenState.lower = [kMkLower(600), kMkLower(600), kMkLower(600)];
-    KitchenState.upper = [kMkUpper(600), kMkUpper(600)];
-    kRenderPanel();
     kRenderColorPickers();
     kFillTopSelect();
-    setTimeout(()=>kRender(), 50);
+    // Инициализация системы проектов кухни
+    const kidx = kProjGetIndex();
+    if(kidx.length > 0){
+      const loaded = kProjLoad(kidx[0].id);
+      if(loaded){
+        kRenderPanel();
+        kProjRenderTabs();
+        setTimeout(()=>kRender(), 50);
+      } else {
+        kProjNew();
+      }
+    } else {
+      // Первый запуск — стартовый набор
+      KitchenState.lower = [kMkLower(600), kMkLower(600), kMkLower(600)];
+      KitchenState.upper = [kMkUpper(600), kMkUpper(600)];
+      kRenderPanel();
+      kProjRenderTabs();
+      setTimeout(()=>kRender(), 50);
+    }
   } else {
     kRenderColorPickers();
     kFillTopSelect();
+    kProjRenderTabs();
     kRender();
   }
 }

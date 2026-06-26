@@ -415,6 +415,27 @@
       <i class="ti ti-arrow-right"></i> В расчёт →
     </button>
   </div>
+  <!-- KITCHEN PROJECTS BAR -->
+  <div id="k-projects-bar">
+    <span id="k-proj-label">Проекты</span>
+    <div id="k-proj-tabs-wrap"><div id="k-proj-tabs"></div></div>
+    <button id="k-proj-new-btn" title="Новый проект" onclick="kProjNew()"><i class="ti ti-plus"></i></button>
+  </div>
+  <!-- KITCHEN PROJECT META STRIP -->
+  <div id="k-proj-meta-strip">
+    <div class="proj-meta-row">
+      <span class="proj-meta-lbl">Название</span>
+      <input type="text" id="k-proj-name-inp" placeholder="Кухня гостиная" oninput="kProjMetaChanged()">
+    </div>
+    <div class="proj-meta-row">
+      <span class="proj-meta-lbl">Клиент</span>
+      <input type="text" id="k-proj-client-inp" placeholder="Иванов И.И." oninput="kProjMetaChanged()">
+      <input type="date" id="k-proj-date-inp" oninput="kProjMetaChanged()">
+      <button id="k-proj-save-btn" onclick="kProjSave()"><i class="ti ti-device-floppy"></i></button>
+      <span id="k-proj-saved-flash">✓</span>
+    </div>
+  </div>
+
   <div id="kapp">
     <!-- Левая панель -->
     <div id="kpanel">
@@ -561,6 +582,7 @@
       <!-- Футер -->
       <div class="kpanel-footer">
         <button class="kfoot-btn" onclick="kShowPreview()"><i class="ti ti-cube"></i><span>3D</span></button>
+        <button class="kfoot-btn" onclick="kProjModalOpen()"><i class="ti ti-folder"></i><span>Проекты</span></button>
         <button class="kfoot-btn" onclick="kShowSpec()"><i class="ti ti-file-invoice"></i><span>Смета</span></button>
         <button class="kfoot-btn" onclick="kShowCut()"><i class="ti ti-layout-grid"></i><span>Раскрой</span></button>
         <button class="kfoot-btn" style="background:#1a3a6a;color:#fff;border-color:#1a3a6a" onclick="kShowBlueprint()"><i class="ti ti-ruler-2"></i><span>Чертёж</span></button>
@@ -573,6 +595,17 @@
       <div id="kstats"></div>
       <div style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.4);color:#fff;font-size:11px;padding:4px 12px;border-radius:20px;pointer-events:none">Тяните для поворота • колесо = зум</div>
     </div>
+  </div>
+</div>
+
+<!-- KITCHEN PROJECTS MODAL -->
+<div id="k-proj-modal" class="modal-wrap" style="display:none">
+  <div class="modal-inner" id="k-proj-modal-inner">
+    <div class="modal-hdr">
+      <span><i class="ti ti-folder" style="margin-right:6px"></i>Проекты кухни</span>
+      <button class="closebtn" onclick="kProjModalClose()"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="k-proj-modal-content"></div>
   </div>
 </div>
 
