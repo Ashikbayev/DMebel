@@ -2353,11 +2353,11 @@ function calcAllCosts(){
 
   const matTotal = ldspCost+hdfCost+facLdspCost+mdfCost+edgeCost+drawerCost+hardwareCost;
 
-  // Дробные эквиваленты листов (как в КП: занятая высота / высота листа)
-  const ldspEquiv    = ldspSheets.length>0 ? ldspSheets.reduce((a,sh)=>a+sh.items.reduce((m,it)=>Math.max(m,it.y+it.h),0),0)/LDSP_H : 0;
-  const hdfEquiv     = hdfSheets.length>0  ? hdfSheets.reduce((a,sh)=>a+sh.items.reduce((m,it)=>Math.max(m,it.y+it.h),0),0)/HDF_H  : 0;
+  // Дробные эквиваленты листов — система Четверть (≤25%→0.25, 25-75%→факт, >75%→1.0)
+  const ldspEquiv    = ldspSheets.length>0    ? countSheetsQuarter(ldspSheets, LDSP_H) : 0;
+  const hdfEquiv     = hdfSheets.length>0     ? countSheetsQuarter(hdfSheets, HDF_H)   : 0;
   const _facAll      = [...facTexSheets,...facNoTexSheets];
-  const facLdspEquiv = _facAll.length>0    ? _facAll.reduce((a,sh)=>a+sh.items.reduce((m,it)=>Math.max(m,it.y+it.h),0),0)/LDSP_H   : 0;
+  const facLdspEquiv = _facAll.length>0       ? countSheetsQuarter(_facAll, LDSP_H)    : 0;
 
   // Штанги — 1 секция с штангой = 1 штанга
   const totalRods = sections.reduce((a,s) => a + (s.hasRod ? 1 : 0), 0);
