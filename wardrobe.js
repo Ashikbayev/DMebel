@@ -2233,16 +2233,29 @@ function packSheets(parts,SW,SH,label,allowRotate,preferLong){
 
 /* ============================================================
    COST CALCULATION — по занятой ширине листа (сторона SH = 1830мм)
-   Для каждого листа берём максимальный Y+H среди всех деталей —
-   это сколько "занято" по стороне 1830. Стоимость = (maxY / SH) × цена.
+   Система "Четверть": ≤25% → 0.25, 25-75% → факт, >75% → 1.0
 ============================================================ */
 function calcSheetsCost(sheets,SW,SH,pricePerSheet){
   return sheets.reduce((total,sh)=>{
-    // максимальная занятая координата по оси Y (сторона SH=1830)
     const maxY=sh.items.reduce((m,it)=>Math.max(m,it.y+it.h),0);
-    const ratio=Math.min(maxY/SH,1); // не более 1 листа
+    const pct = maxY/SH*100;
+    let ratio;
+    if(pct <= 25) ratio = 0.25;
+    else if(pct >= 75) ratio = 1.0;
+    else ratio = pct/100;
     return total+ratio*pricePerSheet;
   },0);
+}
+
+// Подсчёт листов с системой Четверть (для отображения в UI)
+function countSheetsQuarter(sheets, SH){
+  return Math.round(sheets.reduce((total,sh)=>{
+    const maxY=sh.items.reduce((m,it)=>Math.max(m,it.y+it.h),0);
+    const pct = maxY/SH*100;
+    if(pct <= 25) return total+0.25;
+    if(pct >= 75) return total+1.0;
+    return total+pct/100;
+  },0)*100)/100;
 }
 
 function calcAllCosts(){
@@ -2391,11 +2404,10 @@ function showSpec(){
 
   // ЛДСП корпус
   if(d.ldspCount>0){
-    const totalMaxY=d.ldspSheets.reduce((a,sh)=>a+sh.items.reduce((m,it)=>Math.max(m,it.y+it.h),0),0);
-    const equiv=(totalMaxY/LDSP_H).toFixed(2); // эквивалент листов по ширине
+    const equiv=countSheetsQuarter(d.ldspSheets,LDSP_H);
     html+=`<tr>
       <td><span class="color-dot" style="background:#c8a96e;margin-right:6px"></span>${matChoice.ldspName?matChoice.ldspName+' — ':''}ЛДСП корпус 2750×1830<br>
-        <span style="font-size:10px;color:#888">${d.ldspCount} лист(ов), занято ${Math.round(totalMaxY/d.ldspCount)} мм из 1830</span></td>
+        <span style="font-size:10px;color:#888">~${equiv} листов по ширине 1830мм</span></td>
       <td class="num">${equiv}</td>
       <td class="num">лист</td>
       <td class="num">${fmt(d.ldspPricePerSheet)}</td>
@@ -2405,11 +2417,10 @@ function showSpec(){
 
   // ХДФ
   if(d.hdfCount>0){
-    const totalMaxY=d.hdfSheets.reduce((a,sh)=>a+sh.items.reduce((m,it)=>Math.max(m,it.y+it.h),0),0);
-    const equiv=(totalMaxY/HDF_H).toFixed(2);
+    const equiv=countSheetsQuarter(d.hdfSheets,HDF_H);
     html+=`<tr>
       <td><span class="color-dot" style="background:#d4c49a;margin-right:6px"></span>ХДФ задняя стенка 2800×2070<br>
-        <span style="font-size:10px;color:#888">${d.hdfCount} лист(ов), занято ${Math.round(totalMaxY/d.hdfCount)} мм из 2070</span></td>
+        <span style="font-size:10px;color:#888">~${equiv} листов по ширине 2070мм</span></td>
       <td class="num">${equiv}</td>
       <td class="num">лист</td>
       <td class="num">${fmt(d.hdfPricePerSheet)}</td>
@@ -2420,11 +2431,10 @@ function showSpec(){
   // ЛДСП фасад
   if(d.facLdspCount>0){
     const allFacSheets=[...d.facTexSheets,...d.facNoTexSheets];
-    const totalMaxY=allFacSheets.reduce((a,sh)=>a+sh.items.reduce((m,it)=>Math.max(m,it.y+it.h),0),0);
-    const equiv=(totalMaxY/LDSP_H).toFixed(2);
+    const equiv=countSheetsQuarter(allFacSheets,LDSP_H);
     html+=`<tr>
       <td><span class="color-dot" style="background:#e2c484;margin-right:6px"></span>${matChoice.ldspName?matChoice.ldspName+' — ':''}ЛДСП фасад 2750×1830<br>
-        <span style="font-size:10px;color:#888">${d.facLdspCount} лист(ов), занято ${Math.round(totalMaxY/d.facLdspCount)} мм из 1830</span></td>
+        <span style="font-size:10px;color:#888">~${equiv} листов по ширине 1830мм</span></td>
       <td class="num">${equiv}</td>
       <td class="num">лист</td>
       <td class="num">${fmt(d.ldspPricePerSheet)}</td>
@@ -2843,19 +2853,19 @@ function showCut(){
   // ── Вкладка Раскрой ──────────────────────────────────────────
   let sheetsHtml='';
   if(ldspSheets.length) sheetsHtml+=`<div class="cut-mat-block">
-    <div class="cut-mat-title"><span class="color-dot" style="background:#c8a96e"></span>${matChoice.ldspName||'ЛДСП'} корпус 2750×1830 — ${ldspSheets.length} лист(ов)</div>
+    <div class="cut-mat-title"><span class="color-dot" style="background:#c8a96e"></span>${matChoice.ldspName||'ЛДСП'} корпус 2750×1830 — ~${countSheetsQuarter(ldspSheets,LDSP_H)} листов</div>
     <div class="cut-sheets-wrap">${ldspSheets.map(s=>drawSheet(s,LDSP_W,LDSP_H,sc,true)).join('')}</div>
   </div>`;
   if(hdfSheets.length) sheetsHtml+=`<div class="cut-mat-block">
-    <div class="cut-mat-title"><span class="color-dot" style="background:#d4c49a"></span>ХДФ задние стенки 2800×2070 — ${hdfSheets.length} лист(ов) <span style="font-size:10px;color:#888">(по длинной стороне)</span></div>
+    <div class="cut-mat-title"><span class="color-dot" style="background:#d4c49a"></span>ХДФ задние стенки 2800×2070 — ~${countSheetsQuarter(hdfSheets,HDF_H)} листов <span style="font-size:10px;color:#888">(по длинной стороне)</span></div>
     <div class="cut-sheets-wrap">${hdfSheets.map(s=>drawSheet(s,HDF_W,HDF_H,sc,false)).join('')}</div>
   </div>`;
   if(facTexSheets.length) sheetsHtml+=`<div class="cut-mat-block">
-    <div class="cut-mat-title"><span class="color-dot" style="background:#e2c484"></span>ЛДСП фасад с текстурой — ${facTexSheets.length} лист(ов) <span class="badge-tex badge-grain">↕ без поворота</span></div>
+    <div class="cut-mat-title"><span class="color-dot" style="background:#e2c484"></span>ЛДСП фасад с текстурой — ~${countSheetsQuarter(facTexSheets,LDSP_H)} листов <span class="badge-tex badge-grain">↕ без поворота</span></div>
     <div class="cut-sheets-wrap">${facTexSheets.map(s=>drawSheet(s,LDSP_W,LDSP_H,sc,true)).join('')}</div>
   </div>`;
   if(facNoTexSheets.length) sheetsHtml+=`<div class="cut-mat-block">
-    <div class="cut-mat-title"><span class="color-dot" style="background:#e2c484"></span>ЛДСП фасад — ${facNoTexSheets.length} лист(ов) <span class="badge-tex badge-notex">↔ с поворотом</span></div>
+    <div class="cut-mat-title"><span class="color-dot" style="background:#e2c484"></span>ЛДСП фасад — ~${countSheetsQuarter(facNoTexSheets,LDSP_H)} листов <span class="badge-tex badge-notex">↔ с поворотом</span></div>
     <div class="cut-sheets-wrap">${facNoTexSheets.map(s=>drawSheet(s,LDSP_W,LDSP_H,sc,true)).join('')}</div>
   </div>`;
   if(facMdf.length) sheetsHtml+=`<div class="cut-mat-block">
