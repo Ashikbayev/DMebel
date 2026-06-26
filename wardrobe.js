@@ -343,10 +343,18 @@ function loadHardware(){
 function pickSlide(sectionDepth){
   // Телескоп = глубина секции минус ~100мм (зазор спереди и сзади)
   const maxLen = sectionDepth - 100;
-  const matches=slideCatalog
+  // Сначала ищем по активному бренду/типу
+  let matches = slideCatalog
     .filter(s=>s.brand===activeSlide.brand && s.type===activeSlide.type && s.length<=maxLen)
     .sort((a,b)=>b.length-a.length);
-  return matches[0]||null;
+  if(matches.length) return matches[0];
+  // Fallback: любой телескоп подходящей длины
+  matches = slideCatalog
+    .filter(s=>s.type==='Телескоп' && s.length<=maxLen)
+    .sort((a,b)=>b.length-a.length);
+  if(matches.length) return matches[0];
+  // Fallback: любой из каталога
+  return slideCatalog.filter(s=>s.type==='Телескоп').sort((a,b)=>b.length-a.length)[0] || null;
 }
 // цена активной петли
 function hingePrice(){
