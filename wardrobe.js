@@ -4059,6 +4059,24 @@ function kRender(){
       [1/3, 2/3].forEach(frac=>{
         tadd(kBox(innerW, K_BOARD, innerD, M.corpus, cx, innerY0+innerH*frac, -2.5));
       });
+    } else if(mod.type==='corner'){
+      // Угловой модуль — L-образный, занимает W×W по плану
+      // Основной куб слева (W/2 × H × W) + правый куб (W/2 × H × W/2)
+      const halfW = W/2;
+      // Задняя стенка левой части
+      tadd(kBox(halfW, innerH, K_BOARD, M.corpus, cx-halfW/2, CORP_BASE+H/2, -D/2+K_BOARD/2));
+      // Задняя стенка правой части (перпендикулярно)
+      tadd(kBox(K_BOARD, innerH, halfW-K_BOARD, M.corpus, cx+halfW/2-K_BOARD/2, CORP_BASE+H/2, -(halfW-K_BOARD)/2));
+      // Полка карусель (круглая упрощённо)
+      [0.35, 0.7].forEach(frac=>{
+        const ry = CORP_BASE + H*frac;
+        tadd(kBox(W*0.65, K_BOARD, W*0.65, M.corpus, cx-halfW*0.1, ry, -halfW*0.3));
+      });
+      // Фасад левый (узкий, ~W/2 ширина)
+      if(mod.facade==='door'){
+        tadd(kBox(halfW-2, H-2, 16, M.door, cx-halfW/2, CORP_BASE+H/2, D/2+8));
+        kHandle(cx-halfW/2, CORP_BASE+H*0.55, D/2+19, halfW, tag, M);
+      }
     } else if(mod.type==='drawers'){
       // 3 ящика равной высоты
       const dH = innerH/3;
@@ -4086,7 +4104,7 @@ function kRender(){
 
     // ── Фасад ─────────────────────────────────────────────────
     // Высота фасада = высота боковин (нет верхней крышки, столешница сверху)
-    if(mod.facade==='door' && (mod.type==='shelves'||mod.type==='sink'||mod.type==='appliance')){
+    if(mod.facade==='door' && (mod.type==='shelves'||mod.type==='sink'||mod.type==='appliance'||mod.type==='none') && mod.type!=='corner'){
       tadd(kBox(W-2, H-2, 16, M.door, cx, CORP_BASE+H/2, D/2+8));
       kHandle(cx, CORP_BASE+H*0.55, D/2+19, W, tag, M);
     }
