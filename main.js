@@ -562,648 +562,6 @@ function aiGetContext(){
 // ── Системный промт ──────────────────────────────────────────
 function aiGetSystemPrompt(){
   const ctx = aiGetContext();
-  return `Ты ИИ-помощник для мебельной компании MebelOFF (Сатпаев, Казахстан). Помогаешь менеджерам быстро настраивать 3D конфигуратор кухни и шкафа, и заполнять калькулятор.
-
-ТЕКУЩИЙ КОНТЕКСТ ПРИЛОЖЕНИЯ:${ctx}
-
-СТАНДАРТЫ ПРОИЗВОДСТВА MebelOFF:
-- Плита ЛДСП: 16мм | Столешница: 38мм | Ножки: 100мм
-- Высота нижних: ножки(100) + корпус(712) + столешница(38) = 850мм
-- Стандартная глубина кухни: 501мм | Верхние: 350мм глубина
-- Высота верхних шкафов: 750мм (стандарт) или 900мм
-- Пеналы: высота 2140мм | ЛДСП листы: 2750×1830мм
-
-КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА:
-1. Отвечай на русском, кратко — 1-3 предложения.
-2. ВСЕГДА добавляй <actions> если запрос про кухню, шкаф или мебель.
-3. НЕ пиши таблицы, Markdown — только текст + actions.
-4. <actions> — валидный JSON массив, ВСЕГДА в конце.
-5. navigateTo ВСЕГДА первый action.
-
-ПРИМЕР — "кухня 3 метра белый фасад мойка и духовка":
-Настраиваю кухню 3000мм с белым фасадом, мойкой и духовкой.
-<actions>
-[{"action":"navigateTo","page":"kitchen"},{"action":"clearKitchen"},{"action":"setKitchenGlobal","floorH":850,"depth":501},{"action":"addKitchenLower","width":600,"type":"drawers","facade":"door"},{"action":"addKitchenLower","width":600,"type":"shelves","facade":"door"},{"action":"addKitchenLower","width":500,"type":"sink","facade":"none"},{"action":"addKitchenLower","width":600,"type":"appliance","facade":"none"},{"action":"addKitchenLower","width":700,"type":"shelves","facade":"door"},{"action":"addKitchenUpper","width":600,"type":"upper1","facade":"door"},{"action":"addKitchenUpper","width":600,"type":"upper2","facade":"door"},{"action":"addKitchenUpper","width":600,"type":"upper1","facade":"door"},{"action":"addKitchenUpper","width":600,"type":"upper1","facade":"door"}]
-</actions>
-
-ПРИМЕР — "шкаф 2.4м 3 секции штанга, пантограф, петли Blume":
-Настраиваю шкаф-купе 2400мм, 3 секции со штангой и пантографом.
-<actions>
-[{"action":"navigateTo","page":"conf"},{"action":"clearWardrobe"},{"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":true,"shelves":2},{"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":true,"shelves":2},{"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":false,"shelves":3},{"action":"addWardrobeAccessory","cat":"Штанга","qty":3},{"action":"addWardrobeAccessory","cat":"Пантограф","qty":1},{"action":"addWardrobeFurn","cat":"Петля","vid":"Blume","qty":12}]
-</actions>
-
-ПРИМЕР — "кухня 3м, 700 мойка, 500 ящик, верхние стандарт, сушилка 800, столешница":
-Настраиваю кухню 3000мм с мойкой, ящиками и аксессуарами.
-<actions>
-[{"action":"navigateTo","page":"kitchen"},{"action":"clearKitchen"},{"action":"setKitchenGlobal","floorH":850,"depth":501},{"action":"addKitchenLower","width":700,"type":"sink","facade":"none"},{"action":"addKitchenLower","width":500,"type":"drawers","facade":"door"},{"action":"addKitchenLower","width":600,"type":"shelves","facade":"door"},{"action":"addKitchenLower","width":600,"type":"shelves","facade":"door"},{"action":"addKitchenLower","width":600,"type":"shelves","facade":"door"},{"action":"addKitchenUpper","width":600,"type":"upper1","height":750,"facade":"door"},{"action":"addKitchenUpper","width":600,"type":"upper1","height":750,"facade":"door"},{"action":"addKitchenUpper","width":600,"type":"upper1","height":750,"facade":"door"},{"action":"addKitchenAccessory","cat":"Сушилка","vid":"800мм","qty":1},{"action":"addKitchenAccessory","cat":"Столешница","vid":"стандарт","qty":1}]
-</actions>
-
-ПРИМЕР — "добавь пенал 600мм":
-Добавляю пенал 600мм.
-<actions>
-[{"action":"navigateTo","page":"kitchen"},{"action":"addKitchenPenal","width":600,"height":2140,"facade":"door"}]
-</actions>
-
-ПРИМЕР — "верхние шкафы 900мм":
-Устанавливаю высоту всех верхних шкафов 900мм.
-<actions>
-[{"action":"navigateTo","page":"kitchen"},{"action":"setKitchenUpperHeight","height":900}]
-</actions>
-
-ДОСТУПНЫЕ ACTIONS (полный список):
-Навигация:
-- {"action":"navigateTo","page":"kitchen|conf|calc"} — ВСЕГДА первым
-
-Кухня:
-- {"action":"clearKitchen"} — очистить всё
-- {"action":"setKitchenGlobal","floorH":850,"depth":501} — размеры
-- {"action":"addKitchenLower","width":600,"type":"shelves|drawers|sink|appliance","facade":"door|none"}
-- {"action":"addKitchenUpper","width":600,"type":"upper1|upper2|upperOpen","height":750,"facade":"door|none"}
-- {"action":"addKitchenPenal","width":600,"height":2140,"facade":"door|none"}
-- {"action":"addKitchenAccessory","cat":"Столешница","vid":"стандарт","qty":1} — аксессуар кухни (Столешница/Сушилка/Мойка/Плинтус/Карго/Бутылочница)
-- {"action":"setKitchenUpperHeight","height":750} — глобальная высота верхних (750 или 900)
-- {"action":"setKitchenFacadeMat","mat":"ldsp|mdf_plen|mdf_kr"} — материал фасада
-- {"action":"setKitchenFacadeColor","color":"#FFFFFF"} — цвет фасада (hex)
-- {"action":"setKitchenCorpusColor","color":"#D4B896"} — цвет корпуса (hex)
-
-Шкаф:
-- {"action":"clearWardrobe"}
-- {"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":true,"shelves":2}
-- {"action":"addWardrobeSection","width":800,...} — правильный псевдоним addWardobeSection
-- {"action":"addWardrobeAccessory","cat":"Штанга|Пантограф|Крючки|Турникет-Хром","vid":"450мм","qty":1} → shk-list
-- {"action":"addWardrobeFurn","cat":"Петля|Телескоп|Ручки|Ножки","vid":"Blume|GTV|En-7","qty":8} → furn-list
-
-Калькулятор:
-- {"action":"addLdsp","colorName":"Белый Глянец","qty":3.5}
-- {"action":"addFurn","cat":"Петля","qty":8}
-- {"action":"setHdfQty","qty":2.5}
-- {"action":"setKromQty","qty":45}
-- {"action":"explain"} — только для вопросов о цене/экономии
-
-ПРАВИЛА КУХНИ: ширина модулей 300-900мм кратна 100, sink/appliance → facade:"none".
-ПРАВИЛА ШКАФА: ширина секции 600-1200мм.
-НЕ придумывай цены. Вопросы не о мебели — вежливо отклони.\`;ycbxDa66S-OSeSR1B6B2EoS0h5R6X2jW22zccdJP8HtbiGwEh-IGzqf5BsmXNRTeTWN78/exec';
-
-// Статус загрузки
-function showStatus(msg, color) {
-  let el = document.getElementById('db-status');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'db-status';
-    el.style.cssText = 'position:fixed;top:48px;left:0;right:0;z-index:200;padding:8px 14px;font-size:12px;font-weight:500;text-align:center;transition:opacity .5s';
-    document.body.appendChild(el);
-  }
-  el.textContent = msg;
-  el.style.background = color || '#1a5252';
-  el.style.color = '#fff';
-  el.style.opacity = '1';
-}
-function hideStatus() {
-  const el = document.getElementById('db-status');
-  if (el) { el.style.opacity = '0'; setTimeout(() => el.remove(), 500); }
-}
-
-async function loadFromSheets() {
-  showStatus('Загружаю цены из базы...', '#1a5252');
-  try {
-    const res = await fetch(SHEETS_URL);
-    const data = await res.json();
-    if (data.ldsp && data.ldsp.length > 0) {
-      DB.ldsp = data.ldsp;
-      DB.hdf_p = data.hdf_p || 9000;
-      DB.krom_p = data.krom_p || 200;
-      DB.fas_plen = data.fas_plen;
-      DB.fas_kr = data.fas_kr;
-      DB.furn = data.furn;
-      DB.kuh = data.kuh;
-      DB.shk = data.shk || DB.shk;
-      DB.acc = data.acc || DB.acc;
-      DB.svet = data.svet;
-      DB.works = data.works;
-      DB.vit = data.vit;
-      renderWorks();
-      recalc();
-      showStatus('OK: Цены загружены из Google Sheets', '#1D9E75');
-      setTimeout(hideStatus, 2500);
-    } else {
-      showStatus('⚠️ Нет данных — работаю офлайн', '#BA7517');
-      setTimeout(hideStatus, 3000);
-    }
-  } catch(e) {
-    showStatus('⚠️ Нет интернета — работаю офлайн', '#BA7517');
-    setTimeout(hideStatus, 3000);
-  }
-}
-
-const DB={
-  ldsp:[{n:"Бежевый",p:20000},{n:"Америка Орех",p:23000},{n:"Белый",p:19000},{n:"Белый Апельсин",p:20000},{n:"Белый Гладкий",p:20000},{n:"Белый Глянец",p:20000},{n:"Вотан",p:20000},{n:"Графит",p:20000},{n:"Дымчатый Зеленый",p:23000},{n:"Зеленый темный",p:23000},{n:"Кашемир",p:20000},{n:"ЛДСП",p:20000},{n:"Сатин",p:20000},{n:"Серый Камень",p:20000},{n:"Серый Светлый",p:20000},{n:"Слоновая кость",p:20000},{n:"Сонома",p:20000},{n:"Темный Дуб Вотан",p:23000},{n:"Фрост",p:23000},{n:"Цемент СВ",p:20000},{n:"Цемент Тем",p:20000},{n:"Черный",p:20000}],
-  hdf_p:9000,krom_p:200,
-  fas_plen:[{n:"МДФ 16-П",p:18000},{n:"МДФ 16-ПФ",p:20000},{n:"МДФ 18-ПФ",p:22000}],
-  fas_kr:[{n:"МДФ 16-К",p:26000},{n:"МДФ 16-КФ",p:29000},{n:"МДФ 18-КФ",p:31000},{n:"МДФ 16-КИР",p:27000},{n:"МДФ 16-КВАД",p:29000}],
-  furn:[{cat:"Петля",vid:"полувнешний",firm:"En-7",p:320},{cat:"Петля",vid:"полувнешний",firm:"Hefele",p:800},{cat:"Петля",vid:"полувнешний",firm:"GTV",p:670},{cat:"Петля",vid:"полувнешний",firm:"Blume",p:2200},{cat:"Петля",vid:"внутренний",firm:"En-7",p:320},{cat:"Петля",vid:"внутренний",firm:"Hefele",p:800},{cat:"Петля",vid:"внутренний",firm:"GTV",p:670},{cat:"Петля",vid:"внутренний",firm:"Blume",p:2200},{cat:"Петля",vid:"внешний",firm:"En-7",p:320},{cat:"Петля",vid:"внешний",firm:"Hefele",p:800},{cat:"Петля",vid:"внешний",firm:"GTV",p:670},{cat:"Петля",vid:"внешний",firm:"Blume",p:2200},{cat:"Петля",vid:"165°",firm:"En-7",p:320},{cat:"Петля",vid:"165°",firm:"Hefele",p:800},{cat:"Петля",vid:"165°",firm:"GTV",p:670},{cat:"Петля",vid:"165°",firm:"Blume",p:1200},{cat:"Петля",vid:"90°",firm:"En-7",p:320},{cat:"Петля",vid:"90°",firm:"Hefele",p:800},{cat:"Петля",vid:"90°",firm:"GTV",p:670},{cat:"Петля",vid:"90°",firm:"Blume",p:1200},{cat:"Петля",vid:"45°",firm:"En-7",p:320},{cat:"Петля",vid:"45°",firm:"Hefele",p:800},{cat:"Петля",vid:"45°",firm:"GTV",p:670},{cat:"Петля",vid:"45°",firm:"Blume",p:1200},{cat:"Телескоп",vid:"200мм",firm:"En-7",p:1800},{cat:"Телескоп",vid:"250мм",firm:"En-7",p:1670},{cat:"Телескоп",vid:"300мм",firm:"En-7",p:2100},{cat:"Телескоп",vid:"350мм",firm:"En-7",p:2130},{cat:"Телескоп",vid:"400мм",firm:"En-7",p:2270},{cat:"Телескоп",vid:"450мм",firm:"En-7",p:2400},{cat:"Телескоп",vid:"500мм",firm:"En-7",p:2500},{cat:"Телескоп",vid:"300мм",firm:"GTV",p:8000},{cat:"Телескоп",vid:"350мм",firm:"GTV",p:8000},{cat:"Телескоп",vid:"400мм",firm:"GTV",p:8000},{cat:"Телескоп",vid:"450мм",firm:"GTV",p:8000},{cat:"Телескоп",vid:"500мм",firm:"GTV",p:8000},{cat:"Телескоп",vid:"550мм",firm:"Blum",p:12000},{cat:"Телескоп",vid:"600мм",firm:"Blum",p:12000},{cat:"Телескоп-Д",vid:"500мм",firm:"—",p:2200},{cat:"Телескоп-Д",vid:"550мм",firm:"—",p:2700},{cat:"Телескоп-Д черный",vid:"250мм",firm:"—",p:1390},{cat:"Телескоп-Д черный",vid:"300мм",firm:"—",p:1750},{cat:"Телескоп-Д черный",vid:"350мм",firm:"—",p:1770},{cat:"Телескоп-Д черный",vid:"450мм",firm:"—",p:2000},{cat:"СМ-полный",vid:"450мм",firm:"En-7",p:3500},{cat:"СМ-полный",vid:"300мм",firm:"GTV",p:4850},{cat:"СМ-полный",vid:"350мм",firm:"GTV",p:5000},{cat:"СМ-полный",vid:"400мм",firm:"GTV",p:5200},{cat:"СМ-полный",vid:"450мм",firm:"GTV",p:5800},{cat:"СМ-полный",vid:"500мм",firm:"GTV",p:5950},{cat:"СМ-полный",vid:"250мм",firm:"Boyard",p:3950},{cat:"СМ-полный",vid:"300мм",firm:"Boyard",p:4200},{cat:"СМ-полный",vid:"400мм",firm:"Boyard",p:4900},{cat:"СМ-полный",vid:"450мм",firm:"Boyard",p:4950},{cat:"СМ-полный",vid:"500мм",firm:"Boyard",p:5090},{cat:"СМ-полный",vid:"550мм",firm:"Boyard",p:5800},{cat:"Push-open",vid:"300мм",firm:"Boyard",p:5780},{cat:"Push-open",vid:"350мм",firm:"Boyard",p:5250},{cat:"Push-open",vid:"550мм",firm:"Boyard",p:6300},{cat:"СМ-частичный",vid:"400мм",firm:"Boyard",p:3200},{cat:"СМ-частичный",vid:"450мм",firm:"Boyard",p:3580},{cat:"СМ-частичный",vid:"500мм",firm:"Boyard",p:3800},{cat:"Ножки",vid:"—",firm:"—",p:100},{cat:"Ножки",vid:"Хром",firm:"—",p:500},{cat:"Руч-Скрытая",vid:"96мм",firm:"—",p:450},{cat:"Руч-Скрытая",vid:"128мм",firm:"—",p:500},{cat:"Руч-Скрытая",vid:"192мм",firm:"—",p:600},{cat:"Руч-Скрытая",vid:"1000мм",firm:"—",p:1000},{cat:"Руч-Торцевая",vid:"96мм",firm:"—",p:450},{cat:"Руч-Торцевая",vid:"128мм",firm:"—",p:500},{cat:"Руч-Торцевая",vid:"192мм",firm:"—",p:600},{cat:"Руч-Торцевая",vid:"1000мм",firm:"—",p:1000},{cat:"Руч-Скоба",vid:"96мм",firm:"—",p:450},{cat:"Руч-Скоба",vid:"128мм",firm:"—",p:500},{cat:"Руч-Скоба",vid:"192мм",firm:"—",p:600},{cat:"Руч-Скоба",vid:"1000мм",firm:"—",p:1000},{cat:"Типон",vid:"—",firm:"—",p:500},{cat:"Газлифт",vid:"—",firm:"En-7",p:500},{cat:"Газлифт",vid:"—",firm:"Hefele",p:4500},{cat:"Газлифт Авентус",vid:"—",firm:"DTC",p:29000},{cat:"Гола.проф 6м",vid:"—",firm:"—",p:8200},{cat:"Крючки",vid:"—",firm:"—",p:600},{cat:"Крючки",vid:"1",firm:"—",p:600},{cat:"Крючки",vid:"2",firm:"—",p:600},{cat:"Крючки",vid:"3",firm:"—",p:600},{cat:"Штанга-Хром",vid:"—",firm:"—",p:2000},{cat:"Штанга",vid:"—",firm:"—",p:2000},{cat:"Турникет-Хром",vid:"250мм",firm:"—",p:480},{cat:"Турникет-Хром",vid:"350мм",firm:"—",p:670},{cat:"Турникет-Хром",vid:"400мм",firm:"—",p:700},{cat:"Турникет-Хром",vid:"450мм",firm:"—",p:770},{cat:"Турникет-Черный",vid:"300мм",firm:"—",p:900},{cat:"Турникет-Черный",vid:"350мм",firm:"—",p:980},{cat:"Турникет-Черный",vid:"400мм",firm:"—",p:1050},{cat:"Турникет-Черный",vid:"450мм",firm:"—",p:1150},{cat:"Турникет-Золото",vid:"300мм",firm:"—",p:900},{cat:"Турникет-Золото",vid:"350мм",firm:"—",p:980},{cat:"Турникет-Золото",vid:"400мм",firm:"—",p:1050},{cat:"Турникет-Золото",vid:"450мм",firm:"—",p:1150},{cat:"Пантограф",vid:"—",firm:"—",p:15000},{cat:"Пантограф",vid:"Серый",firm:"—",p:15000},{cat:"Пантограф",vid:"Черный",firm:"—",p:15000}],
-  kuh:[{cat:"Плинтус",vid:"—",p:2000},{cat:"Плинтус",vid:"черный",p:2000},{cat:"Плинтус",vid:"серый",p:2000},{cat:"Плинтус",vid:"белый",p:2000},{cat:"Плинтус",vid:"Вотан",p:2000},{cat:"Столешница",vid:"стандарт",p:10000},{cat:"Столешница",vid:"28мм",p:10000},{cat:"Столешница",vid:"38мм",p:10000},{cat:"Столешница",vid:"38мм Вотан",p:10000},{cat:"Столешница",vid:"38мм Сонома",p:10000},{cat:"Камень",vid:"Grandex",p:120000},{cat:"Камень",vid:"Китай",p:80000},{cat:"Мойка",vid:"500мм",p:25000},{cat:"Мойка",vid:"600мм",p:26000},{cat:"Сушилка",vid:"500мм",p:5300},{cat:"Сушилка",vid:"600мм",p:5500},{cat:"Сушилка",vid:"700мм",p:6500},{cat:"Сушилка",vid:"800мм",p:7000},{cat:"Сушилка",vid:"900мм",p:8500},{cat:"Сушилка",vid:"1000мм",p:9100},{cat:"Сушилка Нерж",vid:"500мм",p:5300},{cat:"Сушилка Нерж",vid:"600мм",p:5500},{cat:"Сушилка Нерж",vid:"700мм",p:6500},{cat:"Сушилка Нерж",vid:"800мм",p:7000},{cat:"Сушилка Нерж",vid:"900мм",p:8500},{cat:"Сушилка Нерж",vid:"1000мм",p:9100},{cat:"Бутылочница",vid:"150мм",p:10000},{cat:"Бутылочница",vid:"200мм",p:13000},{cat:"Бутылочница",vid:"250мм",p:15000},{cat:"Бутылочница",vid:"300мм",p:25000},{cat:"Угл.соед",vid:"38мм",p:2000},{cat:"Угл.соед",vid:"26мм",p:1950},{cat:"Карго",vid:"400мм",p:15000},{cat:"Карго",vid:"500мм",p:20000},{cat:"Карго",vid:"600мм",p:30000}],
-  shk:[{cat:"Штанга-Хром",vid:"—",p:2000},{cat:"Штанга",vid:"—",p:2000},{cat:"Крючки",vid:"—",p:600},{cat:"Крючки",vid:"1",p:600},{cat:"Крючки",vid:"2",p:600},{cat:"Крючки",vid:"3",p:600},{cat:"Турникет-Хром",vid:"250мм",p:480},{cat:"Турникет-Хром",vid:"350мм",p:670},{cat:"Турникет-Хром",vid:"400мм",p:700},{cat:"Турникет-Хром",vid:"450мм",p:770},{cat:"Турникет-Черный",vid:"300мм",p:900},{cat:"Турникет-Черный",vid:"350мм",p:980},{cat:"Турникет-Черный",vid:"400мм",p:1050},{cat:"Турникет-Черный",vid:"450мм",p:1150},{cat:"Турникет-Золото",vid:"300мм",p:900},{cat:"Турникет-Золото",vid:"350мм",p:980},{cat:"Турникет-Золото",vid:"400мм",p:1050},{cat:"Турникет-Золото",vid:"450мм",p:1150},{cat:"Пантограф",vid:"—",p:15000},{cat:"Пантограф",vid:"Серый",p:15000},{cat:"Пантограф",vid:"Черный",p:15000}],
-  acc:[{cat:"Мойка",vid:"500мм",p:25000},{cat:"Мойка",vid:"600мм",p:30000},{cat:"Сушилка_двойная",vid:"600мм",p:40000},{cat:"Бутылочница",vid:"150мм",p:10000},{cat:"Бутылочница",vid:"200мм",p:13000},{cat:"Бутылочница",vid:"250мм",p:15000},{cat:"Бутылочница",vid:"300мм",p:25000},{cat:"Карго",vid:"400мм",p:15000},{cat:"Карго",vid:"500мм",p:20000},{cat:"Карго",vid:"600мм",p:30000}],
-  svet:[{cat:"БлокП 12в",vid:"60вт",p:2200},{cat:"БлокП 12в",vid:"100вт",p:2430},{cat:"БлокП 12в",vid:"150вт",p:2970},{cat:"Вилка",vid:"—",p:200},{cat:"Вкл Круглый",vid:"—",p:250},{cat:"Вкл Кнопка",vid:"—",p:220},{cat:"Вкл Врезной",vid:"—",p:250},{cat:"Датчик 12в",vid:"ЛДСП",p:2800},{cat:"Датчик 12в",vid:"Касание",p:1500},{cat:"Датчик 12в",vid:"Махание",p:1760},{cat:"Датчик 12в",vid:"Откр-1-дверь",p:1960},{cat:"Датчик 12в",vid:"Откр-2-дверь",p:1960},{cat:"Датчик 12в",vid:"ДисУпр",p:4500},{cat:"Датчик 12в",vid:"ГолосУпр",p:4500},{cat:"Датчик 12в",vid:"ДляЗеркало",p:2500},{cat:"Датчик 220в",vid:"Касание",p:3400},{cat:"Датчик 220в",vid:"Махание",p:3400},{cat:"Датчик 220в",vid:"ЛДСП",p:4200},{cat:"Датчик 220в",vid:"ДисУпр",p:4500},{cat:"Лента 12в",vid:"Холодный",p:1760},{cat:"Лента 12в",vid:"Теплый",p:1760},{cat:"Лента 12в",vid:"Нейтральный",p:1760},{cat:"Лента 220в 1м",vid:"Холодный",p:410},{cat:"Лента 220в 5м",vid:"Холодный",p:1760},{cat:"Лента 220в 5м",vid:"Теплый",p:1760},{cat:"Лента 220в 5м",vid:"Нейтральный",p:1760},{cat:"Лента 220в 10м",vid:"Нейтральный",p:2700},{cat:"Лента Гибкий 12в",vid:"—",p:880},{cat:"Профиль.угл",vid:"алюминий",p:1620},{cat:"Профиль.угл",vid:"черный",p:1890},{cat:"Профиль.врез",vid:"черный",p:1890},{cat:"Профиль.врез",vid:"алюминий",p:1620},{cat:"Профиль.наклад",vid:"алюминий",p:1620},{cat:"Профиль.наклад",vid:"черный",p:1890},{cat:"Розетка",vid:"—",p:800},{cat:"Переходник",vid:"—",p:250},{cat:"Соед.лента",vid:"—",p:380}],
-  vit:{steklo:{"Бронза":12000,"Графит":12000,"Матовый":14000,"Зеркало":12000,"Простое":6000,"Риф-Бронза":40000,"Риф-Графит":40000,"Риф-Простой":40000},profil_uzkiy:2000,profil_shirokiy:3000,ugolok_uzkiy:1500,ugolok_shirokiy:2000,navesh:1000,prisadka:1500,uplotnitel:400},
-  works:[{n:"Установка мойки",p:0},{n:"Установка смесителя",p:0},{n:"Установка печки/духовки",p:0},{n:"Установка вытяжки",p:0},{n:"Установка посудомойки",p:0},{n:"Установка холодильника",p:0},{n:"Подключение электрики",p:0},{n:"Сборка мебели",p:0},{n:"Установка карго/сушилки",p:0},{n:"Установка витрины",p:0},{n:"Установка подсветки",p:0},{n:"Замер",p:0},{n:"Дизайн проект",p:0}]
-};
-const ST={ldsp:[],fldsp:[],fplen:[],fkr:[],furn:[],kuh:[],shk:[],svet:[],dop:[],vit:[]};
-let C={};
-const $=id=>document.getElementById(id);
-const fm=n=>Math.round(n).toLocaleString("ru")+"₸";
-const gn=id=>{const e=$(id);return e?(parseFloat(e.value)||0):0;};
-const st=(id,v)=>{const e=$(id);if(e)e.textContent=fm(v);};
-const sx=(id,v)=>{const e=$(id);if(e)e.textContent=v;};
-function page(p){["calc","kp","hist","conf","kitchen"].forEach(n=>{$("pg-"+n)?.classList.toggle("on",n===p);const b=$("bbt-"+n);if(b)b.classList.toggle("on",n===p);});if(p==="hist")renderHist();if(p==="conf"){initConf();}if(p==="kitchen"){initKitchen();}}
-function tab(t){["calc","coef","extra","vit","itog"].forEach(s=>$("scr-"+s).classList.toggle("on",s===t));document.querySelectorAll(".tb").forEach((b,i)=>b.classList.toggle("on",["calc","coef","extra","vit","itog"][i]===t));if(t==="itog")recalc();window.scrollTo(0,0);}
-function tog(id){const b=$("cb-"+id),a=$("ar-"+id);if(!b)return;const op=b.classList.toggle("op");if(a)a.classList.toggle("op",op);}
-function addLdsp(){
-  const i=ST.ldsp.length;ST.ldsp.push(0);
-  const c=$("ldsp-list");if(i===0)c.innerHTML="";
-  const d=document.createElement("div");d.id="lr"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
-  const o=DB.ldsp.map((x,j)=>`<option value="${j}">${x.n} — ${x.p.toLocaleString("ru")}₸</option>`).join("");
-  d.innerHTML=`<div class="fr"><select id="ls${i}" onchange="ST.ldsp[${i}]=+this.value;$('lp${i}').textContent=DB.ldsp[+this.value].p.toLocaleString('ru')+'₸/л';recalc()">${o}</select><button class="db" onclick="$('lr${i}').style.display='none';ST.ldsp[${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="lq${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="lp${i}">${DB.ldsp[0].p.toLocaleString("ru")}₸/л</span></div>`;
-  c.appendChild(d);recalc();
-}
-function lC(){return ST.ldsp.reduce((s,x,i)=>{if(x===null||x===undefined)return s;return s+(DB.ldsp[x]?.p||0)*(gn("lq"+i));},0);}
-function kC(){return lC()+DB.hdf_p*gn("hdf-qty")+DB.krom_p*gn("krom-qty");}
-function addSimple(sec,arr,lid){
-  const a=ST[sec];const i=a.length;a.push(0);
-  const c=$(lid);if(i===0)c.innerHTML="";
-  const d=document.createElement("div");d.id=sec+"r"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
-  const o=arr.map((x,j)=>`<option value="${j}">${x.n} — ${x.p.toLocaleString("ru")}₸</option>`).join("");
-  d.innerHTML=`<div class="fr"><select id="${sec}s${i}" onchange="ST['${sec}'][${i}]=+this.value;$('${sec}p${i}').textContent=arr[+this.value].p.toLocaleString('ru')+'₸/л';recalc()">${o}</select><button class="db" onclick="$('${sec}r${i}').style.display='none';ST['${sec}'][${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="${sec}q${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="${sec}p${i}">${arr[0].p.toLocaleString("ru")}₸/л</span></div>`;
-  c.appendChild(d);recalc();
-}
-function sC(sec,arr){return ST[sec].reduce((s,x,i)=>{if(x===null||x===undefined)return s;return s+(arr[x]?.p||0)*(gn(sec+"q"+i));},0);}
-function sIt(sec,arr){return ST[sec].map((x,i)=>{if(x===null||x===undefined)return null;const q=gn(sec+"q"+i);if(!q)return null;return{n:arr[x]?.n,q};}).filter(Boolean);}
-function gA(sec){return sec==="furn"?DB.furn:sec==="kuh"?DB.kuh:sec==="shk"?DB.shk:DB.svet;}
-function addCat(sec,arr,lid){
-  const a=ST[sec];const i=a.length;a.push({p:0});
-  const c=$(lid);if(i===0)c.innerHTML="";
-  const d=document.createElement("div");d.id=sec+"r"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
-  const cats=[...new Set(arr.map(x=>x.cat))];
-  d.innerHTML=`<div class="fr"><select id="${sec}c${i}" onchange="uC('${sec}',${i})">${cats.map(c=>`<option value="${c}">${c}</option>`).join("")}</select><button class="db" onclick="$('${sec}r${i}').style.display='none';ST['${sec}'][${i}]=null;recalc()">✕</button></div><div class="fr" id="${sec}vf${i}"></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="${sec}q${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="${sec}pp${i}">0₸</span></div>`;
-  c.appendChild(d);uC(sec,i);
-}
-function uC(sec,i){
-  const arr=gA(sec);const cat=$(sec+"c"+i)?.value;
-  const rows=arr.filter(x=>x.cat===cat);
-  const vids=[...new Set(rows.map(x=>x.vid))];
-  const firms=[...new Set(rows.map(x=>x.firm).filter(f=>f&&f!=="—"))];
-  const vf=$(sec+"vf"+i);vf.innerHTML="";
-  if(vids.length>1||(vids[0]&&vids[0]!=="—")){const s=document.createElement("select");s.id=sec+"v"+i;vids.forEach(v=>{const o=document.createElement("option");o.value=v;o.textContent=v;s.appendChild(o);});s.onchange=()=>uCP(sec,i);vf.appendChild(s);}
-  if(firms.length>0){const s=document.createElement("select");s.id=sec+"f"+i;firms.forEach(f=>{const o=document.createElement("option");o.value=f;o.textContent=f;s.appendChild(o);});s.onchange=()=>uCP(sec,i);vf.appendChild(s);}
-  uCP(sec,i);
-}
-function uCP(sec,i){
-  const arr=gA(sec);const a=ST[sec];
-  const cat=$(sec+"c"+i)?.value,vid=$(sec+"v"+i)?.value||"—",firm=$(sec+"f"+i)?.value||"—";
-  const row=arr.find(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")&&(x.firm===firm||x.firm==="—"||!x.firm));
-  const p=row?.p||0;if(a[i])a[i]={p};
-  const pr=$(sec+"pp"+i);if(pr)pr.textContent=p.toLocaleString("ru")+"₸";recalc();
-}
-function cC(sec){
-  const arr=gA(sec);
-  return ST[sec].reduce((s,item,i)=>{
-    if(!item)return s;
-    const cat=$(sec+"c"+i)?.value,vid=$(sec+"v"+i)?.value||"—",firm=$(sec+"f"+i)?.value||"—";
-    const row=arr.find(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")&&(x.firm===firm||x.firm==="—"||!x.firm));
-    return s+(row?.p||0)*(gn(sec+"q"+i));
-  },0);
-}
-function cIt(sec){
-  const arr=gA(sec);
-  return ST[sec].map((item,i)=>{
-    if(!item)return null;
-    const cat=$(sec+"c"+i)?.value||"",vid=$(sec+"v"+i)?.value||"—",firm=$(sec+"f"+i)?.value||"—";
-    const row=arr.find(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")&&(x.firm===firm||x.firm==="—"||!x.firm));
-    const q=gn(sec+"q"+i);if(!q)return null;
-    const parts=[cat];if(vid&&vid!=="—")parts.push(vid);if(firm&&firm!=="—")parts.push(firm);
-    return{n:parts.join(" "),q};
-  }).filter(Boolean);
-}
-function addDop(){
-  const i=ST.dop.length;ST.dop.push(1);
-  const c=$("dop-list");if(i===0)c.innerHTML="";
-  const d=document.createElement("div");d.id="dr"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
-  d.innerHTML=`<div class="fr"><input style="font-size:12px;border:1px solid #ddd;border-radius:8px;padding:6px 8px;flex:1;min-width:0" type="text" id="dn${i}" placeholder="Название"><button class="db" onclick="$('dr${i}').style.display='none';ST.dop[${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Цена</span><input class="qi" type="number" inputmode="decimal" id="dp${i}" placeholder="0" onchange="recalc()"><span class="fp">₸/шт</span></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="dq${i}" placeholder="1" onchange="recalc()"><span class="fp">шт</span></div>`;
-  c.appendChild(d);recalc();
-}
-function dC(){return ST.dop.reduce((s,x,i)=>x===null?s:s+(gn("dp"+i))*(gn("dq"+i)),0);}
-function dIt(){return ST.dop.map((x,i)=>{if(x===null)return null;const p=gn("dp"+i),q=gn("dq"+i);if(!q||!p)return null;return{n:$("dn"+i)?.value||"Доп.",q};}).filter(Boolean);}
-function renderWorks(){
-  const wl=$("works-list");if(wl){wl.innerHTML="";DB.works.forEach((w,i)=>{const d=document.createElement("div");if(i>0)d.className="ib";d.style.marginTop="6px";d.innerHTML=`<div class="fr"><span style="font-size:11px;flex:1;min-width:0">${w.n}</span><input class="qi" type="number" inputmode="decimal" id="wq${i}" placeholder="0" min="0" onchange="recalc()" style="width:62px;min-width:62px;max-width:62px"><span class="fp">шт</span><span class="fp" style="min-width:48px;text-align:right">${w.p.toLocaleString("ru")}₸</span></div>`;wl.appendChild(d);});}
-  const bl=$("base-works-list");if(bl){bl.innerHTML="";DB.works.forEach((w,i)=>{const d=document.createElement("div");if(i>0)d.className="ib";d.style.marginTop="6px";d.innerHTML=`<div class="fr"><span style="font-size:11px;flex:1;min-width:0">${w.n}</span><input class="qw" type="number" inputmode="decimal" id="bwp${i}" value="${w.p}" placeholder="0" onchange="DB.works[${i}].p=parseFloat(this.value)||0;renderWorks();recalc()"><span class="fp">₸</span></div>`;bl.appendChild(d);});}
-}
-function wC(){return DB.works.reduce((s,w,i)=>s+w.p*(gn("wq"+i)),0);}
-function wIt(){return DB.works.map((w,i)=>{const q=gn("wq"+i);if(!q||!w.p)return null;return{n:w.n,q};}).filter(Boolean);}
-function addVit(){
-  const i=ST.vit.length;ST.vit.push(1);
-  const c=$("vit-list");if(i===0)c.innerHTML="";
-  const d=document.createElement("div");d.id="vr"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
-  const so=Object.keys(DB.vit.steklo).map(k=>`<option value="${k}">${k} — ${DB.vit.steklo[k].toLocaleString("ru")}₸</option>`).join("");
-  d.innerHTML=`<div style="font-size:12px;color:#666;font-weight:500;margin-bottom:4px">Витрина ${i+1}</div>
-    <div class="fr"><span class="lb">Ширина</span><input class="ql" type="number" inputmode="decimal" id="vw${i}" placeholder="0" onchange="cV(${i})"><span class="fp">мм</span></div>
-    <div class="fr"><span class="lb">Высота</span><input class="ql" type="number" inputmode="decimal" id="vh${i}" placeholder="0" onchange="cV(${i})"><span class="fp">мм</span></div>
-    <div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="vn${i}" placeholder="1" onchange="cV(${i})"><span class="fp">шт</span></div>
-    <div class="fr"><span class="lb">Стекло</span><select id="vst${i}" onchange="cV(${i})">${so}</select></div>
-    <div class="fr"><span class="lb">Профиль</span><select id="vpr${i}" onchange="cV(${i})"><option value="uzkiy">Узкий — 2 000₸</option><option value="shirokiy">Широкий — 3 000₸</option></select></div>
-    <div class="ss"><div class="stl">Доставка</div><div class="fr"><span class="lb">Сумма</span><input class="ql" type="number" inputmode="decimal" id="vdel${i}" placeholder="0" onchange="cV(${i})"><span class="fp">₸</span></div></div>
-    <div class="ss"><div class="stl">Доход с установки</div><div class="fr"><span class="lb">Сумма</span><input class="ql" type="number" inputmode="decimal" id="vinc${i}" placeholder="0" onchange="cV(${i})"><span class="fp">₸</span></div></div>
-    <div class="fr" style="margin-top:8px;padding-top:8px;border-top:1px solid #f0f0f0"><span class="lb">Итог</span><span style="font-size:13px;font-weight:600;margin-left:auto" id="vres${i}">0₸</span><button class="db" style="margin-left:8px" onclick="$('vr${i}').style.display='none';ST.vit[${i}]=null;recalc()">✕</button></div>`;
-  c.appendChild(d);cV(i);
-}
-function gVD(i){
-  const w=gn("vw"+i),h=gn("vh"+i),n=parseFloat($("vn"+i)?.value)||1;
-  const st=$("vst"+i)?.value||"Бронза",pr=$("vpr"+i)?.value||"uzkiy";
-  const del=gn("vdel"+i),inc=gn("vinc"+i);
-  const V=DB.vit,steklo=(w*h/1e6)*V.steklo[st];
-  const profP=pr==="shirokiy"?V.profil_shirokiy:V.profil_uzkiy;
-  const profil=((w+h)*2/1000)*profP,uplot=((w+h)*2/1000)*V.uplotnitel;
-  const ugolok=pr==="shirokiy"?V.ugolok_shirokiy:V.ugolok_uzkiy;
-  const nav=h<=800?3:h<=2000?5:6,pris=h<=800?1:h<=2000?3:4;
-  const mat=(steklo+profil+uplot+ugolok+V.navesh*nav+V.prisadka*pris)*n;
-  return{mat,del,inc,tot:mat+del+inc,stName:st,n};
-}
-function cV(i){const d=gVD(i);const er=$("vres"+i);if(er)er.textContent=fm(d.tot);recalc();}
-function vTot(){let mat=0,inc=0,tot=0;ST.vit.forEach((x,i)=>{if(x===null)return;const d=gVD(i);mat+=d.mat;inc+=d.inc;tot+=d.tot;});return{mat,inc,tot};}
-function vIt(){return ST.vit.map((x,i)=>{if(x===null)return null;const d=gVD(i);if(!d.tot)return null;return{n:`Витрина стекло ${d.stName}`,q:d.n};}).filter(Boolean);}
-function blk(fas,k,rm,sk,tax,cr,vK,shared,extras,eInc){
-  const base=vK+fas+shared,aK=base*k,rabM=aK*rm,aSk=aK+sk,taxA=aSk*tax,tot=aSk+taxA+extras,credit=tot*(1+cr);
-  return{base,aK,rabM,sk,taxA,aSk,tot,credit,inc:aSk-base-rabM+eInc};
-}
-function recalc(){
-  const vK=kC(),vFL=sC("fldsp",DB.ldsp),vFP=sC("fplen",DB.fas_plen),vFK=sC("fkr",DB.fas_kr);
-  const vFu=cC("furn"),vKu=cC("kuh"),vSh=cC("shk"),vDel=gn("d-sat")+gn("d-pdm");
-  const vSM=cC("svet"),vSI=gn("svet-inc"),vDp=dC(),vWk=wC(),vVit=vTot();
-  const dfi=$("del-fi");if(dfi)dfi.textContent=fm(vFu+vKu+vSh);
-  const shared=vFu+vKu+vSh+vDel,extras=(vSM+vSI)+vVit.tot+vWk+vDp,eInc=vSI+vVit.inc+vWk;
-  const kl=gn("c-kl")||1.8,rml=gn("c-rl")/100,skl=parseFloat($("c-sl")?.value)||0,taxl=gn("c-taxl")/100,crl=gn("c-crl")/100;
-  const kp=gn("c-kp")||1.8,rmp=gn("c-rp")/100,skp=parseFloat($("c-sp")?.value)||0,taxp=gn("c-taxp")/100,crp=gn("c-crp")/100;
-  const kk=gn("c-kk")||1.8,rmk=gn("c-rk")/100,skk=parseFloat($("c-sk")?.value)||0,taxk=gn("c-taxk")/100,crk=gn("c-crk")/100;
-  const BL=blk(vFL,kl,rml,skl,taxl,crl,vK,shared,extras,eInc);
-  const BP=blk(vFP,kp,rmp,skp,taxp,crp,vK,shared,extras,eInc);
-  const BK=blk(vFK,kk,rmk,skk,taxk,crk,vK,shared,extras,eInc);
-  C={BL,BP,BK,vK,vFL,vFP,vFK,vFu,vKu,vSh,vDel,vSM,vSI,vVit,vDp,vWk,
-    ldspIt:ST.ldsp.map((x,i)=>{if(x===null||x===undefined)return null;const q=gn("lq"+i);if(!q)return null;return{n:DB.ldsp[x]?.n,q};}).filter(Boolean),
-    hdfQ:gn("hdf-qty"),kromQ:gn("krom-qty"),
-    fldspIt:sIt("fldsp",DB.ldsp),fplenIt:sIt("fplen",DB.fas_plen),fkrIt:sIt("fkr",DB.fas_kr),
-    fuIt:cIt("furn"),kuIt:cIt("kuh"),shIt:cIt("shk"),
-    svIt:cIt("svet"),dpIt:dIt(),wkIt:wIt(),vitIt:vIt()};
-  sx("tl-p",fm(BL.tot));sx("tl-c",fm(BL.credit));sx("tl-i",fm(BL.inc));
-  sx("tp-p",fm(BP.tot));sx("tp-c",fm(BP.credit));sx("tp-i",fm(BP.inc));
-  sx("tk-p",fm(BK.tot));sx("tk-c",fm(BK.credit));sx("tk-i",fm(BK.inc));
-  [["s-korp",vK],["s-fldsp",vFL],["s-fplen",vFP],["s-fkr",vFK],["s-furn",vFu],["s-kuh",vKu],["s-shk",vSh],["s-del",vDel],["s-svet",vSM+vSI],["s-dop",vDp],["s-works",vWk]].forEach(([id,v])=>st(id,v));
-  const sv=$("s-vit");if(sv)sv.textContent=fm(vVit.tot);
-  function fB(pfx,B){
-    st(pfx+"-b",B.base);st(pfx+"-a",B.aK);st(pfx+"-r",B.rabM);
-    const se=$(pfx+"-s");if(se){const s=B.sk;se.textContent=(s===0?"0₸":(s>0?"+":"")+Math.round(s).toLocaleString("ru")+"₸");se.style.color=s<0?"#E24B4A":s>0?"#1D9E75":"#aaa";}
-    st(pfx+"-t",B.taxA);st(pfx+"-tot",B.tot);st(pfx+"-cr",B.credit);st(pfx+"-inc",B.inc);
-  }
-  fB("il",BL);fB("ip",BP);fB("ik",BK);
-}
-
-// ── Модальное окно выбора вариантов КП ───────────────────────
-function openKpVarModal(){
-  if(!C.BL){ alert('Сначала заполните калькулятор'); return; }
-  document.getElementById('kp-var-modal').style.display='flex';
-}
-function kpVarClose(){
-  document.getElementById('kp-var-modal').style.display='none';
-}
-function kpVarCheck(){
-  // хотя бы один должен быть выбран
-  const l=$('kpv-ldsp').checked, p=$('kpv-plen').checked, k=$('kpv-kr').checked;
-  $('kpv-ok-btn').disabled = !l && !p && !k;
-  $('kpv-ok-btn').style.opacity = (!l && !p && !k) ? '0.4' : '1';
-}
-function kpVarConfirm(){
-  const showL = $('kpv-ldsp').checked;
-  const showP = $('kpv-plen').checked;
-  const showK = $('kpv-kr').checked;
-  kpVarClose();
-  showKP(showL, showP, showK);
-}
-
-let kpStyleModern = true; // текущий стиль
-function kpToggleStyle(){
-  kpStyleModern = !kpStyleModern;
-  const pg = document.getElementById('pg-kp');
-  const btn = document.getElementById('kp-style-toggle');
-  if(pg){ pg.classList.toggle('kp-classic', !kpStyleModern); }
-  if(btn){ btn.textContent = kpStyleModern ? '⬡ Modern' : '◈ Classic'; }
-}
-
-function showKP(showL=true, showP=true, showK=false){
-  const client=$("kp-client")?.value||"—",obj=$("kp-object")?.value||"—",num=$("kp-num")?.value||"001";
-  const today=new Date().toLocaleDateString("ru-RU",{day:"numeric",month:"long",year:"numeric"});
-
-  // Строка комплектации
-  const cols = [showL,showP,showK];
-  const nCols = cols.filter(Boolean).length;
-  const colStyle = `grid-template-columns:1fr${' 54px'.repeat(nCols)}`;
-
-  function mkR(n,q){
-    const checks = [
-      showL?'<div class="kck">OK</div>':'',
-      showP?'<div class="kck">OK</div>':'',
-      showK?'<div class="kck">OK</div>':''
-    ].filter((_,i)=>cols[i]).join('');
-    return `<div class="kr" style="${colStyle}"><div><div class="krn">${n}</div></div>${checks}</div>`;
-  }
-  function mkF(n, li, pi, ki){
-    const lc=li?`<div class="kvv" style="background:#ede9ff;color:#5b21b6">OK</div>`:`<div class="kck d">—</div>`;
-    const pc=pi?`<div class="kvv" style="background:#d1fae5;color:#065f46">OK</div>`:`<div class="kck d">—</div>`;
-    const kc=ki?`<div class="kvv" style="background:#fef3c7;color:#92400e">OK</div>`:`<div class="kck d">—</div>`;
-    const cells=[showL?lc:'',showP?pc:'',showK?kc:''].filter((_,i)=>cols[i]).join('');
-    return `<div class="kr" style="${colStyle}"><div><div class="krn">${n}</div></div>${cells}</div>`;
-  }
-
-  let kR="";
-  C.ldspIt.forEach(it=>{kR+=mkR(it.n,it.q);});
-  if(C.hdfQ>0)kR+=mkR("ХДФ (задняя стенка)",C.hdfQ);
-  if(C.kromQ>0)kR+=mkR("Кромка (пм)",C.kromQ);
-
-  const fL=C.fldspIt.map(it=>mkF(it.n,true,false,false)).join("");
-  const fP=C.fplenIt.map(it=>mkF(it.n,false,true,false)).join("");
-  const fK=C.fkrIt.map(it=>mkF(it.n,false,false,true)).join("");
-  const allF=[...C.fuIt,...C.kuIt,...C.shIt];
-  const fRows=allF.map(it=>mkR(it.n,it.q)).join("");
-  const dRow=C.vDel>0?mkR("Доставка по Сатпаеву и ПДМ",1):"";
-  const allE=[...C.svIt,...C.vitIt,...C.wkIt,...C.dpIt];
-  const eRows=allE.map(it=>mkR(it.n,it.q)).join("");
-
-  // Шапка колонок
-  const hdrCols=[
-    showL?'<div class="kchv" style="color:#a8c4ff">ЛДСП</div>':'',
-    showP?'<div class="kchv" style="color:#7dd5b0">Плёнка</div>':'',
-    showK?'<div class="kchv" style="color:#e8b07a">Краска</div>':''
-  ].filter((_,i)=>cols[i]).join('');
-  const hdrStyle=`display:grid;${colStyle};padding:8px 14px;background:#111827;border-radius:10px 10px 0 0;margin:10px 10px 0`;
-
-  // Итоговые колонки
-  const totCols=[
-    showL?`<div class="ktrv" style="color:#a8c4ff">${fm(C.BL.tot)}</div>`:'',
-    showP?`<div class="ktrv" style="color:#7dd5b0">${fm(C.BP.tot)}</div>`:'',
-    showK?`<div class="ktrv" style="color:#e8b07a">${fm(C.BK.tot)}</div>`:''
-  ].filter((_,i)=>cols[i]).join('');
-  const crCols=[
-    showL?`<div class="kcrv">${fm(C.BL.credit)}</div>`:'',
-    showP?`<div class="kcrv">${fm(C.BP.credit)}</div>`:'',
-    showK?`<div class="kcrv">${fm(C.BK.credit)}</div>`:''
-  ].filter((_,i)=>cols[i]).join('');
-  const thCols=[
-    showL?'<div class="kthv" style="color:#a8c4ff">ЛДСП</div>':'',
-    showP?'<div class="kthv" style="color:#7dd5b0">Плёнка</div>':'',
-    showK?'<div class="kthv" style="color:#e8b07a">Краска</div>':''
-  ].filter((_,i)=>cols[i]).join('');
-  const totStyle=`display:grid;${colStyle};align-items:center;padding:4px 0`;
-  const crStyle=`display:grid;${colStyle};padding:4px 0`;
-  const thStyle=`display:grid;${colStyle};margin-bottom:8px`;
-
-  $("kp-doc").innerHTML=`
-  <div class="kh">
-    <div class="kh-glass"></div>
-    <div class="kh-orb1"></div>
-    <div class="kh-orb2"></div>
-    <div class="kh-inner">
-      <div class="klr">
-        <div class="klb"><div class="klm">M</div><div class="kld"></div></div>
-        <div>
-          <div class="kbn">MEBEL<span>OFF</span></div>
-          <div class="kbs">Мебель на заказ · Сатпаев</div>
-        </div>
-      </div>
-      <div class="khb">
-        <div class="kct">
-          <strong>+7 707 540 7626</strong>
-          <div>mebeloff.kz</div>
-          <div>Абая 68, БЦ, каб. 4</div>
-        </div>
-        <div class="kdi">
-          <div class="kdl">Коммерческое предложение</div>
-          <div class="kdn">#${num}</div>
-          <div class="kdd">${today}</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="kcb">
-    <div class="kcl"><div class="kcll">Клиент</div><div class="kclv">${client}</div></div>
-    <div class="kcl"><div class="kcll">Объект</div><div class="kclv">${obj}</div></div>
-    <div class="kcl"><div class="kcll">Менеджер</div><div class="kclv">Дали</div></div>
-  </div>
-
-  <div class="kvw">
-    <div class="kvt">Варианты исполнения</div>
-    <div class="kvs">
-      ${showL?`<div class="kv${showP||showK?'':' pop'}">
-        <div class="kv-tag ldsp">⬡ ЛДСП</div>
-        <div class="kvp">${fm(C.BL.tot)}</div>
-        <div class="kvc">кредит / рассрочка: <span>${fm(C.BL.credit)}</span></div>
-      </div>`:''}
-      ${showP?`<div class="kv pop">
-        <div class="kvbg"> Популярный</div>
-        <div class="kv-tag plen">◈ МДФ Плёнка</div>
-        <div class="kvp">${fm(C.BP.tot)}</div>
-        <div class="kvc">кредит / рассрочка: <span>${fm(C.BP.credit)}</span></div>
-      </div>`:''}
-      ${showK?`<div class="kv">
-        <div class="kv-tag kr">◆ МДФ Краска</div>
-        <div class="kvp">${fm(C.BK.tot)}</div>
-        <div class="kvc">кредит / рассрочка: <span>${fm(C.BK.credit)}</span></div>
-      </div>`:''}
-    </div>
-  </div>
-
-  <div style="${hdrStyle}">
-    <div class="kchl">Комплектация</div>
-    ${hdrCols}
-  </div>
-  ${kR?`<div class="ksl t"> Корпус</div>${kR}`:""}
-  ${(showL&&fL)||(showP&&fP)||(showK&&fK)?`<div class="ksl t"> Фасад</div>${showL?fL:""}${showP?fP:""}${showK?fK:""}`:""}
-  ${fRows?`<div class="ksl t"> Фурнитура</div>${fRows}`:""}
-  ${dRow?`<div class="ksl t"> Доставка</div>${dRow}`:""}
-  ${eRows?`<div class="ksl g">✦ Дополнительно</div>${eRows}`:""}
-  <div class="kf-spacer"></div>
-
-  <div class="kt">
-    <div style="${thStyle}"><div></div>${thCols}</div>
-    <div style="${totStyle}"><div class="ktrl">Итого клиенту</div>${totCols}</div>
-    <div class="ktd"></div>
-    <div style="${crStyle}"><div class="kcrl">💳 Кредит / рассрочка</div>${crCols}</div>
-  </div>
-
-  <div class="kco">
-    <div class="kcot">Условия сотрудничества</div>
-    <div class="kcog">
-      <div class="kcon"><div class="kcd">OK</div><span>Срок изготовления 15–45 рабочих дней</span></div>
-      <div class="kcon"><div class="kcd">OK</div><span>Предоплата 50% при подписании договора</span></div>
-      <div class="kcon"><div class="kcd">OK</div><span>Остаток оплачивается при доставке</span></div>
-      <div class="kcon"><div class="kcd">OK</div><span>КП действительно 7 календарных дней</span></div>
-    </div>
-  </div>
-
-  <div class="kf">
-    <div class="kfl">
-      <strong>Дали</strong>
-      <div class="kf-contacts">
-        <div class="kf-contact"><i class="ti ti-phone"></i>+7 707 540 7626</div>
-        <div class="kf-contact"><i class="ti ti-world"></i>mebeloff.kz</div>
-        <div class="kf-contact"><i class="ti ti-map-pin"></i>Абая 68, БЦ, каб. 4, Сатпаев</div>
-      </div>
-    </div>
-    <div class="kfr">КП не является публичной офертой. Цены действительны на дату выдачи.</div>
-  </div>
-  <div style="height:16px"></div>`;
-
-  page("kp");
-  window.scrollTo(0,0);
-}
-
-// ════════════════════════════════════════════════════════════
-// MebelOFF AI ПОМОЩНИК
-// ════════════════════════════════════════════════════════════
-
-// ── Состояние чата ───────────────────────────────────────────
-const aiHistory = []; // {role:'user'|'assistant', content}
-let aiLoading = false;
-
-// ── API ключ и режим ─────────────────────────────────────────
-let aiMode = 'local'; // 'local' | 'api'
-
-function aiKeyLoad(){
-  return localStorage.getItem('moff_ai_key')||'';
-}
-
-function aiSetMode(mode){
-  aiMode = mode;
-  const btnLocal = document.getElementById('ai-btn-local');
-  const btnApi   = document.getElementById('ai-btn-api');
-  const keyRow   = document.getElementById('ai-key-row');
-  const status   = document.getElementById('ai-mode-status');
-  const bar      = document.getElementById('ai-key-bar');
-  if(btnLocal) btnLocal.className = 'ai-mode-btn' + (mode==='local'?' active-local':'');
-  if(btnApi)   btnApi.className   = 'ai-mode-btn' + (mode==='api'?' active-api':'');
-  if(keyRow)   keyRow.classList.toggle('show', mode==='api');
-  if(bar){ bar.style.background = mode==='api'?'#fffbeb':'#f0fdf4'; bar.style.borderColor = mode==='api'?'#fde68a':'#bbf7d0'; }
-  if(status){
-    if(mode==='local') status.textContent = 'Авто-режим — работает без ключа';
-    else {
-      const k = aiKeyLoad();
-      status.textContent = k ? 'Claude API: ключ подключён' : 'Введите API ключ ниже';
-    }
-  }
-  // Если переключились на API и нет ключа — показываем поле
-  if(mode==='api' && !aiKeyLoad()){
-    setTimeout(()=>document.getElementById('ai-key-inp')?.focus(), 100);
-  }
-}
-window.aiSetMode = aiSetMode;
-function aiKeySave(){
-  const inp = document.getElementById('ai-key-inp');
-  const key = (inp?.value||'').trim();
-  if(!key){ alert('Введите API ключ'); return; }
-  if(!key.startsWith('sk-ant-')){
-    alert('Ключ должен начинаться с sk-ant-'); return;
-  }
-  localStorage.setItem('moff_ai_key', key);
-  aiSetMode('api');
-  const box = document.getElementById('ai-messages');
-  if(box){
-    box.innerHTML = '';
-    aiRenderMsg('ai', 'API ключ сохранён! Claude API подключён. Опишите задачу.');
-  }
-}
-function aiKeyUpdateUI(key){
-  const bar  = document.getElementById('ai-key-bar');
-  const inp  = document.getElementById('ai-key-inp');
-  const lbl  = document.getElementById('ai-key-lbl');
-  const save = document.getElementById('ai-key-save');
-  if(!bar) return;
-  if(key){
-    // Показываем маскированный ключ + кнопку изменить
-    bar.innerHTML = `<span id="ai-key-lbl" style="font-size:10px;color:#065f46">OK API ключ подключён</span>
-      <button id="ai-key-edit" onclick="aiKeyEdit()">Изменить</button>`;
-    bar.style.background='#d1fae5';
-    bar.style.borderBottom='1px solid #6ee7b7';
-  }
-}
-function aiKeyEdit(){
-  const bar = document.getElementById('ai-key-bar');
-  if(!bar) return;
-  bar.style.background='#fffbeb';
-  bar.style.borderBottom='1px solid #fde68a';
-  bar.innerHTML = `<span id="ai-key-lbl" style="font-size:10px;color:#92400e"> API ключ:</span>
-    <input id="ai-key-inp" type="password" placeholder="sk-ant-api..." autocomplete="off"
-      style="flex:1;font-size:11px;border:1px solid #fcd34d;border-radius:6px;padding:5px 8px;outline:none;background:#fff;font-family:monospace;color:#334155"
-      onkeydown="if(event.key==='Enter')aiKeySave()">
-    <button onclick="aiKeySave()" style="padding:5px 10px;background:#f59e0b;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">Сохранить</button>`;
-}
-
-// ── Открыть/закрыть drawer ───────────────────────────────────
-function aiOpen(){
-  document.getElementById('ai-drawer').classList.add('open');
-  document.getElementById('ai-drawer-overlay').classList.add('open');
-  document.getElementById('ai-input').focus();
-  document.getElementById('ai-fab').classList.add('has-ctx');
-  // Инициализируем режим
-  aiSetMode(aiMode);
-}
-function aiClose(){
-  document.getElementById('ai-drawer').classList.remove('open');
-  document.getElementById('ai-drawer-overlay').classList.remove('open');
-}
-
-// ── Получить контекст текущей страницы ───────────────────────
-function aiGetContext(){
-  const activePage = document.querySelector('.pg.on')?.id || 'pg-calc';
-  let ctx = '';
-
-  // Текущий расчёт
-  if(C && C.BL){
-    ctx += `\nТекущий расчёт: ЛДСП ${fm(C.BL.tot)}, МДФ Плёнка ${fm(C.BP.tot)}, МДФ Краска ${fm(C.BK.tot)}.`;
-    ctx += `\nКорпус ЛДСП: ${C.ldspIt?.map(x=>x.n+'×'+x.q).join(', ')||'нет'}.`;
-    ctx += `\nФурнитура: ${C.fuIt?.map(x=>x.n+'×'+x.q).join(', ')||'нет'}.`;
-    ctx += `\nКухня: ${C.kuIt?.map(x=>x.n+'×'+x.q).join(', ')||'нет'}.`;
-  }
-
-  // Кухонный конфигуратор
-  if(activePage === 'pg-kitchen' && typeof KitchenState !== 'undefined'){
-    const lower = KitchenState.lower || [];
-    const upper = KitchenState.upper || [];
-    ctx += `\nКухня: ${lower.length} нижних (${lower.map(m=>m.width+'мм '+m.type).join(', ')}), ${upper.length} верхних.`;
-    ctx += `\nГлубина кухни: ${document.getElementById('k-depth')?.value||501}мм, высота: ${document.getElementById('k-floor-h')?.value||850}мм.`;
-  }
-
-  // Шкафный конфигуратор
-  if(activePage === 'pg-conf' && typeof sections !== 'undefined' && sections.length){
-    ctx += `\nШкаф: ${sections.length} секций. `;
-    ctx += sections.map((s,i)=>`Секция ${i+1}: ${s.width}×${s.height}мм, глубина ${s.depth}мм${s.hasRod?', штанга':''}${s.antresol?.enabled?', антресоль '+s.antresol.height+'мм':''}`).join('. ');
-  }
-
-  // База материалов
-  if(DB && DB.ldsp?.length){
-    ctx += `\nДоступные цвета ЛДСП: ${DB.ldsp.map(x=>x.n).join(', ')}.`;
-  }
-  if(DB && DB.furn?.length){
-    const cats = [...new Set(DB.furn.map(x=>x.cat))];
-    ctx += `\nКатегории фурнитуры: ${cats.join(', ')}.`;
-  }
-  if(DB && DB.kuh?.length){
-    const kuhCats = [...new Set(DB.kuh.map(x=>x.cat))];
-    ctx += `\nКухонные аксессуары: ${kuhCats.join(', ')}.`;
-  }
-
-  return ctx;
-}
-
-// ── Системный промт ──────────────────────────────────────────
-function aiGetSystemPrompt(){
-  const ctx = aiGetContext();
   return `Ты ИИ-помощник для мебельной компании MebelOFF (Сатпаев, Казахстан). Помогаешь менеджерам и клиентам быстро заполнять калькулятор мебели на заказ.
 
 ТЕКУЩИЙ КОНТЕКСТ ПРИЛОЖЕНИЯ:${ctx}
@@ -1311,7 +669,7 @@ function aiExecuteActions(actionsJson){
         case 'addKitchenUpper':
           if(typeof KitchenState!=='undefined' && typeof kMkUpper==='function'){
             const m=kMkUpper(act.width||600);
-            m.height=act.height||KitchenState.globalUpperH||750;
+            m.height=act.height||(KitchenState.globalUpperH||750);
             m.type=act.type||'upper1';
             m.facade=act.facade||'door';
             KitchenState.upper.push(m);
@@ -1321,10 +679,10 @@ function aiExecuteActions(actionsJson){
 
         case 'addKitchenPenal':
           if(typeof KitchenState!=='undefined' && typeof kMkPenal==='function'){
-            const m=kMkPenal(act.width||600);
-            m.height=act.height||2140;
-            m.facade=act.facade||'door';
-            KitchenState.penal.push(m);
+            const mp=kMkPenal(act.width||600);
+            mp.height=act.height||2140;
+            mp.facade=act.facade||'door';
+            KitchenState.penal.push(mp);
             needKitchenRender=true; applied++;
           }
           break;
@@ -1336,26 +694,15 @@ function aiExecuteActions(actionsJson){
           }
           break;
 
-        case 'setKitchenFacadeColor':
-          if(typeof kSetFacadeColor==='function' && act.color){
-            kSetFacadeColor(act.color);
-            needKitchenRender=true; applied++;
+        case 'setKitchenFacadeMat':{
+          var fmEl=document.getElementById('k-facade-mat');
+          if(fmEl && act.mat){
+            fmEl.value=act.mat;
+            if(typeof kRenderColorPickers==='function') kRenderColorPickers();
+            applied++;
           }
           break;
-
-        case 'setKitchenCorpusColor':
-          if(typeof kSetCorpusColor==='function' && act.color){
-            kSetCorpusColor(act.color);
-            needKitchenRender=true; applied++;
-          }
-          break;
-
-        case 'setKitchenFacadeMat':
-          if(act.mat){
-            const el=document.getElementById('k-facade-mat');
-            if(el){ el.value=act.mat; if(typeof kRenderColorPickers==='function') kRenderColorPickers(); applied++; }
-          }
-          break;
+        }
 
         case 'clearWardrobe':{
           // Используем сеттер: sections=[] в module через defineProperty
@@ -1396,116 +743,84 @@ function aiExecuteActions(actionsJson){
           applied++; break;
         }
 
-        case 'addKitchenAccessory':{
-          if(!DB.kuh || !DB.kuh.length || !act.cat) break;
-          var kuhArr = DB.kuh;
-          var kuhIdx = kuhArr.findIndex(function(x){
-            return x.cat.toLowerCase().includes(act.cat.toLowerCase()) &&
-              (act.vid ? x.vid.toLowerCase().includes(act.vid.toLowerCase()) : true);
-          });
-          if(kuhIdx < 0) kuhIdx = kuhArr.findIndex(function(x){ return x.cat.toLowerCase().includes(act.cat.toLowerCase()); });
-          if(kuhIdx < 0) break;
-          var kuhI = ST.kuh.length;
-          ST.kuh.push({p: kuhArr[kuhIdx].p});
-          var kuhC = document.getElementById('kuh-list');
-          if(!kuhC) break;
-          if(kuhI === 0) kuhC.innerHTML = '';
-          var kuhCats = [...new Set(kuhArr.map(function(x){ return x.cat; }))];
-          var kuhD = document.createElement('div');
-          kuhD.id = 'kuhr' + kuhI;
-          if(kuhI > 0) kuhD.className = 'ib';
-          kuhD.style.marginTop = '8px';
-          var kuhOpts = kuhCats.map(function(c){ return '<option value="' + c + '"' + (c===kuhArr[kuhIdx].cat?' selected':'') + '>' + c + '</option>'; }).join('');
-          kuhD.innerHTML = '<div class="fr"><select id="kuhc' + kuhI + '" onchange="uC('kuh',' + kuhI + ')">' + kuhOpts + '</select>'
-            + '<button class="db" onclick="$('kuhr' + kuhI + '').style.display='none';ST.kuh[' + kuhI + ']=null;recalc()">✕</button></div>'
-            + '<div class="fr" id="kuhvf' + kuhI + '"></div>'
-            + '<div class="fr"><span class="lb">Кол-во</span>'
-            + '<input class="qi" type="number" inputmode="decimal" id="kuhq' + kuhI + '" placeholder="0" min="0" onchange="recalc()">'
-            + '<span class="fp" id="kuhpp' + kuhI + '">' + kuhArr[kuhIdx].p.toLocaleString('ru') + '₸</span></div>';
-          kuhC.appendChild(kuhD);
-          uC('kuh', kuhI);
-          var kuhQEl = document.getElementById('kuhq' + kuhI);
-          if(kuhQEl) kuhQEl.value = act.qty || 1;
-          var kuhCb = document.getElementById('cb-kuh');
-          if(kuhCb && !kuhCb.classList.contains('op')) tog('kuh');
-          applied++; break;
-        }
-
         case 'addFurn':
           if(typeof kAddFurnRow==='function' && act.cat){
             kAddFurnRow(act.cat, act.qty||1); applied++;
           }
           break;
 
+        case 'addKitchenAccessory':{
+          // Аксессуар кухни -> kuh-list
+          if(!DB.kuh||!DB.kuh.length||!act.cat) break;
+          var kiArr=DB.kuh;
+          var kiIdx=kiArr.findIndex(function(x){return x.cat.toLowerCase().indexOf(act.cat.toLowerCase())>=0;});
+          if(kiIdx<0) break;
+          var kiI=ST.kuh.length; ST.kuh.push({p:kiArr[kiIdx].p});
+          var kiC=document.getElementById('kuh-list'); if(!kiC) break;
+          if(kiI===0) kiC.innerHTML='';
+          var kiCats=[...new Set(kiArr.map(function(x){return x.cat;}))];
+          var kiD=document.createElement('div');
+          kiD.id='kuhr'+kiI; if(kiI>0) kiD.className='ib'; kiD.style.marginTop='8px';
+          var kiO=kiCats.map(function(c){return '<option value="'+c+'"'+(c===kiArr[kiIdx].cat?' selected':'')+'>'+c+'</option>';}).join('');
+          kiD.innerHTML='<div class="fr"><select id="kuhc'+kiI+'" onchange="uC('kuh','+kiI+')">'+kiO+'</select>'
+            +'<button class="db" onclick="$('kuhr'+kiI+'').style.display='none';ST.kuh['+kiI+']=null;recalc()">✕</button></div>'
+            +'<div class="fr" id="kuhvf'+kiI+'"></div>'
+            +'<div class="fr"><span class="lb">Кол-во</span>'
+            +'<input class="qi" type="number" inputmode="decimal" id="kuhq'+kiI+'" placeholder="0" min="0" onchange="recalc()">'
+            +'<span class="fp" id="kuhpp'+kiI+'">'+kiArr[kiIdx].p.toLocaleString('ru')+'₸</span></div>';
+          kiC.appendChild(kiD); uC('kuh',kiI);
+          var kiQ=document.getElementById('kuhq'+kiI); if(kiQ) kiQ.value=act.qty||1;
+          var kiCb=document.getElementById('cb-kuh'); if(kiCb&&!kiCb.classList.contains('op')) tog('kuh');
+          applied++; break;
+        }
+
         case 'addWardrobeAccessory':{
-          // Аксессуар шкафа → shk-list (DB.shk)
-          if(!DB.shk || !DB.shk.length || !act.cat) break;
-          var shkArr = DB.shk;
-          var shkIdx = shkArr.findIndex(function(x){
-            return x.cat.toLowerCase().includes(act.cat.toLowerCase()) &&
-              (act.vid ? x.vid.toLowerCase().includes(act.vid.toLowerCase()) : true);
-          });
-          if(shkIdx < 0) shkIdx = shkArr.findIndex(function(x){ return x.cat.toLowerCase().includes(act.cat.toLowerCase()); });
-          if(shkIdx < 0) break;
-          var shkI = ST.shk.length;
-          ST.shk.push({p: shkArr[shkIdx].p});
-          var shkC = document.getElementById('shk-list');
-          if(!shkC) break;
-          if(shkI === 0) shkC.innerHTML = '';
-          var shkCats = [...new Set(shkArr.map(function(x){ return x.cat; }))];
-          var shkD = document.createElement('div');
-          shkD.id = 'shkr' + shkI;
-          if(shkI > 0) shkD.className = 'ib';
-          shkD.style.marginTop = '8px';
-          var shkOpts = shkCats.map(function(c){ return '<option value="' + c + '"' + (c===shkArr[shkIdx].cat?' selected':'') + '>' + c + '</option>'; }).join('');
-          shkD.innerHTML = '<div class="fr"><select id="shkc' + shkI + '" onchange="uC('shk',' + shkI + ')">' + shkOpts + '</select>'
-            + '<button class="db" onclick="$('shkr' + shkI + '').style.display='none';ST.shk[' + shkI + ']=null;recalc()">✕</button></div>'
-            + '<div class="fr" id="shkvf' + shkI + '"></div>'
-            + '<div class="fr"><span class="lb">Кол-во</span>'
-            + '<input class="qi" type="number" inputmode="decimal" id="shkq' + shkI + '" placeholder="0" min="0" onchange="recalc()">'
-            + '<span class="fp" id="shkpp' + shkI + '">' + shkArr[shkIdx].p.toLocaleString('ru') + '₸</span></div>';
-          shkC.appendChild(shkD);
-          uC('shk', shkI);
-          var shkQEl = document.getElementById('shkq' + shkI);
-          if(shkQEl) shkQEl.value = act.qty || 1;
-          var shkCb = document.getElementById('cb-shk');
-          if(shkCb && !shkCb.classList.contains('op')) tog('shk');
+          // Аксессуар шкафа -> shk-list
+          if(!DB.shk||!DB.shk.length||!act.cat) break;
+          var skArr=DB.shk;
+          var skIdx=skArr.findIndex(function(x){return x.cat.toLowerCase().indexOf(act.cat.toLowerCase())>=0;});
+          if(skIdx<0) break;
+          var skI=ST.shk.length; ST.shk.push({p:skArr[skIdx].p});
+          var skC=document.getElementById('shk-list'); if(!skC) break;
+          if(skI===0) skC.innerHTML='';
+          var skCats=[...new Set(skArr.map(function(x){return x.cat;}))];
+          var skD=document.createElement('div');
+          skD.id='shkr'+skI; if(skI>0) skD.className='ib'; skD.style.marginTop='8px';
+          var skO=skCats.map(function(c){return '<option value="'+c+'"'+(c===skArr[skIdx].cat?' selected':'')+'>'+c+'</option>';}).join('');
+          skD.innerHTML='<div class="fr"><select id="shkc'+skI+'" onchange="uC('shk','+skI+')">'+skO+'</select>'
+            +'<button class="db" onclick="$('shkr'+skI+'').style.display='none';ST.shk['+skI+']=null;recalc()">✕</button></div>'
+            +'<div class="fr" id="shkvf'+skI+'"></div>'
+            +'<div class="fr"><span class="lb">Кол-во</span>'
+            +'<input class="qi" type="number" inputmode="decimal" id="shkq'+skI+'" placeholder="0" min="0" onchange="recalc()">'
+            +'<span class="fp" id="shkpp'+skI+'">'+skArr[skIdx].p.toLocaleString('ru')+'₸</span></div>';
+          skC.appendChild(skD); uC('shk',skI);
+          var skQ=document.getElementById('shkq'+skI); if(skQ) skQ.value=act.qty||1;
+          var skCb=document.getElementById('cb-shk'); if(skCb&&!skCb.classList.contains('op')) tog('shk');
           applied++; break;
         }
 
         case 'addWardrobeFurn':{
-          // Общая фурнитура → furn-list (DB.furn: Петля, Телескоп, Ручки...)
-          if(!DB.furn || !DB.furn.length || !act.cat) break;
-          var furnArr = DB.furn;
-          var furnIdx = furnArr.findIndex(function(x){
-            return x.cat.toLowerCase().includes(act.cat.toLowerCase()) &&
-              (act.vid ? x.vid.toLowerCase().includes(act.vid.toLowerCase()) : true);
-          });
-          if(furnIdx < 0) furnIdx = furnArr.findIndex(function(x){ return x.cat.toLowerCase().includes(act.cat.toLowerCase()); });
-          if(furnIdx < 0) break;
-          var furnI = ST.furn.length;
-          ST.furn.push({p: furnArr[furnIdx].p});
-          var furnC = document.getElementById('furn-list');
-          if(!furnC) break;
-          if(furnI === 0) furnC.innerHTML = '';
-          var furnCats = [...new Set(furnArr.map(function(x){ return x.cat; }))];
-          var furnD = document.createElement('div');
-          furnD.id = 'furnr' + furnI;
-          if(furnI > 0) furnD.className = 'ib';
-          furnD.style.marginTop = '8px';
-          var furnOpts = furnCats.map(function(c){ return '<option value="' + c + '"' + (c===furnArr[furnIdx].cat?' selected':'') + '>' + c + '</option>'; }).join('');
-          furnD.innerHTML = '<div class="fr"><select id="furnc' + furnI + '" onchange="uC('furn',' + furnI + ')">' + furnOpts + '</select>'
-            + '<button class="db" onclick="$('furnr' + furnI + '').style.display='none';ST.furn[' + furnI + ']=null;recalc()">✕</button></div>'
-            + '<div class="fr" id="furnvf' + furnI + '"></div>'
-            + '<div class="fr"><span class="lb">Кол-во</span>'
-            + '<input class="qi" type="number" inputmode="decimal" id="furnq' + furnI + '" placeholder="0" min="0" onchange="recalc()">'
-            + '<span class="fp" id="furnpp' + furnI + '">' + furnArr[furnIdx].p.toLocaleString('ru') + '₸</span></div>';
-          furnC.appendChild(furnD);
-          uC('furn', furnI);
-          var furnQEl = document.getElementById('furnq' + furnI);
-          if(furnQEl) furnQEl.value = act.qty || 1;
-          var furnCb = document.getElementById('cb-furn');
-          if(furnCb && !furnCb.classList.contains('op')) tog('furn');
+          // Фурнитура шкафа -> furn-list (Петля, Телескоп, Ручки...)
+          if(!DB.furn||!DB.furn.length||!act.cat) break;
+          var fkArr=DB.furn;
+          var fkIdx=fkArr.findIndex(function(x){return x.cat.toLowerCase().indexOf(act.cat.toLowerCase())>=0;});
+          if(fkIdx<0) break;
+          var fkI=ST.furn.length; ST.furn.push({p:fkArr[fkIdx].p});
+          var fkC=document.getElementById('furn-list'); if(!fkC) break;
+          if(fkI===0) fkC.innerHTML='';
+          var fkCats=[...new Set(fkArr.map(function(x){return x.cat;}))];
+          var fkD=document.createElement('div');
+          fkD.id='furnr'+fkI; if(fkI>0) fkD.className='ib'; fkD.style.marginTop='8px';
+          var fkO=fkCats.map(function(c){return '<option value="'+c+'"'+(c===fkArr[fkIdx].cat?' selected':'')+'>'+c+'</option>';}).join('');
+          fkD.innerHTML='<div class="fr"><select id="furnc'+fkI+'" onchange="uC('furn','+fkI+')">'+fkO+'</select>'
+            +'<button class="db" onclick="$('furnr'+fkI+'').style.display='none';ST.furn['+fkI+']=null;recalc()">✕</button></div>'
+            +'<div class="fr" id="furnvf'+fkI+'"></div>'
+            +'<div class="fr"><span class="lb">Кол-во</span>'
+            +'<input class="qi" type="number" inputmode="decimal" id="furnq'+fkI+'" placeholder="0" min="0" onchange="recalc()">'
+            +'<span class="fp" id="furnpp'+fkI+'">'+fkArr[fkIdx].p.toLocaleString('ru')+'₸</span></div>';
+          fkC.appendChild(fkD); uC('furn',fkI);
+          var fkQ=document.getElementById('furnq'+fkI); if(fkQ) fkQ.value=act.qty||1;
+          var fkCb=document.getElementById('cb-furn'); if(fkCb&&!fkCb.classList.contains('op')) tog('furn');
           applied++; break;
         }
 
@@ -1661,17 +976,10 @@ function aiLocalProcess(text){
 
     ordered.forEach(m => actions.push({action:'addKitchenLower', width:m.w, type:m.type, facade: m.type==='sink'||m.type==='appliance' ? 'none' : 'door'}));
 
-    // Верхние шкафы — ~60% от нижних, стандарт 750мм
-    const upperH = t.includes('900') ? 900 : 750;
-    if(upperH===900) actions.push({action:'setKitchenUpperHeight', height:900});
+    // Верхние шкафы — половина нижних
     const upperCount = Math.max(1, Math.floor(ordered.length * 0.6));
     const upperW = Math.round(totalW / upperCount / 100) * 100;
-    for(let i=0; i<upperCount; i++) actions.push({action:'addKitchenUpper', width:upperW, type:'upper1', height:upperH, facade:'door'});
-
-    // Пенал если упомянут
-    if(t.includes('пенал')||t.includes('penal')||t.includes('колонн')){
-      actions.push({action:'addKitchenPenal', width:600, height:2140, facade:'door'});
-    }
+    for(let i=0; i<upperCount; i++) actions.push({action:'addKitchenUpper', width:upperW, height:720, facade:'door'});
 
     // Цвет фасада
     const colorMap = {
@@ -1684,9 +992,9 @@ function aiLocalProcess(text){
     if(colorName) actions.push({action:'addLdsp', colorName, qty:0});
 
     const nLower = ordered.length;
-    reply = 'Кухня настроена: ' + nLower + ' нижних (' +
+    reply = 'Кухня настроена: ' + nLower + ' нижних модулей (' +
       ordered.map(m=>m.w+'мм '+m.type).join(', ') + '), ' +
-      upperCount + ' верхних ' + upperH + 'мм. Общая ширина ~' + totalW + 'мм.';
+      upperCount + ' верхних. Общая ширина ~' + totalW + 'мм.';
     if(colorName) reply += ' Цвет: ' + colorName + '.';
     reply += '\n\nПроверьте в 3D и при необходимости скорректируйте.';
   }
