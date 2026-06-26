@@ -586,10 +586,10 @@ function aiGetSystemPrompt(){
 [{"action":"navigateTo","page":"kitchen"},{"action":"clearKitchen"},{"action":"setKitchenGlobal","floorH":850,"depth":501},{"action":"addKitchenLower","width":600,"type":"drawers","facade":"door"},{"action":"addKitchenLower","width":600,"type":"shelves","facade":"door"},{"action":"addKitchenLower","width":500,"type":"sink","facade":"none"},{"action":"addKitchenLower","width":600,"type":"appliance","facade":"none"},{"action":"addKitchenLower","width":700,"type":"shelves","facade":"door"},{"action":"addKitchenUpper","width":600,"type":"upper1","facade":"door"},{"action":"addKitchenUpper","width":600,"type":"upper2","facade":"door"},{"action":"addKitchenUpper","width":600,"type":"upper1","facade":"door"},{"action":"addKitchenUpper","width":600,"type":"upper1","facade":"door"}]
 </actions>
 
-ПРИМЕР — "шкаф 2.4м 3 секции штанга":
-Настраиваю шкаф-купе 2400мм, 3 секции со штангой.
+ПРИМЕР — "шкаф 2.4м 3 секции штанга, пантограф, петли Blume":
+Настраиваю шкаф-купе 2400мм, 3 секции со штангой и пантографом.
 <actions>
-[{"action":"navigateTo","page":"conf"},{"action":"clearWardrobe"},{"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":true,"shelves":2},{"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":true,"shelves":2},{"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":false,"shelves":3}]
+[{"action":"navigateTo","page":"conf"},{"action":"clearWardrobe"},{"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":true,"shelves":2},{"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":true,"shelves":2},{"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":false,"shelves":3},{"action":"addWardrobeAccessory","cat":"Штанга","qty":3},{"action":"addWardrobeAccessory","cat":"Пантограф","qty":1},{"action":"addWardrobeFurn","cat":"Петля","vid":"Blume","qty":12}]
 </actions>
 
 ПРИМЕР — "кухня 3м, 700 мойка, 500 ящик, верхние стандарт, сушилка 800, столешница":
@@ -629,6 +629,9 @@ function aiGetSystemPrompt(){
 Шкаф:
 - {"action":"clearWardrobe"}
 - {"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":true,"shelves":2}
+- {"action":"addWardrobeSection","width":800,...} — правильный псевдоним addWardobeSection
+- {"action":"addWardrobeAccessory","cat":"Штанга|Пантограф|Крючки|Турникет-Хром","vid":"450мм","qty":1} → shk-list
+- {"action":"addWardrobeFurn","cat":"Петля|Телескоп|Ручки|Ножки","vid":"Blume|GTV|En-7","qty":8} → furn-list
 
 Калькулятор:
 - {"action":"addLdsp","colorName":"Белый Глянец","qty":3.5}
@@ -1394,49 +1397,37 @@ function aiExecuteActions(actionsJson){
         }
 
         case 'addKitchenAccessory':{
-          // Добавляет аксессуар кухни в раздел "Фурнитура кухня" (kuh-list)
-          if(!DB.kuh?.length || !act.cat) break;
-          // Ищем по категории, можно указать vid для уточнения
-          let idx = DB.kuh.findIndex(x =>
-            x.cat.toLowerCase().includes(act.cat.toLowerCase()) &&
-            (act.vid ? x.vid.toLowerCase().includes(act.vid.toLowerCase()) : true)
-          );
-          if(idx < 0) idx = DB.kuh.findIndex(x => x.cat.toLowerCase().includes(act.cat.toLowerCase()));
-          if(idx < 0) break;
-          const ki = ST.kuh.length;
-          ST.kuh.push({p: DB.kuh[idx].p});
-          const kc = $('kuh-list');
-          if(!kc) break;
-          if(ki === 0) kc.innerHTML = '';
-          const cats = [...new Set(DB.kuh.map(x => x.cat))];
-          const kd = document.createElement('div');
-          kd.id = 'kuhr' + ki;
-          if(ki > 0) kd.className = 'ib';
-          kd.style.marginTop = '8px';
-          kd.innerHTML = `<div class="fr">
-            <select id="kuhc${ki}" onchange="uC('kuh',${ki})">${cats.map(c=>`<option value="${c}"${c===DB.kuh[idx].cat?' selected':''}>${c}</option>`).join('')}</select>
-            <button class="db" onclick="$('kuhr${ki}').style.display='none';ST.kuh[${ki}]=null;recalc()">✕</button>
-          </div>
-          <div class="fr" id="kuhvf${ki}"></div>
-          <div class="fr">
-            <span class="lb">Кол-во</span>
-            <input class="qi" type="number" inputmode="decimal" id="kuhq${ki}" placeholder="0" min="0" onchange="recalc()">
-            <span class="fp" id="kuhpp${ki}">${DB.kuh[idx].p.toLocaleString('ru')}₸</span>
-          </div>`;
-          kc.appendChild(kd);
-          uC('kuh', ki);
-          const kqEl = $('kuhq' + ki);
-          if(kqEl) kqEl.value = act.qty || 1;
-          // Выбираем нужный vid если указан
-          if(act.vid){
-            const vidEl = $('kuhv' + ki);
-            if(vidEl){
-              const vidIdx = [...vidEl.options].findIndex(o => o.value.toLowerCase().includes(act.vid.toLowerCase()));
-              if(vidIdx >= 0){ vidEl.selectedIndex = vidIdx; uC('kuh', ki); }
-            }
-          }
-          const kCb = $('cb-kuh');
-          if(kCb && !kCb.classList.contains('op')) tog('kuh');
+          if(!DB.kuh || !DB.kuh.length || !act.cat) break;
+          var kuhArr = DB.kuh;
+          var kuhIdx = kuhArr.findIndex(function(x){
+            return x.cat.toLowerCase().includes(act.cat.toLowerCase()) &&
+              (act.vid ? x.vid.toLowerCase().includes(act.vid.toLowerCase()) : true);
+          });
+          if(kuhIdx < 0) kuhIdx = kuhArr.findIndex(function(x){ return x.cat.toLowerCase().includes(act.cat.toLowerCase()); });
+          if(kuhIdx < 0) break;
+          var kuhI = ST.kuh.length;
+          ST.kuh.push({p: kuhArr[kuhIdx].p});
+          var kuhC = document.getElementById('kuh-list');
+          if(!kuhC) break;
+          if(kuhI === 0) kuhC.innerHTML = '';
+          var kuhCats = [...new Set(kuhArr.map(function(x){ return x.cat; }))];
+          var kuhD = document.createElement('div');
+          kuhD.id = 'kuhr' + kuhI;
+          if(kuhI > 0) kuhD.className = 'ib';
+          kuhD.style.marginTop = '8px';
+          var kuhOpts = kuhCats.map(function(c){ return '<option value="' + c + '"' + (c===kuhArr[kuhIdx].cat?' selected':'') + '>' + c + '</option>'; }).join('');
+          kuhD.innerHTML = '<div class="fr"><select id="kuhc' + kuhI + '" onchange="uC('kuh',' + kuhI + ')">' + kuhOpts + '</select>'
+            + '<button class="db" onclick="$('kuhr' + kuhI + '').style.display='none';ST.kuh[' + kuhI + ']=null;recalc()">✕</button></div>'
+            + '<div class="fr" id="kuhvf' + kuhI + '"></div>'
+            + '<div class="fr"><span class="lb">Кол-во</span>'
+            + '<input class="qi" type="number" inputmode="decimal" id="kuhq' + kuhI + '" placeholder="0" min="0" onchange="recalc()">'
+            + '<span class="fp" id="kuhpp' + kuhI + '">' + kuhArr[kuhIdx].p.toLocaleString('ru') + '₸</span></div>';
+          kuhC.appendChild(kuhD);
+          uC('kuh', kuhI);
+          var kuhQEl = document.getElementById('kuhq' + kuhI);
+          if(kuhQEl) kuhQEl.value = act.qty || 1;
+          var kuhCb = document.getElementById('cb-kuh');
+          if(kuhCb && !kuhCb.classList.contains('op')) tog('kuh');
           applied++; break;
         }
 
@@ -1445,6 +1436,78 @@ function aiExecuteActions(actionsJson){
             kAddFurnRow(act.cat, act.qty||1); applied++;
           }
           break;
+
+        case 'addWardrobeAccessory':{
+          // Аксессуар шкафа → shk-list (DB.shk)
+          if(!DB.shk || !DB.shk.length || !act.cat) break;
+          var shkArr = DB.shk;
+          var shkIdx = shkArr.findIndex(function(x){
+            return x.cat.toLowerCase().includes(act.cat.toLowerCase()) &&
+              (act.vid ? x.vid.toLowerCase().includes(act.vid.toLowerCase()) : true);
+          });
+          if(shkIdx < 0) shkIdx = shkArr.findIndex(function(x){ return x.cat.toLowerCase().includes(act.cat.toLowerCase()); });
+          if(shkIdx < 0) break;
+          var shkI = ST.shk.length;
+          ST.shk.push({p: shkArr[shkIdx].p});
+          var shkC = document.getElementById('shk-list');
+          if(!shkC) break;
+          if(shkI === 0) shkC.innerHTML = '';
+          var shkCats = [...new Set(shkArr.map(function(x){ return x.cat; }))];
+          var shkD = document.createElement('div');
+          shkD.id = 'shkr' + shkI;
+          if(shkI > 0) shkD.className = 'ib';
+          shkD.style.marginTop = '8px';
+          var shkOpts = shkCats.map(function(c){ return '<option value="' + c + '"' + (c===shkArr[shkIdx].cat?' selected':'') + '>' + c + '</option>'; }).join('');
+          shkD.innerHTML = '<div class="fr"><select id="shkc' + shkI + '" onchange="uC('shk',' + shkI + ')">' + shkOpts + '</select>'
+            + '<button class="db" onclick="$('shkr' + shkI + '').style.display='none';ST.shk[' + shkI + ']=null;recalc()">✕</button></div>'
+            + '<div class="fr" id="shkvf' + shkI + '"></div>'
+            + '<div class="fr"><span class="lb">Кол-во</span>'
+            + '<input class="qi" type="number" inputmode="decimal" id="shkq' + shkI + '" placeholder="0" min="0" onchange="recalc()">'
+            + '<span class="fp" id="shkpp' + shkI + '">' + shkArr[shkIdx].p.toLocaleString('ru') + '₸</span></div>';
+          shkC.appendChild(shkD);
+          uC('shk', shkI);
+          var shkQEl = document.getElementById('shkq' + shkI);
+          if(shkQEl) shkQEl.value = act.qty || 1;
+          var shkCb = document.getElementById('cb-shk');
+          if(shkCb && !shkCb.classList.contains('op')) tog('shk');
+          applied++; break;
+        }
+
+        case 'addWardrobeFurn':{
+          // Общая фурнитура → furn-list (DB.furn: Петля, Телескоп, Ручки...)
+          if(!DB.furn || !DB.furn.length || !act.cat) break;
+          var furnArr = DB.furn;
+          var furnIdx = furnArr.findIndex(function(x){
+            return x.cat.toLowerCase().includes(act.cat.toLowerCase()) &&
+              (act.vid ? x.vid.toLowerCase().includes(act.vid.toLowerCase()) : true);
+          });
+          if(furnIdx < 0) furnIdx = furnArr.findIndex(function(x){ return x.cat.toLowerCase().includes(act.cat.toLowerCase()); });
+          if(furnIdx < 0) break;
+          var furnI = ST.furn.length;
+          ST.furn.push({p: furnArr[furnIdx].p});
+          var furnC = document.getElementById('furn-list');
+          if(!furnC) break;
+          if(furnI === 0) furnC.innerHTML = '';
+          var furnCats = [...new Set(furnArr.map(function(x){ return x.cat; }))];
+          var furnD = document.createElement('div');
+          furnD.id = 'furnr' + furnI;
+          if(furnI > 0) furnD.className = 'ib';
+          furnD.style.marginTop = '8px';
+          var furnOpts = furnCats.map(function(c){ return '<option value="' + c + '"' + (c===furnArr[furnIdx].cat?' selected':'') + '>' + c + '</option>'; }).join('');
+          furnD.innerHTML = '<div class="fr"><select id="furnc' + furnI + '" onchange="uC('furn',' + furnI + ')">' + furnOpts + '</select>'
+            + '<button class="db" onclick="$('furnr' + furnI + '').style.display='none';ST.furn[' + furnI + ']=null;recalc()">✕</button></div>'
+            + '<div class="fr" id="furnvf' + furnI + '"></div>'
+            + '<div class="fr"><span class="lb">Кол-во</span>'
+            + '<input class="qi" type="number" inputmode="decimal" id="furnq' + furnI + '" placeholder="0" min="0" onchange="recalc()">'
+            + '<span class="fp" id="furnpp' + furnI + '">' + furnArr[furnIdx].p.toLocaleString('ru') + '₸</span></div>';
+          furnC.appendChild(furnD);
+          uC('furn', furnI);
+          var furnQEl = document.getElementById('furnq' + furnI);
+          if(furnQEl) furnQEl.value = act.qty || 1;
+          var furnCb = document.getElementById('cb-furn');
+          if(furnCb && !furnCb.classList.contains('op')) tog('furn');
+          applied++; break;
+        }
 
         case 'setHdfQty':{
           const e=$('hdf-qty'); if(e){e.value=act.qty||0; applied++;}
