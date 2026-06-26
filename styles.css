@@ -276,10 +276,16 @@ input.qt{font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:6px
 .kmod-tab.on{background:#1a5252;color:#fff;border-color:#1a5252}
 /* Mobile kitchen */
 @media(max-width:700px){
-  #pg-kitchen #kvp{display:none}
+  #pg-kitchen #kvp{display:none;position:fixed;inset:0;z-index:200;background:#222}
+  #pg-kitchen #kvp.mobile-open{display:block}
+  #pg-kitchen #kvp #kc3d{width:100%!important;height:100%!important}
+  #k-3d-close-btn{display:flex}
   #pg-kitchen #kapp{display:block;height:auto}
   #pg-kitchen #kpanel{width:100%;height:auto;border-right:none;overflow:visible}
   #pg-kitchen #kpanel-body{overflow:visible;padding:10px}
+}
+@media(min-width:701px){
+  #k-3d-close-btn{display:none}
 }
  /* conf body scoped */
 #pg-conf #app{display:grid;grid-template-columns:310px 1fr;height:calc(100vh - 52px)}

@@ -447,39 +447,28 @@ async function loadFromSheets(){
   if(st) st.style.color='#888';
   if(btn) btn.disabled=true;
 
-  // Пробуем fetch сначала, потом JSONP как fallback
+  // Используем только JSONP (fetch блокируется CORS с GitHub Pages)
   let d=null;
   try{
-    const r=await Promise.race([
-      fetch(url),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
-    ]);
-    d=await r.json();
-  }catch(fetchErr){
-    // fetch не сработал — пробуем JSONP
-    try{
-      d=await new Promise((resolve,reject)=>{
-        const cbName='_wc_cb_'+Date.now();
-        const script=document.createElement('script');
-        const t=setTimeout(()=>{
-          cleanup();reject(new Error('JSONP timeout'));
-        },10000);
-        function cleanup(){
-          clearTimeout(t);
-          delete window[cbName];
-          if(script.parentNode) script.parentNode.removeChild(script);
-        }
-        window[cbName]=function(data){ cleanup(); resolve(data); };
-        const sep=url.includes('?')?'&':'?';
-        script.src=url+sep+'callback='+cbName;
-        script.onerror=()=>{ cleanup(); reject(new Error('script load error')); };
-        document.head.appendChild(script);
-      });
-    }catch(jsonpErr){
-      if(st){ st.textContent='✗ Ошибка: '+jsonpErr.message+'. Проверьте доступ к скрипту (должен быть "Все")'; st.style.color='#c0392b'; }
-      if(btn) btn.disabled=false;
-      return;
-    }
+    d=await new Promise((resolve,reject)=>{
+      const cbName='_wc_cb_'+Date.now();
+      const script=document.createElement('script');
+      const t=setTimeout(()=>{ cleanup(); reject(new Error('timeout')); },10000);
+      function cleanup(){
+        clearTimeout(t);
+        delete window[cbName];
+        if(script.parentNode) script.parentNode.removeChild(script);
+      }
+      window[cbName]=function(data){ cleanup(); resolve(data); };
+      const sep=url.includes('?')?'&':'?';
+      script.src=url+sep+'callback='+cbName;
+      script.onerror=()=>{ cleanup(); reject(new Error('script load error')); };
+      document.head.appendChild(script);
+    });
+  }catch(err){
+    if(st){ st.textContent='✗ Ошибка: '+err.message; st.style.color='#c0392b'; }
+    if(btn) btn.disabled=false;
+    return;
   }
 
   // Обрабатываем данные
@@ -4077,9 +4066,32 @@ function initKitchen(){
 
 // ── Mobile preview ────────────────────────────────────────────
 function kShowPreview(){
-  const vp=document.getElementById('kvp');
-  if(vp) vp.style.display='block';
+  const vp = document.getElementById('kvp');
+  if(!vp) return;
+  const isMobile = window.innerWidth <= 700;
+  if(isMobile){
+    vp.classList.add('mobile-open');
+    // Ресайзим canvas под экран
+    setTimeout(()=>{
+      const canvas = document.getElementById('kc3d');
+      if(canvas && kRenderer){
+        kRenderer.setSize(window.innerWidth, window.innerHeight);
+        if(kCamera){
+          kCamera.aspect = window.innerWidth / window.innerHeight;
+          kCamera.updateProjectionMatrix();
+        }
+        kRender();
+      }
+    }, 50);
+  } else {
+    vp.style.display = 'block';
+  }
 }
+function kClosePreview(){
+  const vp = document.getElementById('kvp');
+  if(vp) vp.classList.remove('mobile-open');
+}
+window.kClosePreview = kClosePreview;
 
 // ── Синхронизация цен кухни из Google Sheets ─────────────────
 async function kLoadFromSheets(){
@@ -4089,27 +4101,37 @@ async function kLoadFromSheets(){
   if(!url){ if(st) st.textContent='⚠ URL не задан в настройках'; return; }
   if(btn) btn.disabled=true;
   if(st){ st.textContent='Загружаю...'; st.style.color='#888'; }
+  // Используем только JSONP (fetch блокируется CORS с GitHub Pages)
   try{
-    const r=await Promise.race([
-      fetch(url),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
-    ]);
-    const d=await r.json();
-    let updated=0;
-    if(d.ldsp&&d.ldsp.length)   { DB.ldsp=d.ldsp;        updated++; }
-    if(d.fas_plen&&d.fas_plen.length){ DB.fas_plen=d.fas_plen; updated++; }
-    if(d.fas_kr&&d.fas_kr.length)    { DB.fas_kr=d.fas_kr;     updated++; }
-    if(d.furn&&d.furn.length)        { DB.furn=d.furn;          updated++; }
-    if(d.kuh&&d.kuh.length)          { DB.kuh=d.kuh;            updated++; }
-    if(d.shk&&d.shk.length)          { DB.shk=d.shk;            updated++; }
-    if(d.acc&&d.acc.length)          { DB.acc=d.acc;            updated++; }
+    const d = await new Promise((resolve, reject)=>{
+      const cbName = '_k_cb_' + Date.now();
+      const script = document.createElement('script');
+      const t = setTimeout(()=>{ cleanup(); reject(new Error('timeout')); }, 10000);
+      function cleanup(){
+        clearTimeout(t);
+        delete window[cbName];
+        if(script.parentNode) script.parentNode.removeChild(script);
+      }
+      window[cbName] = function(data){ cleanup(); resolve(data); };
+      const sep = url.includes('?') ? '&' : '?';
+      script.src = url + sep + 'callback=' + cbName;
+      script.onerror = ()=>{ cleanup(); reject(new Error('script load error. Проверьте доступ (должен быть "Все")')); };
+      document.head.appendChild(script);
+    });
+    if(d.ldsp&&d.ldsp.length)   { DB.ldsp=d.ldsp; }
+    if(d.fas_plen&&d.fas_plen.length){ DB.fas_plen=d.fas_plen; }
+    if(d.fas_kr&&d.fas_kr.length)    { DB.fas_kr=d.fas_kr; }
+    if(d.furn&&d.furn.length)        { DB.furn=d.furn; }
+    if(d.kuh&&d.kuh.length)          { DB.kuh=d.kuh; }
+    if(d.shk&&d.shk.length)          { DB.shk=d.shk; }
+    if(d.acc&&d.acc.length)          { DB.acc=d.acc; }
     if(d.hingeCatalog&&d.hingeCatalog.length) hingeCatalog=d.hingeCatalog;
     if(d.slideCatalog&&d.slideCatalog.length) slideCatalog=d.slideCatalog;
     kRenderColorPickers();
     kFillTopSelect();
     kRenderPricesPreview();
     if(st){ st.textContent=`✓ Загружено: ЛДСП ${DB.ldsp.length}, Кухня ${DB.kuh.length}, Фурнитура ${DB.furn.length}`; st.style.color='#27ae60'; }
-    showStatus('OK: Цены кухни синхронизированы из Google Sheets','#1D9E75');
+    showStatus('OK: Цены синхронизированы из Google Sheets','#1D9E75');
     setTimeout(hideStatus,2500);
   }catch(e){
     if(st){ st.textContent='✗ '+e.message; st.style.color='#c0392b'; }
