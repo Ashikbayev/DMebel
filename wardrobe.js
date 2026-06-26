@@ -5326,6 +5326,7 @@ function sendKitchenToCalc(){
   const depth   = parseInt(document.getElementById('k-depth')?.value||601);
   const floorH  = parseInt(document.getElementById('k-floor-h')?.value||850);
   const upperD  = 350;
+  const LEG_H   = 100;
   const facadeMat = document.getElementById('k-facade-mat')?.value || 'ldsp';
   const kSheetFmt = document.getElementById('k-sheet-fmt')?.value || '2750x1830';
   const [LDSP_W_MM, LDSP_H_MM] = kSheetFmt==='2800x2070' ? [2800,2070] : [2750,1830];
@@ -5351,18 +5352,56 @@ function sendKitchenToCalc(){
   KitchenState.upper.forEach(m=>{ if(m.facade==='door') facM2 += (m.width/1000)*(m.height/1000); });
   KitchenState.penal.forEach(m=>{ if(m.facade==='door') facM2 += (m.width/1000)*(m.height/1000); });
 
-  // ── Кромка ───────────────────────────────────────────────────
+  // ── Кромка по реальным видимым торцам (1мм — одна кромка) ──
   let edgePm = 0;
+
+  const CORP_H3 = (floorH - K_TOP - LEG_H) / 1000;
+  const D_m = depth / 1000;
+  const UD_m = upperD / 1000;
+  const T_m = T / 1000;
+
   KitchenState.lower.forEach(m=>{
-    const H=(floorH-K_TOP-100)/1000, D=depth/1000;
-    edgePm += 2*(H+D)*2;                           // 2 бока × 2 торца
-    if(m.facade==='door') edgePm += 2*(H+m.width/1000); // фасады
+    const W = m.width / 1000, H = CORP_H3, D = D_m;
+    // 2 боковины: передний торец (H-T) + нижний торец (D)
+    edgePm += 2 * ((H - T_m) + D);
+    // Дно накладное: передний торец (W)
+    edgePm += W;
+    // 2 планки верхние: передний торец (W) каждая
+    edgePm += 2 * W;
+    // Полки по типу
+    if(m.type === 'shelves') edgePm += 2 * (W - T_m*2);
+    if(m.type === 'drawers') edgePm += 3 * (W - T_m*2);
+    // Фасад: 4 торца (периметр)
+    if(m.facade === 'door' && m.type !== 'sink' && m.type !== 'appliance')
+      edgePm += 2 * ((W - 0.004) + (H - 0.004));
   });
+
   KitchenState.upper.forEach(m=>{
-    const H=m.height/1000, D=upperD/1000;
-    edgePm += 2*(H+D)*2;
-    if(m.facade==='door') edgePm += 2*(H+m.width/1000);
+    const W = m.width / 1000, H = m.height / 1000, D = UD_m;
+    // 2 боковины: передний торец (H) + нижний торец (D)
+    edgePm += 2 * (H + D);
+    // Верх вкладной + 2 дна вкладных
+    edgePm += (W - T_m*2);
+    edgePm += 2 * (W - T_m*2);
+    // Полка
+    if(m.type !== 'upperOpen') edgePm += (W - T_m*2);
+    // Фасад: 4 торца
+    if(m.facade === 'door') edgePm += 2 * ((W - 0.004) + (H - 0.004));
   });
+
+  KitchenState.penal.forEach(m=>{
+    const W = m.width / 1000, H = m.height / 1000, D = D_m;
+    // 2 боковины: передний торец (H) + нижний торец (D)
+    edgePm += 2 * (H + D);
+    // Верх + 2 дна вкладных
+    edgePm += (W - T_m*2);
+    edgePm += 2 * (W - T_m*2);
+    // 2 полки
+    edgePm += 2 * (W - T_m*2);
+    // Фасад: 4 торца
+    if(m.facade === 'door') edgePm += 2 * ((W - 0.004) + (H - 0.004));
+  });
+
   edgePm = Math.ceil(edgePm);
 
   // ── Петли: 2 на дверь (ящики: 1 на ящик × 3) ────────────────
