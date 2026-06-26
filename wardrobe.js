@@ -4512,6 +4512,113 @@ function kShowSpec(){
   `;
   modal.style.display='flex';
 }
+// ── Общие функции раскроя кухни (используются в kShowCut и sendKitchenToCalc) ──
+
+// Система "Четверть": до 25% → 0.25, 25-75% → как есть, >75% → 1.0
+function kQuarterSheet(pct){
+  if(pct <= 25) return 0.25;
+  if(pct >= 75) return 1.0;
+  return Math.round(pct) / 100;
+}
+
+// Подсчёт листов по ширине с системой Четверть
+function kCalcSheets(parts, SW, SH, allowRotate){
+  if(!parts.length) return 0;
+  const SAW_EXT = 7, SAW_INT = 12;
+  const RW = SW - SAW_EXT*2;
+  const RH = SH - SAW_EXT*2;
+  const sorted = [...parts].sort((a,b)=>{
+    const hA = allowRotate ? Math.min(a.w,a.h) : a.h;
+    const hB = allowRotate ? Math.min(b.w,b.h) : b.h;
+    return hB - hA;
+  });
+  const sheets = [];
+  function tryPlace(part){
+    const orients = [{w:part.w, h:part.h}];
+    if(allowRotate && part.w !== part.h) orients.push({w:part.h, h:part.w});
+    for(const sh of sheets){
+      for(const o of orients){
+        if(o.w > RW || o.h > RH) continue;
+        for(const row of sh.rows){
+          if(o.h <= row.h && row.x + o.w <= RW){ row.x += o.w + SAW_INT; return; }
+        }
+        const lastRow = sh.rows[sh.rows.length-1];
+        const newY = lastRow.y + lastRow.h + SAW_INT;
+        if(newY + o.h <= RH){ sh.rows.push({x:o.w+SAW_INT, y:newY, h:o.h}); return; }
+      }
+    }
+    const o = orients.find(o=>o.w<=RW&&o.h<=RH) || orients[0];
+    sheets.push({rows:[{x:o.w+SAW_INT, y:0, h:o.h}]});
+  }
+  sorted.forEach(p=>tryPlace(p));
+  // Считаем листы по Четверть
+  let total = 0;
+  sheets.forEach(sh=>{
+    const lastRow = sh.rows[sh.rows.length-1];
+    const widthUsed = lastRow ? lastRow.y + lastRow.h + SAW_EXT : 0;
+    const pct = widthUsed / RH * 100;
+    total += kQuarterSheet(pct);
+  });
+  return Math.round(total * 100) / 100;
+}
+
+// Собирает детали корпуса кухни (ЛДСП)
+function kBuildCorpusParts(depth, floorH){
+  const T = K_BOARD, T_PLAN = 71, upperD = 350;
+  const CORP_H = floorH - K_TOP - 100;
+  const parts = [];
+  KitchenState.lower.forEach((m,mi)=>{
+    const W=m.width, D=depth, H=CORP_H;
+    parts.push({name:'Боковина', w:H-T, h:D}, {name:'Боковина', w:H-T, h:D});
+    parts.push({name:'Планка', w:W, h:T_PLAN}, {name:'Планка', w:W, h:T_PLAN});
+    parts.push({name:'Дно', w:W, h:D});
+    if(m.type==='shelves'){ parts.push({name:'Полка',w:W-T*2,h:D},{name:'Полка',w:W-T*2,h:D}); }
+    if(m.type==='drawers'){ for(let i=0;i<3;i++) parts.push({name:'Дно яш',w:W-T*2,h:D-30}); }
+  });
+  KitchenState.upper.forEach((m,mi)=>{
+    const W=m.width, D=upperD, H=m.height;
+    parts.push({name:'Бок',w:H,h:D},{name:'Бок',w:H,h:D});
+    parts.push({name:'Верх',w:W-T*2,h:D},{name:'Дно',w:W-T*2,h:D},{name:'Дно',w:W-T*2,h:D});
+    if(m.type!=='upperOpen') parts.push({name:'Полка',w:W-T*2,h:D});
+  });
+  KitchenState.penal.forEach((m,mi)=>{
+    const W=m.width, D=depth, H=m.height;
+    parts.push({name:'Бок',w:H,h:D},{name:'Бок',w:H,h:D});
+    parts.push({name:'Верх',w:W-T*2,h:D},{name:'Дно',w:W-T*2,h:D},{name:'Дно',w:W-T*2,h:D});
+    parts.push({name:'Полка',w:W-T*2,h:D},{name:'Полка',w:W-T*2,h:D});
+  });
+  return parts;
+}
+
+// Собирает детали фасадов ЛДСП
+function kBuildFacadeParts(depth, floorH){
+  const T = K_BOARD, CORP_H = floorH - K_TOP - 100;
+  const parts = [];
+  KitchenState.lower.forEach(m=>{
+    if(m.facade!=='door'||m.type==='sink'||m.type==='appliance') return;
+    parts.push({name:'Фасад', w:m.width-4, h:CORP_H-4});
+  });
+  KitchenState.upper.forEach(m=>{
+    if(m.facade!=='door') return;
+    parts.push({name:'Фасад', w:m.width-4, h:m.height-4});
+  });
+  KitchenState.penal.forEach(m=>{
+    if(m.facade!=='door') return;
+    parts.push({name:'Фасад', w:m.width-4, h:m.height-4});
+  });
+  return parts;
+}
+
+// Собирает детали ХДФ задников
+function kBuildHdfParts(depth, floorH){
+  const T = K_BOARD, CORP_H = floorH - K_TOP - 100, upperD = 350;
+  const parts = [];
+  KitchenState.lower.forEach(m=>{ parts.push({name:'Задник',w:m.width-T*2,h:CORP_H}); });
+  KitchenState.upper.forEach(m=>{ parts.push({name:'Задник',w:m.width-T*2,h:m.height-T*2}); });
+  KitchenState.penal.forEach(m=>{ parts.push({name:'Задник',w:m.width-T*2,h:m.height-T*2}); });
+  return parts;
+}
+
 function kShowCut(){
   const modal = document.getElementById('k-cut-modal');
   const el = document.getElementById('k-cut-content');
@@ -5216,79 +5323,33 @@ function kAddFurnRow(catName, qty){
 
 // ── Мост: Кухня → Калькулятор ────────────────────────────────
 function sendKitchenToCalc(){
-  const depth   = parseInt(document.getElementById('k-depth')?.value||600);
+  const depth   = parseInt(document.getElementById('k-depth')?.value||601);
   const floorH  = parseInt(document.getElementById('k-floor-h')?.value||850);
   const upperD  = 350;
   const facadeMat = document.getElementById('k-facade-mat')?.value || 'ldsp';
-  // Формат листа ЛДСП: стандарт 2750×1830 (можно переключить на 2800×2070)
   const kSheetFmt = document.getElementById('k-sheet-fmt')?.value || '2750x1830';
   const [LDSP_W_MM, LDSP_H_MM] = kSheetFmt==='2800x2070' ? [2800,2070] : [2750,1830];
-  const LDSP_SHEET_M2 = LDSP_W_MM/1000 * LDSP_H_MM/1000;
   const T = K_BOARD;
 
-  // ── ХДФ задние стенки (стандарт MebelOFF: 4мм ХДФ) ────────
-  // Нижние: W × H каждого модуля (без столешницы и ножек)
-  // Верхние: W × H каждого модуля
-  let hdfM2 = 0;
-  KitchenState.lower.forEach(m=>{
-    const W = m.width, H = floorH - K_TOP - 100;
-    hdfM2 += (W * H) / 1e6;
-  });
-  KitchenState.upper.forEach(m=>{
-    hdfM2 += (m.width * m.height) / 1e6;
-  });
-  // Пересчёт в листы ХДФ (формат 2800×2070)
-  const HDF_SHEET_M2 = 2.8 * 2.07;
-  const hdfSheets = Math.round((hdfM2 / HDF_SHEET_M2) * 100) / 100;
+  // ── Расчёт листов через packParts + Четверть ────────────────
+  const corpParts2 = kBuildCorpusParts(depth, floorH);
+  const facParts2  = kBuildFacadeParts(depth, floorH);
+  const hdfParts2  = kBuildHdfParts(depth, floorH);
 
-  // ── Подсчёт ЛДСП корпуса (стандарт MebelOFF 16мм) ──────────
-  // Нижний: 2 боковины + дно (верхней крышки нет — столешница)
-  // + полки если тип shelves
-  let corpM2 = 0;
-  KitchenState.lower.forEach(m=>{
-    const W=m.width, H=floorH-K_TOP-100, D=depth;
-    // 2 боковины (H × D каждая)
-    corpM2 += 2*H*D/1e6;
-    // дно (внутри боковин: (W-2T) × D)
-    corpM2 += (W-T*2)*D/1e6;
-    // полки
-    if(m.type==='shelves') corpM2 += (W-T*2)*D*2/1e6; // 2 полки
-    if(m.type==='drawers'){
-      // дна ящиков (3 шт): ширина ящика × (D - задник)
-      const dW=W-T*2-3; // ширина ящика (боковины + зазор)
-      corpM2 += dW*(D-50)/1e6 * 3; // 3 дна ящиков
-      // 2 боковины каждого ящика (3 ящика × 2 бока)
-      const dH=(H-T)/3; // высота ящика
-      corpM2 += 2*(dH*D/1e6)*3; // боковины ящиков (упрощённо)
-    }
-  });
-  KitchenState.upper.forEach(m=>{
-    const W=m.width, H=m.height, D=upperD;
-    // 2 боковины + дно + верх + 1 полка
-    corpM2 += 2*H*D/1e6;
-    corpM2 += (W-T*2)*D/1e6 * 2; // дно + верх
-    corpM2 += (W-T*2)*D/1e6;      // 1 полка
-  });
-  const corpSheets = Math.round((corpM2/LDSP_SHEET_M2)*100)/100;
+  // ЛДСП без поворота (текстура), ХДФ с поворотом
+  const corpSheets = kCalcSheets(corpParts2, LDSP_W_MM, LDSP_H_MM, false);
+  const facSheets  = kCalcSheets(facParts2,  LDSP_W_MM, LDSP_H_MM, false);
+  const hdfSheets  = kCalcSheets(hdfParts2,  2800, 2070, true);
 
-  // ── Подсчёт площади фасадов (м²) ────────────────────────────
+  // Площадь фасада (для МДФ)
+  const CORP_H2 = floorH - K_TOP - 100;
   let facM2 = 0;
   KitchenState.lower.forEach(m=>{
-    if(m.facade!=='door') return;
-    const W=m.width/1000;
-    const H=(floorH-K_TOP-100)/1000;
-    if(m.type==='drawers'){
-      // 3 ящика-фасада
-      facM2 += W * (H/3) * 3;
-    } else {
-      facM2 += W * H;
-    }
+    if(m.facade!=='door'||m.type==='sink'||m.type==='appliance') return;
+    facM2 += (m.width/1000) * (CORP_H2/1000);
   });
-  KitchenState.upper.forEach(m=>{
-    if(m.facade!=='door') return;
-    facM2 += (m.width/1000) * (m.height/1000);
-  });
-  const facSheets = Math.round((facM2/LDSP_SHEET_M2)*100)/100;
+  KitchenState.upper.forEach(m=>{ if(m.facade==='door') facM2 += (m.width/1000)*(m.height/1000); });
+  KitchenState.penal.forEach(m=>{ if(m.facade==='door') facM2 += (m.width/1000)*(m.height/1000); });
 
   // ── Кромка ───────────────────────────────────────────────────
   let edgePm = 0;
