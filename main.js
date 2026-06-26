@@ -1353,16 +1353,25 @@ function sendConfToCalc() {
       fd.appendChild(row1); fd.appendChild(vidDiv); fd.appendChild(row2);
       fc.appendChild(fd);
 
-      // uC строит подселект вида/бренда (catSel уже имеет selected=catName)
+      // uC строит подселект вида/бренда
       uC('furn', fi);
-      // Выбираем нужный vid и brand
-      var vSel = $('furnv'+fi);
-      var bSel = $('furnf'+fi);
-      if (vSel) vSel.value = vidName;
-      if (bSel && sl.brand && sl.brand !== '—') bSel.value = sl.brand;
-      uCP('furn', fi);
-      // Восстанавливаем qty (uCP мог сбросить)
-      $('furnq'+fi).value = sl.count;
+      // Выбираем нужный vid и brand через setTimeout чтобы DOM успел построиться
+      (function(idx, vn, bn, cnt, price){
+        setTimeout(function(){
+          var vSel = $('furnv'+idx);
+          var bSel = $('furnf'+idx);
+          if(vSel) { vSel.value = vn; }
+          if(bSel && bn && bn !== '—') { bSel.value = bn; }
+          uCP('furn', idx);
+          // Восстанавливаем qty и цену после uCP
+          var qEl = $('furnq'+idx);
+          if(qEl) qEl.value = cnt;
+          var ppEl = $('furnpp'+idx);
+          if(ppEl && price) ppEl.textContent = price.toLocaleString('ru')+'₸';
+          ST.furn[idx] = {p: price};
+          recalc();
+        }, 0);
+      })(fi, vidName, sl.brand, sl.count, arr[exactIdx].p);
 
       var cb = $('cb-furn');
       if (cb && !cb.classList.contains('op')) tog('furn');
