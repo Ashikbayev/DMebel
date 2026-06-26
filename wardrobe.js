@@ -1157,7 +1157,7 @@ function renderPanel(){
           (sections.length>1?`<button class="delbtn" onclick="event.stopPropagation();removeSection(${s.id})"><i class="ti ti-trash"></i></button>`:'') +
         `</span>` +
       `</div>` +
-      `<div class="sec-body" style="display:${isOpen?'':'none'};padding:10px">`;
+      `<div class="sec-body" style="display:${isOpen?'':'none'};padding:10px">` +
 
       // ── Габариты (всегда открыты) ──
       `<div class="g3" style="margin-bottom:6px">` +
