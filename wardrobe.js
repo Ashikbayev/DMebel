@@ -3244,8 +3244,11 @@ function kProjSnapshot(){
     },
     lower:     JSON.parse(JSON.stringify(KitchenState.lower)),
     upper:     JSON.parse(JSON.stringify(KitchenState.upper)),
+    penal:     JSON.parse(JSON.stringify(KitchenState.penal)),
     lId:       KitchenState.lId,
     uId:       KitchenState.uId,
+    pId:       KitchenState.pId,
+    globalUpperH: KitchenState.globalUpperH,
     facadeMat: document.getElementById('k-facade-mat')?.value || 'ldsp',
     topType:   document.getElementById('k-top-type')?.value   || 'none',
     floorH:    document.getElementById('k-floor-h')?.value    || '850',
@@ -3262,8 +3265,11 @@ function kProjSnapshot(){
 function kProjRestore(snap){
   KitchenState.lower = snap.lower || [];
   KitchenState.upper = snap.upper || [];
+  KitchenState.penal = snap.penal || [];
   KitchenState.lId   = snap.lId   || 0;
   KitchenState.uId   = snap.uId   || 0;
+  KitchenState.pId   = snap.pId   || 0;
+  KitchenState.globalUpperH = snap.globalUpperH || 750;
   const fm = document.getElementById('k-facade-mat'); if(fm) fm.value = snap.facadeMat||'ldsp';
   const fh = document.getElementById('k-floor-h');   if(fh) fh.value = snap.floorH||'850';
   const dp = document.getElementById('k-depth');      if(dp) dp.value = snap.depth||'501';
@@ -3361,8 +3367,11 @@ function kProjNew(){
   kProjUnsaved = false;
   KitchenState.lower = [];
   KitchenState.upper = [];
+  KitchenState.penal = [];
   KitchenState.lId = 0;
   KitchenState.uId = 0;
+  KitchenState.pId = 0;
+  KitchenState.globalUpperH = 750;
   kAccItems = [];
   kAccId = 0;
   const today = new Date().toISOString().split('T')[0];
@@ -3449,19 +3458,39 @@ window.kProjMetaChanged=kProjMetaChanged;
 // ═══════════════════════════════════════════════════════════════
 const KitchenState = {
   lower: [],   // [{id, width, type, facade}]
-  upper: [],   // [{id, width, height, facade}]
+  upper: [],   // [{id, width, height, type, facade}]
+  penal: [],   // [{id, width, height, facade}]
   lId: 0,
-  uId: 0
+  uId: 0,
+  pId: 0,
+  globalUpperH: 750,  // глобальная высота верхних
 };
-// type: 'shelves'|'drawers'|'sink'|'appliance'
+// type: 'shelves'|'drawers'|'sink'|'appliance'|'corner'
 // facade: 'door'|'none'
 
 function kMkLower(w=600){
   return {id: KitchenState.lId++, width:w, type:'shelves', facade:'door'};
 }
 function kMkUpper(w=600){
-  return {id: KitchenState.uId++, width:w, height:720, facade:'door'};
+  return {id: KitchenState.uId++, width:w, height:KitchenState.globalUpperH, type:'upper1', facade:'door'};
 }
+function kMkPenal(w=600){
+  return {id: KitchenState.pId++, width:w, height:2140, facade:'door'};
+}
+
+// Глобальная высота верхних
+function kSetUpperHeight(h){
+  KitchenState.globalUpperH = h;
+  // Обновляем все верхние у которых высота была "стандартной"
+  KitchenState.upper.forEach(m=>{ m.height = h; });
+  // Обновляем кнопки
+  var b750 = document.getElementById('kuh-750');
+  var b900 = document.getElementById('kuh-900');
+  if(b750){ b750.style.background=h===750?'#7a5c2e':'#fff'; b750.style.color=h===750?'#fff':'#666'; b750.style.borderColor=h===750?'#7a5c2e':'#ddd'; }
+  if(b900){ b900.style.background=h===900?'#7a5c2e':'#fff'; b900.style.color=h===900?'#fff':'#666'; b900.style.borderColor=h===900?'#7a5c2e':'#ddd'; }
+  kRenderPanel(); kRender(); kProjMarkUnsaved();
+}
+window.kSetUpperHeight = kSetUpperHeight;
 
 // ── Переключатель вкладок ─────────────────────────────────────
 function kAccToggle(id){
@@ -3509,8 +3538,15 @@ function kAddUpper(){
   KitchenState.upper.push(kMkUpper());
   kRenderPanel(); kRender(); kProjMarkUnsaved();
 }
+function kAddPenal(){
+  KitchenState.penal.push(kMkPenal());
+  kRenderPanel(); kRender(); kProjMarkUnsaved();
+}
+window.kAddPenal = kAddPenal;
 function kRemoveLower(id){ KitchenState.lower=KitchenState.lower.filter(m=>m.id!==id); kRenderPanel(); kRender(); kUpdateTopSelect(); kProjMarkUnsaved(); }
 function kRemoveUpper(id){ KitchenState.upper=KitchenState.upper.filter(m=>m.id!==id); kRenderPanel(); kRender(); kProjMarkUnsaved(); }
+function kRemovePenal(id){ KitchenState.penal=KitchenState.penal.filter(m=>m.id!==id); kRenderPanel(); kRender(); kProjMarkUnsaved(); }
+window.kRemovePenal = kRemovePenal;
 function kUpdateLower(id, field, val){
   const m=KitchenState.lower.find(x=>x.id===id); if(!m)return;
   if(field==='width'){
@@ -3532,6 +3568,14 @@ function kUpdateUpper(id, field, val){
   else if(field==='facade') m.facade=val;
   kRender(); kProjMarkUnsaved();
 }
+function kUpdatePenal(id, field, val){
+  const m=KitchenState.penal.find(x=>x.id===id); if(!m)return;
+  if(field==='width') m.width=Math.max(200,parseInt(val)||600);
+  else if(field==='height') m.height=Math.max(300,parseInt(val)||2140);
+  else if(field==='facade') m.facade=val;
+  kRender(); kProjMarkUnsaved();
+}
+window.kUpdatePenal = kUpdatePenal;
 
 // ── Рендер панели ─────────────────────────────────────────────
 const TYPE_LABELS = {shelves:'Полки', drawers:'Ящики', sink:'Мойка', appliance:'Техника', corner:'Угловой', upper1:'1 дверь', upper2:'2 двери', upperOpen:'Открытый', penal:'Пенал'};
@@ -3564,7 +3608,7 @@ const K_UPPER_TYPES = [
   {type:'upperOpen', label:'Открытый', sizes:[300,400,450,500,600]},
 ];
 const K_PENAL_TYPES = [
-  {type:'penal',     label:'Пенал',    sizes:[300,400,450,600]},
+  {type:'penal',     label:'Пенал 2140мм', sizes:[600]},
 ];
 
 // ── Текущий таб верхних (верхние/пеналы) ─────────────────────
@@ -3587,6 +3631,8 @@ function kRenderCatalog(){
   _kRenderCatalogFor('k-lower-catalog', K_LOWER_TYPES, 'lower', '#1a5252');
   _kRenderCatalogFor('k-upper-catalog', K_UPPER_TYPES, 'upper', '#7a5c2e');
   _kRenderCatalogFor('k-penal-catalog', K_PENAL_TYPES, 'penal', '#534AB7');
+  // Инициализируем кнопки высоты верхних
+  setTimeout(()=>kSetUpperHeight(KitchenState.globalUpperH||750), 0);
 }
 function _kRenderCatalogFor(containerId, types, category, color){
   const el = document.getElementById(containerId); if(!el) return;
@@ -3610,13 +3656,13 @@ window.kRenderCatalog = kRenderCatalog;
 // ── Добавить модуль по типу и размеру ────────────────────────
 function kAddByType(category, type, width){
   width = Math.max(200, parseInt(width)||600);
-  if(category === 'lower' || category === 'penal' && false){
+  if(category === 'lower'){
     const noFacade = type==='sink'||type==='appliance';
     KitchenState.lower.push({id:KitchenState.lId++, width, type, facade:noFacade?'none':'door'});
   } else if(category === 'upper'){
-    KitchenState.upper.push({id:KitchenState.uId++, width, height:720, type, facade:type==='upperOpen'?'none':'door'});
+    KitchenState.upper.push({id:KitchenState.uId++, width, height:KitchenState.globalUpperH, type, facade:type==='upperOpen'?'none':'door'});
   } else if(category === 'penal'){
-    KitchenState.upper.push({id:KitchenState.uId++, width, height:2200, type:'penal', facade:'door'});
+    KitchenState.penal.push({id:KitchenState.pId++, width, height:2140, type:'penal', facade:'door'});
   }
   kRenderPanel(); kRender(); kUpdateTopSelect(); kProjMarkUnsaved();
 }
@@ -3689,13 +3735,46 @@ function kRenderPanel(){
         </div>
       </div>`).join(''); }
   }
+  // Пеналы
+  const pl = document.getElementById('k-penal-list');
+  if(pl){
+    if(!KitchenState.penal.length){ pl.innerHTML='<p class="hint">Нет пеналов</p>'; }
+    else { pl.innerHTML = KitchenState.penal.map(m=>`
+      <div class="km-card" id="km-p-${m.id}">
+        <div class="km-hdr" onclick="kToggle('kmp${m.id}')">
+          <span class="km-title">${K_MOD_SVG.penal?'':''}<i class="ti ti-layout-sidebar"></i> ${m.width}мм × ${m.height}мм — Пенал</span>
+          <button class="km-del" onclick="event.stopPropagation();kRemovePenal(${m.id})">✕</button>
+        </div>
+        <div class="km-body" id="kmp${m.id}">
+          <div class="km-row">
+            <span class="km-lbl">Ширина (мм)</span>
+            <input class="km-inp" type="number" value="${m.width}" min="200" max="800" onchange="kUpdatePenal(${m.id},'width',this.value)">
+          </div>
+          <div class="km-row">
+            <span class="km-lbl">Высота (мм)</span>
+            <input class="km-inp" type="number" value="${m.height}" min="1800" max="2400" onchange="kUpdatePenal(${m.id},'height',this.value)">
+          </div>
+          <div class="km-row">
+            <span class="km-lbl">Фасад</span>
+            <select class="km-sel" onchange="kUpdatePenal(${m.id},'facade',this.value)">
+              <option value="door" ${m.facade==='door'?'selected':''}>С дверью</option>
+              <option value="none" ${m.facade==='none'?'selected':''}>Без двери</option>
+            </select>
+          </div>
+        </div>
+      </div>`).join(''); }
+  }
+
   // ── Счётчики в заголовках аккордеонов ────────────────────────
   const lCnt=document.getElementById('kacc-lower-cnt');
   const uCnt=document.getElementById('kacc-upper-cnt');
+  const pCnt=document.getElementById('kacc-penal-cnt');
   const lLen=KitchenState.lower.reduce((s,m)=>s+m.width,0);
   const uLen=KitchenState.upper.reduce((s,m)=>s+m.width,0);
+  const pLen=KitchenState.penal.reduce((s,m)=>s+m.width,0);
   if(lCnt) lCnt.textContent=KitchenState.lower.length?`${KitchenState.lower.length} мод · ${lLen}мм`:'';
   if(uCnt) uCnt.textContent=KitchenState.upper.length?`${KitchenState.upper.length} мод · ${uLen}мм`:'';
+  if(pCnt) pCnt.textContent=KitchenState.penal.length?`${KitchenState.penal.length} мод · ${pLen}мм`:'';
 }
 
 function kToggle(id){
@@ -4020,7 +4099,7 @@ function kRender(){
   }
 
   // ── Верхние шкафы (прижаты к задней стене) ───────────────
-  const uppers = KitchenState.upper;
+  const uppers = [...KitchenState.upper, ...KitchenState.penal.map(m=>({...m, _isPenal:true}))];
   const totalUpperW = uppers.reduce((s,m)=>s+m.width,0);
   const startXU = -totalUpperW/2;
   const UD = 350; // глубина верхних
@@ -4091,7 +4170,8 @@ function kRender(){
   if(stats){
     stats.innerHTML =
       `Н: ${lowers.length} мод · ${totalLowerW}мм<br>` +
-      `В: ${uppers.length} мод · ${totalUpperW}мм<br>` +
+      `В: ${KitchenState.upper.length} мод · ${KitchenState.upper.reduce((s,m)=>s+m.width,0)}мм<br>` +
+      `П: ${KitchenState.penal.length} мод · ${KitchenState.penal.reduce((s,m)=>s+m.width,0)}мм<br>` +
       `Выс: ${floorH}мм · Гл: ${depth}мм`;
   }
 

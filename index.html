@@ -550,13 +550,32 @@
           </div>
           <div class="kacc-body" id="kacc-upper">
             <div style="padding:8px 10px">
-              <div id="k-upper-catalog" class="k-catalog-grid"></div>
-              <div id="k-penal-catalog" class="k-catalog-grid" style="display:none"></div>
-              <div style="display:flex;gap:4px;margin-bottom:6px">
-                <button class="k-cat-tab active" id="kct-upper" onclick="kCatTab('upper')" style="flex:1;padding:5px;font-size:11px;border:1px solid #7a5c2e;border-radius:6px;background:#f8f4ec;color:#7a5c2e;cursor:pointer;font-weight:600">Верхние</button>
-                <button class="k-cat-tab" id="kct-penal" onclick="kCatTab('penal')" style="flex:1;padding:5px;font-size:11px;border:1px solid #ddd;border-radius:6px;background:#f8f8f8;color:#666;cursor:pointer;font-weight:600">Пеналы</button>
+              <!-- Глобальная высота верхних -->
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;background:#fdf8f0;border-radius:6px;padding:6px 8px">
+                <span style="font-size:11px;color:#7a5c2e;flex-shrink:0">Высота всех:</span>
+                <button id="kuh-750" onclick="kSetUpperHeight(750)" style="flex:1;padding:4px;font-size:11px;border:1.5px solid #7a5c2e;border-radius:5px;background:#7a5c2e;color:#fff;cursor:pointer;font-weight:600">750мм</button>
+                <button id="kuh-900" onclick="kSetUpperHeight(900)" style="flex:1;padding:4px;font-size:11px;border:1.5px solid #ddd;border-radius:5px;background:#fff;color:#666;cursor:pointer;font-weight:600">900мм</button>
               </div>
+              <!-- Каталог верхних -->
+              <div id="k-upper-catalog" class="k-catalog-grid"></div>
               <div id="k-upper-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Аккордеон: Пеналы -->
+        <div class="kacc">
+          <div class="kacc-hdr" onclick="kAccToggle('kacc-penal')">
+            <span><i class="ti ti-layout-sidebar"></i> Пеналы</span>
+            <span style="display:flex;align-items:center;gap:6px">
+              <span id="kacc-penal-cnt" style="font-size:10px;color:#534AB7;font-weight:600"></span>
+              <span class="kacc-arr">▾</span>
+            </span>
+          </div>
+          <div class="kacc-body" id="kacc-penal">
+            <div style="padding:8px 10px">
+              <div id="k-penal-catalog" class="k-catalog-grid"></div>
+              <div id="k-penal-list"></div>
             </div>
           </div>
         </div>
