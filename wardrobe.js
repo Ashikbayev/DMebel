@@ -1126,9 +1126,38 @@ function renderPanel(){
     const drBadge  = s.drawerBlocks.length ? `${s.drawerBlocks.reduce((a,b)=>a+b.count,0)} шт` : '';
     const facBadge = s.facade.type==='none' ? 'нет' : s.facade.type==='full' ? 'сплошной' : s.facade.type==='doors2' ? '2 дв.' : '3 дв.';
 
+    // Открытые/закрытые секции — храним в Map
+    const secOpen = window._secOpen || (window._secOpen = {});
+    if(secOpen[s.id] === undefined) secOpen[s.id] = true; // по умолчанию открыта
+
+    const isOpen = secOpen[s.id];
+
     div.innerHTML=
-      `<div class="sec-hdr"><span>Секция ${idx+1}</span>${delBtn}</div>` +
-      `<div class="sec-body">` +
+      `<div class="sec-hdr" onclick="(function(el,sid){` +
+        `window._secOpen[sid]=!window._secOpen[sid];` +
+        `const body=el.parentNode.querySelector('.sec-body');` +
+        `const antr=el.parentNode.querySelector('.antr-card');` +
+        `const doorDiv=el.parentNode.querySelector('.facade-door-wrap');` +
+        `const arr=el.querySelector('.sec-arr');` +
+        `const open=window._secOpen[sid];` +
+        `if(body) body.style.display=open?'':'none';` +
+        `if(antr) antr.style.display=open?'':'none';` +
+        `if(doorDiv) doorDiv.style.display=open?'':'none';` +
+        `if(arr) arr.textContent=open?'▾':'▸';` +
+      `})(this,${s.id})">` +
+        `<span style="display:flex;align-items:center;gap:6px">` +
+          `<span class="sec-arr" style="font-size:10px;color:#aaa;transition:transform .15s">${isOpen?'▾':'▸'}</span>` +
+          `<span>Секция ${idx+1}</span>` +
+          (s.width?`<span style="font-size:10px;color:#888;font-weight:400">${s.width}×${s.height}мм</span>`:'') +
+        `</span>` +
+        `<span style="display:flex;align-items:center;gap:6px">` +
+          (shBadge?`<span style="font-size:10px;color:#1a5252;background:#e8f5f0;padding:1px 6px;border-radius:4px">▤ ${shBadge}</span>`:'') +
+          (drBadge?`<span style="font-size:10px;color:#1a3a8a;background:#e8eaf6;padding:1px 6px;border-radius:4px">▦ ${drBadge}</span>`:'') +
+          (rodBadge?`<span style="font-size:10px;color:#7a5c2e;background:#f8f4ec;padding:1px 6px;border-radius:4px">⊢</span>`:'') +
+          (sections.length>1?`<button class="delbtn" onclick="event.stopPropagation();removeSection(${s.id})"><i class="ti ti-trash"></i></button>`:'') +
+        `</span>` +
+      `</div>` +
+      `<div class="sec-body" style="display:${isOpen?'':'none'};padding:10px">`;
 
       // ── Габариты (всегда открыты) ──
       `<div class="g3" style="margin-bottom:6px">` +
@@ -1238,6 +1267,7 @@ function renderPanel(){
     const antrDiv=document.createElement('div');
     antrDiv.className='antr-card';
     antrDiv.style.marginTop='8px';
+    antrDiv.style.display = isOpen ? '' : 'none';
     antrDiv.innerHTML=
       `<div class="antr-card-title"><i class="ti ti-layout-navbar"></i> Антресоль секции</div>` +
       `<label class="chkrow" style="margin-bottom:6px">` +
@@ -1261,7 +1291,8 @@ function renderPanel(){
         </div>`;
       }).join('');
       const doorDiv=document.createElement('div');
-      doorDiv.style.cssText='margin-top:6px;padding:8px;background:#fafafa;border:1px solid #eee;border-radius:6px';
+      doorDiv.className='facade-door-wrap';
+      doorDiv.style.cssText='margin-top:6px;padding:8px;background:#fafafa;border:1px solid #eee;border-radius:6px;display:'+(isOpen?'':'none');
       doorDiv.innerHTML=`<div class="stitle" style="margin-top:0">Материал по дверям</div>${doorRows}`;
       div.appendChild(doorDiv);
     }
