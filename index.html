@@ -462,12 +462,12 @@
       </div>
 
       <!-- ── ТАБ: КОНСТРУКТОР ───────────────────────────────── -->
-      <div id="k-pane-constructor" style="flex:1;overflow-y:auto">
+      <div id="k-pane-constructor" style="flex:1;overflow-y:auto;display:flex;flex-direction:column">
 
-        <!-- Аккордеон: Размеры -->
+        <!-- Параметры кухни (глобальные) -->
         <div class="kacc">
           <div class="kacc-hdr" onclick="kAccToggle('kacc-sizes')">
-            <span><i class="ti ti-ruler-2"></i> Размеры</span><span class="kacc-arr">▾</span>
+            <span><i class="ti ti-settings"></i> Параметры кухни</span><span class="kacc-arr">▾</span>
           </div>
           <div class="kacc-body open" id="kacc-sizes">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 10px">
@@ -494,7 +494,7 @@
           </div>
         </div>
 
-        <!-- Аккордеон: Материалы -->
+        <!-- Материалы -->
         <div class="kacc">
           <div class="kacc-hdr" onclick="kAccToggle('kacc-mats')">
             <span><i class="ti ti-palette"></i> Материалы</span><span class="kacc-arr">▾</span>
@@ -522,45 +522,7 @@
           </div>
         </div>
 
-        <!-- Аккордеон: Нижние шкафы -->
-        <div class="kacc">
-          <div class="kacc-hdr" onclick="kAccToggle('kacc-lower')">
-            <span><i class="ti ti-rectangle"></i> Нижние шкафы</span>
-            <span style="display:flex;align-items:center;gap:6px">
-              <span id="kacc-lower-cnt" style="font-size:10px;color:#1a5252;font-weight:600"></span>
-              <span class="kacc-arr">▾</span>
-            </span>
-          </div>
-          <div class="kacc-body open" id="kacc-lower">
-            <div style="padding:8px 10px">
-              <div id="k-lower-list"></div>
-              <button id="kadd-lower" onclick="kAddLower()" style="width:100%;padding:7px;border-radius:8px;font-size:12px;cursor:pointer;border:1px dashed #1a5252;background:#f0f8f8;color:#1a5252;margin-top:6px;display:flex;align-items:center;justify-content:center;gap:5px">
-                <i class="ti ti-plus"></i> Добавить нижний модуль
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Аккордеон: Верхние шкафы -->
-        <div class="kacc">
-          <div class="kacc-hdr" onclick="kAccToggle('kacc-upper')">
-            <span><i class="ti ti-rectangle" style="opacity:.6"></i> Верхние шкафы</span>
-            <span style="display:flex;align-items:center;gap:6px">
-              <span id="kacc-upper-cnt" style="font-size:10px;color:#7a5c2e;font-weight:600"></span>
-              <span class="kacc-arr">▾</span>
-            </span>
-          </div>
-          <div class="kacc-body" id="kacc-upper">
-            <div style="padding:8px 10px">
-              <div id="k-upper-list"></div>
-              <button id="kadd-upper" onclick="kAddUpper()" style="width:100%;padding:7px;border-radius:8px;font-size:12px;cursor:pointer;border:1px dashed #7a5c2e;background:#f8f4ec;color:#7a5c2e;margin-top:6px;display:flex;align-items:center;justify-content:center;gap:5px">
-                <i class="ti ti-plus"></i> Добавить верхний модуль
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Аккордеон: Столешница -->
+        <!-- Столешница -->
         <div class="kacc">
           <div class="kacc-hdr" onclick="kAccToggle('kacc-top')">
             <span><i class="ti ti-layers-subtract"></i> Столешница</span><span class="kacc-arr">▾</span>
@@ -574,7 +536,7 @@
                 </select>
               </div>
               <div id="k-top-len-lbl" style="font-size:10px;color:#1a5252;padding-left:64px;margin-top:-4px"></div>
-              <div style="display:flex;align-items:center;gap:8px" id="k-top-len-row" style="display:none">
+              <div style="display:flex;align-items:center;gap:8px" id="k-top-len-row">
                 <span style="font-size:11px;color:#555;width:56px;flex-shrink:0">Длина, пм</span>
                 <input class="kglobal-inp" style="width:80px;box-sizing:border-box" type="number" id="k-top-len" min="0.1" step="0.1" onchange="kProjMarkUnsaved()">
                 <span style="font-size:11px;color:#888">пм</span>
@@ -583,7 +545,46 @@
           </div>
         </div>
 
-        <!-- Аккордеон: Аксессуары (без наценки) -->
+        <!-- ── МОДУЛИ ────────────────────────────────────────── -->
+        <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+
+          <!-- Табы категорий модулей -->
+          <div id="k-mod-tabs" style="display:flex;border-bottom:2px solid #e0e0e0;flex-shrink:0;background:#fafafa">
+            <button class="k-mod-tab active" id="kmt-lower" onclick="kModTab('lower')">
+              <i class="ti ti-rectangle"></i> Нижние
+            </button>
+            <button class="k-mod-tab" id="kmt-upper" onclick="kModTab('upper')">
+              <i class="ti ti-rectangle" style="opacity:.6"></i> Верхние
+            </button>
+            <button class="k-mod-tab" id="kmt-penal" onclick="kModTab('penal')">
+              <i class="ti ti-layout-sidebar"></i> Пеналы
+            </button>
+          </div>
+
+          <!-- Каталог нижних модулей -->
+          <div id="k-cat-lower" class="k-mod-catalog">
+            <div class="k-mod-grid" id="k-lower-catalog"></div>
+            <div class="k-mod-added-title">Добавлено в проект</div>
+            <div id="k-lower-list"></div>
+          </div>
+
+          <!-- Каталог верхних модулей -->
+          <div id="k-cat-upper" class="k-mod-catalog" style="display:none">
+            <div class="k-mod-grid" id="k-upper-catalog"></div>
+            <div class="k-mod-added-title">Добавлено в проект</div>
+            <div id="k-upper-list"></div>
+          </div>
+
+          <!-- Каталог пеналов -->
+          <div id="k-cat-penal" class="k-mod-catalog" style="display:none">
+            <div class="k-mod-grid" id="k-penal-catalog"></div>
+            <div class="k-mod-added-title">Добавлено в проект</div>
+            <div id="k-penal-list"></div>
+          </div>
+
+        </div>
+
+        <!-- Аксессуары -->
         <div class="kacc">
           <div class="kacc-hdr" onclick="kAccToggle('kacc-acc');kRenderAccItems()">
             <span><i class="ti ti-tool"></i> Аксессуары</span>
@@ -617,6 +618,13 @@
 
       <!-- Футер -->
       <div class="kpanel-footer">
+        <button class="kfoot-btn" onclick="kShowPreview()"><i class="ti ti-cube"></i><span>3D</span></button>
+        <button class="kfoot-btn" onclick="kShowSpec()"><i class="ti ti-file-invoice"></i><span>Смета</span></button>
+        <button class="kfoot-btn" onclick="kShowCut()"><i class="ti ti-layout-grid"></i><span>Раскрой</span></button>
+        <button class="kfoot-btn" style="background:#1a3a6a;color:#fff;border-color:#1a3a6a" onclick="kShowBlueprint()"><i class="ti ti-ruler-2"></i><span>Чертёж</span></button>
+        <button class="kfoot-btn" style="background:#1a5252;color:#fff;border-color:#1a5252;flex:2" onclick="sendKitchenToCalc()"><i class="ti ti-arrow-right"></i><span>В расчёт →</span></button>
+      </div>
+
         <button class="kfoot-btn" onclick="kShowPreview()"><i class="ti ti-cube"></i><span>3D</span></button>
         <button class="kfoot-btn" onclick="kShowSpec()"><i class="ti ti-file-invoice"></i><span>Смета</span></button>
         <button class="kfoot-btn" onclick="kShowCut()"><i class="ti ti-layout-grid"></i><span>Раскрой</span></button>
