@@ -559,3 +559,46 @@ select{width:100%;font-size:12px;padding:5px 6px;border:1px solid #ddd;border-ra
 #k-proj-save-btn{padding:3px 10px;background:#1a5252;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:4px;white-space:nowrap;height:26px}
 #k-proj-save-btn:hover{background:#0f3838}
 #k-proj-saved-flash{font-size:10px;color:#27ae60;opacity:0;transition:opacity .3s;white-space:nowrap;flex-shrink:0}
+
+/* ── KITCHEN PANEL TABS ───────────────────────────────────── */
+#k-panel-tabs{display:flex;border-bottom:1px solid #e0e0e0;flex-shrink:0;align-items:stretch}
+#k-panel-tabs .ptab{flex:1;padding:9px 4px;font-size:11px;font-weight:600;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent;transition:.15s}
+#k-panel-tabs .ptab.active{color:#1a5252;border-bottom-color:#1a5252}
+#k-panel-tabs .ptab:hover:not(.active){color:#444}
+#k-client-mode-btn{flex-shrink:0;padding:0 10px;background:none;border:none;border-left:1px solid #e0e0e0;color:#aaa;cursor:pointer;font-size:16px;display:flex;align-items:center;transition:.15s}
+#k-client-mode-btn:hover{color:#1a5252;background:#f0f8f8}
+#k-client-mode-btn.active{color:#1a5252;background:#e8f5f0}
+#pg-kitchen #kpanel{display:flex;flex-direction:column}
+
+/* ── КНОПКА РЕЖИМ КЛИЕНТА (шкаф) ─────────────────────────── */
+#client-mode-btn{flex-shrink:0;padding:0 10px;background:none;border:none;border-left:1px solid #e0e0e0;color:#aaa;cursor:pointer;font-size:16px;display:flex;align-items:center;transition:.15s}
+#client-mode-btn:hover{color:#1a5252;background:#f0f8f8}
+#client-mode-btn.active{color:#1a5252;background:#e8f5f0}
+#pg-conf #panel-tabs{display:flex;border-bottom:1px solid #e0e0e0;flex-shrink:0;align-items:stretch}
+
+/* ── УНИФИКАЦИЯ СТИЛЕЙ КУХНИ И ШКАФА ────────────────────────── */
+/* Meta strip кухни — те же стили что у шкафа */
+#k-proj-meta-strip .proj-meta-row{display:flex;align-items:center;gap:6px}
+#k-proj-meta-strip .proj-meta-lbl{font-size:10px;color:#999;white-space:nowrap;flex-shrink:0;min-width:46px}
+
+/* Футер кухни — выравниваем под шкаф (горизонтальные кнопки) */
+.kfoot-btn{flex:1;min-width:54px;padding:8px 4px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #ddd;background:#f4f4f4;color:#333;display:flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap}
+.kfoot-btn span{display:inline}
+.kfoot-btn i{font-size:13px}
+
+/* kpanel — единый скролл */
+#pg-kitchen #kpanel{display:flex;flex-direction:column;height:100%;overflow:hidden}
+#k-pane-constructor{flex:1;overflow-y:auto}
+#k-pane-prices{flex:1;overflow-y:auto}
+
+/* Аккордеон кухни — чуть плотнее как у шкафа */
+.kacc-hdr{padding:8px 12px}
+
+/* Размеры инпутов в аккордеоне */
+.kglobal-inp{font-size:12px;border:1px solid #e0e0e0;border-radius:6px;padding:4px 8px;background:#fff}
+
+/* Мобильная адаптация футера кухни */
+@media(max-width:600px){
+  .kfoot-btn{padding:10px 4px;font-size:11px}
+  #k-panel-tabs .ptab{padding:11px 4px;font-size:12px}
+}
