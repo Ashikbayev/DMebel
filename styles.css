@@ -609,3 +609,9 @@ select{width:100%;font-size:12px;padding:5px 6px;border:1px solid #ddd;border-ra
   .kfoot-btn{padding:10px 4px;font-size:11px}
   #k-panel-tabs .ptab{padding:11px 4px;font-size:12px}
 }
+
+/* ── КАТАЛОГ МОДУЛЕЙ КУХНИ ───────────────────────────────────── */
+.k-catalog-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px}
+.k-cat-card:hover{border-color:#1a5252!important;background:#f0f8f8!important}
+.k-cat-card svg{width:44px;height:36px}
+.k-sz-btn:hover{background:#1a5252!important;color:#fff!important;border-color:#1a5252!important}

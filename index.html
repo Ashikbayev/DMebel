@@ -533,10 +533,8 @@
           </div>
           <div class="kacc-body open" id="kacc-lower">
             <div style="padding:8px 10px">
+              <div id="k-lower-catalog" class="k-catalog-grid"></div>
               <div id="k-lower-list"></div>
-              <button id="kadd-lower" onclick="kAddLower()" style="width:100%;padding:7px;border-radius:8px;font-size:12px;cursor:pointer;border:1px dashed #1a5252;background:#f0f8f8;color:#1a5252;margin-top:6px;display:flex;align-items:center;justify-content:center;gap:5px">
-                <i class="ti ti-plus"></i> Добавить нижний модуль
-              </button>
             </div>
           </div>
         </div>
@@ -552,10 +550,13 @@
           </div>
           <div class="kacc-body" id="kacc-upper">
             <div style="padding:8px 10px">
+              <div id="k-upper-catalog" class="k-catalog-grid"></div>
+              <div id="k-penal-catalog" class="k-catalog-grid" style="display:none"></div>
+              <div style="display:flex;gap:4px;margin-bottom:6px">
+                <button class="k-cat-tab active" id="kct-upper" onclick="kCatTab('upper')" style="flex:1;padding:5px;font-size:11px;border:1px solid #7a5c2e;border-radius:6px;background:#f8f4ec;color:#7a5c2e;cursor:pointer;font-weight:600">Верхние</button>
+                <button class="k-cat-tab" id="kct-penal" onclick="kCatTab('penal')" style="flex:1;padding:5px;font-size:11px;border:1px solid #ddd;border-radius:6px;background:#f8f8f8;color:#666;cursor:pointer;font-weight:600">Пеналы</button>
+              </div>
               <div id="k-upper-list"></div>
-              <button id="kadd-upper" onclick="kAddUpper()" style="width:100%;padding:7px;border-radius:8px;font-size:12px;cursor:pointer;border:1px dashed #7a5c2e;background:#f8f4ec;color:#7a5c2e;margin-top:6px;display:flex;align-items:center;justify-content:center;gap:5px">
-                <i class="ti ti-plus"></i> Добавить верхний модуль
-              </button>
             </div>
           </div>
         </div>

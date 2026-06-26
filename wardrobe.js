@@ -3534,8 +3534,93 @@ function kUpdateUpper(id, field, val){
 }
 
 // ── Рендер панели ─────────────────────────────────────────────
-const TYPE_LABELS = {shelves:'Полки', drawers:'Ящики', sink:'Мойка', appliance:'Техника'};
-const TYPE_ICONS  = {shelves:'📦', drawers:'🗄️', sink:'🚿', appliance:'🔌'};
+const TYPE_LABELS = {shelves:'Полки', drawers:'Ящики', sink:'Мойка', appliance:'Техника', corner:'Угловой', upper1:'1 дверь', upper2:'2 двери', upperOpen:'Открытый', penal:'Пенал'};
+const TYPE_ICONS  = {shelves:'📦', drawers:'🗄️', sink:'🚿', appliance:'🔌', corner:'🔲', upper1:'🪟', upper2:'🪟', upperOpen:'📭', penal:'🗃️'};
+
+// ── SVG иконки модулей ────────────────────────────────────────
+const K_MOD_SVG = {
+  shelves:   '<svg viewBox="0 0 48 36" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="44" height="32" rx="2" stroke="#1a5252" stroke-width="1.5" fill="#f0f8f8"/><line x1="2" y1="18" x2="46" y2="18" stroke="#1a5252" stroke-width="1"/><rect x="22" y="2" width="2" height="32" fill="#1a5252" opacity=".2"/><circle cx="13" cy="10" r="2" fill="#1a5252" opacity=".4"/><circle cx="35" cy="10" r="2" fill="#1a5252" opacity=".4"/><circle cx="13" cy="26" r="2" fill="#1a5252" opacity=".4"/><circle cx="35" cy="26" r="2" fill="#1a5252" opacity=".4"/></svg>',
+  drawers:   '<svg viewBox="0 0 48 36" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="44" height="32" rx="2" stroke="#1a5252" stroke-width="1.5" fill="#f0f8f8"/><rect x="2" y="12" width="44" height="1" fill="#1a5252" opacity=".4"/><rect x="2" y="23" width="44" height="1" fill="#1a5252" opacity=".4"/><rect x="17" y="5" width="14" height="4" rx="2" fill="#1a5252" opacity=".4"/><rect x="17" y="15" width="14" height="4" rx="2" fill="#1a5252" opacity=".4"/><rect x="17" y="26" width="14" height="4" rx="2" fill="#1a5252" opacity=".4"/></svg>',
+  sink:      '<svg viewBox="0 0 48 36" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="44" height="32" rx="2" stroke="#1a5252" stroke-width="1.5" fill="#f0f8f8"/><rect x="8" y="8" width="32" height="20" rx="3" stroke="#1a5252" stroke-width="1.5" fill="#fff"/><circle cx="24" cy="18" r="5" stroke="#1a5252" stroke-width="1" fill="none"/><line x1="24" y1="4" x2="24" y2="8" stroke="#1a5252" stroke-width="1.5"/><circle cx="24" cy="3" r="1.5" fill="#1a5252" opacity=".5"/></svg>',
+  appliance: '<svg viewBox="0 0 48 36" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="44" height="32" rx="2" stroke="#1a5252" stroke-width="1.5" fill="#f0f8f8"/><rect x="6" y="5" width="36" height="14" rx="1" fill="#e0e0e0" stroke="#bbb" stroke-width="1"/><rect x="8" y="7" width="32" height="10" rx="1" fill="#c8c8c8"/><circle cx="14" cy="26" r="3.5" stroke="#888" stroke-width="1" fill="#f0f0f0"/><circle cx="24" cy="26" r="3.5" stroke="#888" stroke-width="1" fill="#f0f0f0"/><circle cx="34" cy="26" r="3.5" stroke="#888" stroke-width="1" fill="#f0f0f0"/></svg>',
+  corner:    '<svg viewBox="0 0 48 36" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 2h22v32H2z" stroke="#1a5252" stroke-width="1.5" fill="#f0f8f8"/><path d="M24 2h22v20H24z" stroke="#1a5252" stroke-width="1.5" fill="#e8f5f0"/><circle cx="24" cy="22" r="8" stroke="#1a5252" stroke-width="1" fill="none" stroke-dasharray="3,2"/><circle cx="13" cy="10" r="2" fill="#1a5252" opacity=".4"/><circle cx="35" cy="10" r="2" fill="#1a5252" opacity=".4"/></svg>',
+  upper1:    '<svg viewBox="0 0 48 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="44" height="28" rx="2" stroke="#7a5c2e" stroke-width="1.5" fill="#f8f4ec"/><circle cx="24" cy="16" r="2" fill="#7a5c2e" opacity=".5"/></svg>',
+  upper2:    '<svg viewBox="0 0 48 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="44" height="28" rx="2" stroke="#7a5c2e" stroke-width="1.5" fill="#f8f4ec"/><line x1="24" y1="2" x2="24" y2="30" stroke="#7a5c2e" stroke-width="1.5"/><circle cx="13" cy="16" r="2" fill="#7a5c2e" opacity=".5"/><circle cx="35" cy="16" r="2" fill="#7a5c2e" opacity=".5"/></svg>',
+  upperOpen: '<svg viewBox="0 0 48 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="44" height="28" rx="2" stroke="#7a5c2e" stroke-width="1.5" fill="#f8f4ec" stroke-dasharray="5,3"/><line x1="2" y1="16" x2="46" y2="16" stroke="#7a5c2e" stroke-width="1" opacity=".4"/></svg>',
+  penal:     '<svg viewBox="0 0 28 44" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="24" height="40" rx="2" stroke="#534AB7" stroke-width="1.5" fill="#f4f3ff"/><line x1="2" y1="22" x2="26" y2="22" stroke="#534AB7" stroke-width="1" opacity=".4"/><circle cx="14" cy="12" r="2" fill="#534AB7" opacity=".5"/><circle cx="14" cy="32" r="2" fill="#534AB7" opacity=".5"/></svg>',
+};
+
+// ── Каталог типов модулей ────────────────────────────────────
+const K_LOWER_TYPES = [
+  {type:'shelves',   label:'Полки',   sizes:[300,400,450,500,600,800]},
+  {type:'drawers',   label:'Ящики',   sizes:[300,400,450,500,600]},
+  {type:'sink',      label:'Мойка',   sizes:[500,600,800]},
+  {type:'appliance', label:'Техника', sizes:[600]},
+  {type:'corner',    label:'Угловой', sizes:[900]},
+];
+const K_UPPER_TYPES = [
+  {type:'upper1',    label:'1 дверь',  sizes:[300,400,450,500,600]},
+  {type:'upper2',    label:'2 двери',  sizes:[600,700,800,900]},
+  {type:'upperOpen', label:'Открытый', sizes:[300,400,450,500,600]},
+];
+const K_PENAL_TYPES = [
+  {type:'penal',     label:'Пенал',    sizes:[300,400,450,600]},
+];
+
+// ── Текущий таб верхних (верхние/пеналы) ─────────────────────
+let kCurCatTab = 'upper';
+function kCatTab(tab){
+  kCurCatTab = tab;
+  const uc = document.getElementById('k-upper-catalog');
+  const pc = document.getElementById('k-penal-catalog');
+  const bt1 = document.getElementById('kct-upper');
+  const bt2 = document.getElementById('kct-penal');
+  if(uc) uc.style.display = tab==='upper' ? '' : 'none';
+  if(pc) pc.style.display = tab==='penal' ? '' : 'none';
+  if(bt1){ bt1.style.background=tab==='upper'?'#f8f4ec':'#f8f8f8'; bt1.style.color=tab==='upper'?'#7a5c2e':'#666'; bt1.style.borderColor=tab==='upper'?'#7a5c2e':'#ddd'; }
+  if(bt2){ bt2.style.background=tab==='penal'?'#f4f3ff':'#f8f8f8'; bt2.style.color=tab==='penal'?'#534AB7':'#666'; bt2.style.borderColor=tab==='penal'?'#534AB7':'#ddd'; }
+}
+window.kCatTab = kCatTab;
+
+// ── Рендер каталога модулей ───────────────────────────────────
+function kRenderCatalog(){
+  _kRenderCatalogFor('k-lower-catalog', K_LOWER_TYPES, 'lower', '#1a5252');
+  _kRenderCatalogFor('k-upper-catalog', K_UPPER_TYPES, 'upper', '#7a5c2e');
+  _kRenderCatalogFor('k-penal-catalog', K_PENAL_TYPES, 'penal', '#534AB7');
+}
+function _kRenderCatalogFor(containerId, types, category, color){
+  const el = document.getElementById(containerId); if(!el) return;
+  el.innerHTML = types.map(t=>{
+    const svg = K_MOD_SVG[t.type] || K_MOD_SVG.shelves;
+    const sizeBtns = t.sizes.map(s=>
+      `<button class="k-sz-btn" style="font-size:10px;padding:2px 5px;border:1px solid #ddd;border-radius:4px;background:#f8f8f8;cursor:pointer;color:#555" onclick="event.stopPropagation();kAddByType('${category}','${t.type}',${s})">${s}</button>`
+    ).join('');
+    return `<div class="k-cat-card" style="background:#fff;border:1.5px solid #e8e8e8;border-radius:8px;padding:6px;cursor:pointer;text-align:center" onclick="kAddByType('${category}','${t.type}',600)">
+      <div style="width:100%;display:flex;justify-content:center;margin-bottom:3px">${svg}</div>
+      <div style="font-size:10px;font-weight:600;color:#333;margin-bottom:4px">${t.label}</div>
+      <div style="display:flex;gap:2px;flex-wrap:wrap;justify-content:center;margin-bottom:4px">${sizeBtns}</div>
+      <input class="k-sz-inp" type="number" placeholder="мм" min="200" max="1500" style="width:52px;font-size:10px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;text-align:center"
+        onclick="event.stopPropagation()"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();kAddByType('${category}','${t.type}',+this.value||600);this.value=''}">
+    </div>`;
+  }).join('');
+}
+window.kRenderCatalog = kRenderCatalog;
+
+// ── Добавить модуль по типу и размеру ────────────────────────
+function kAddByType(category, type, width){
+  width = Math.max(200, parseInt(width)||600);
+  if(category === 'lower' || category === 'penal' && false){
+    const noFacade = type==='sink'||type==='appliance';
+    KitchenState.lower.push({id:KitchenState.lId++, width, type, facade:noFacade?'none':'door'});
+  } else if(category === 'upper'){
+    KitchenState.upper.push({id:KitchenState.uId++, width, height:720, type, facade:type==='upperOpen'?'none':'door'});
+  } else if(category === 'penal'){
+    KitchenState.upper.push({id:KitchenState.uId++, width, height:2200, type:'penal', facade:'door'});
+  }
+  kRenderPanel(); kRender(); kUpdateTopSelect(); kProjMarkUnsaved();
+}
+window.kAddByType = kAddByType;
 
 function kRenderPanel(){
   // Нижние — рендерим в оба контейнера (новый аккордеон + старый pane)
@@ -4037,6 +4122,7 @@ function initKitchen(){
     kInitThree();
     kRenderColorPickers();
     kFillTopSelect();
+    kRenderCatalog();
     // Инициализация системы проектов кухни
     const kidx = kProjGetIndex();
     if(kidx.length > 0){
