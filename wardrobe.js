@@ -4979,24 +4979,29 @@ function sendKitchenToCalc(){
       kAccItems.forEach(item=>{
         const row = acc.find(x=>x.cat===item.cat&&x.vid===item.vid);
         if(!row) return;
-        const di = ST.dop.length; ST.dop.push(null);
+        const di = ST.dop.length;
+        ST.dop.push(1); // 1 = активная позиция (не null)
         const fd = document.createElement('div');
-        fd.id = 'dpr'+di; if(di>0) fd.className='ib'; fd.style.marginTop='8px';
+        fd.id = 'dr'+di;
+        if(di>0) fd.className='ib';
+        fd.style.marginTop='8px';
         fd.innerHTML =
-          `<div class="fr">` +
-          `<input class="qt" id="dn${di}" value="${item.cat} ${item.vid}" style="flex:2">` +
-          `<button class="db" onclick="$('dpr${di}').style.display='none';ST.dop[${di}]=null;recalc()">✕</button></div>` +
-          `<div class="fr"><span class="lb">Цена</span>` +
-          `<input class="qi" type="number" id="dp${di}" value="${row.p}" min="0" onchange="recalc()">` +
-          `<span class="lb">Кол-во</span>` +
-          `<input class="qi" type="number" id="dq${di}" value="${item.qty}" min="0" onchange="recalc()"></div>`;
+          '<div class="fr">' +
+          '<input style="font-size:12px;border:1px solid #ddd;border-radius:8px;padding:6px 8px;flex:1;min-width:0" type="text" id="dn'+di+'" value="'+item.cat+' '+item.vid+'">' +
+          '<button class="db" onclick="$(\'dr'+di+'\').style.display=\'none\';ST.dop['+di+']=null;recalc()">✕</button>' +
+          '</div>' +
+          '<div class="fr"><span class="lb">Цена</span>' +
+          '<input class="qi" type="number" inputmode="decimal" id="dp'+di+'" value="'+row.p+'" onchange="recalc()">' +
+          '<span class="fp">₸/шт</span></div>' +
+          '<div class="fr"><span class="lb">Кол-во</span>' +
+          '<input class="qi" type="number" inputmode="decimal" id="dq'+di+'" value="'+item.qty+'" onchange="recalc()">' +
+          '<span class="fp">шт</span></div>';
         dl.appendChild(fd);
-        ST.dop[di] = null; // addDop хранит null, цена берётся из dp+i
-        recalc();
       });
       const dopCb=$('cb-dop'); if(dopCb&&!dopCb.classList.contains('op')) tog('dop');
+      imported++;
+      recalc();
     }
-    imported++;
   }
 
   // Финальный пересчёт уже после всех добавлений
