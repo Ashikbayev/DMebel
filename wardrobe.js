@@ -356,6 +356,21 @@ function pickSlide(sectionDepth){
   // Fallback: любой из каталога
   return slideCatalog.filter(s=>s.type==='Телескоп').sort((a,b)=>b.length-a.length)[0] || null;
 }
+
+function pickSlideByBrand(sectionDepth, brand){
+  const maxLen = sectionDepth - 100;
+  // Ищем по конкретному бренду
+  let matches = slideCatalog
+    .filter(s=>s.brand===brand && s.type==='Телескоп' && s.length<=maxLen)
+    .sort((a,b)=>b.length-a.length);
+  if(matches.length) return matches[0];
+  // Fallback: любой телескоп подходящей длины
+  matches = slideCatalog
+    .filter(s=>s.type==='Телескоп' && s.length<=maxLen)
+    .sort((a,b)=>b.length-a.length);
+  if(matches.length) return matches[0];
+  return slideCatalog.filter(s=>s.type==='Телескоп').sort((a,b)=>b.length-a.length)[0] || null;
+}
 // цена активной петли
 function hingePrice(){
   const h=hingeCatalog.find(h=>h.brand===activehingeBrand);
@@ -665,7 +680,7 @@ function addDrawerBlock(sid){
   // берём первую нишу без ящиков
   const usedNiches=s.drawerBlocks.map(b=>b.nicheIdx);
   const freeNiche=niches.findIndex((_,i)=>!usedNiches.includes(i));
-  s.drawerBlocks.push({nicheIdx:freeNiche>=0?freeNiche:0,count:3});
+  s.drawerBlocks.push({nicheIdx:freeNiche>=0?freeNiche:0, count:3, brand:'En-7'});
   renderPanel();render3D(); projMarkUnsaved();
 }
 function removeDrawerBlock(sid,bi){
@@ -677,6 +692,7 @@ function updDrawerBlock(sid,bi,field,val){
   const s=sections.find(x=>x.id===sid);
   if(field==='nicheIdx') s.drawerBlocks[bi].nicheIdx=parseInt(val);
   if(field==='count') s.drawerBlocks[bi].count=Math.max(1,parseInt(val)||1);
+  if(field==='brand') s.drawerBlocks[bi].brand=val;
   renderPanel(); render3D(); updateStats(); projMarkUnsaved();
 }
 // возвращает массив ниш: [{bottom, top, label}]
@@ -980,7 +996,7 @@ function saveAsTemplate(sid){
   arr.push({ id:'utpl_'+Date.now(), name, isUser:true,
     data:{ shelves:s.shelves.map(sh=>({height:sh.height})),
            hasRod:s.hasRod, rodHeight:s.rodHeight, height:s.height,
-           drawerBlocks:s.drawerBlocks.map(db=>({nicheIdx:db.nicheIdx,count:db.count})) }});
+           drawerBlocks:s.drawerBlocks.map(db=>({nicheIdx:db.nicheIdx,count:db.count,brand:db.brand||'En-7'})) }});
   saveUserTemplates(arr);
   renderPanel();
 }
@@ -1090,6 +1106,7 @@ function renderPanel(){
       const nicheH=niches[db.nicheIdx]?niches[db.nicheIdx].top-niches[db.nicheIdx].bottom:0;
       const drawerH=db.count>0?Math.floor((nicheH-(db.count+1)*4)/db.count):0;
       const totalDrawers=db.count*colCount;
+      const brand=db.brand||'En-7';
       const nicheOpts=niches.map((n,ni)=>
         `<option value="${ni}" ${db.nicheIdx===ni?'selected':''}>${n.label} (${Math.round(n.top-n.bottom)} мм)</option>`
       ).join('');
@@ -1097,6 +1114,9 @@ function renderPanel(){
         ?`<div style="font-size:10px;color:#1a5252;background:#e8f5e9;border-radius:4px;padding:3px 6px;margin-bottom:6px">` +
           `<i class="ti ti-layout-columns"></i> ${colCount} колонки × ${db.count} ящ. = <b>${totalDrawers} ящиков</b></div>`
         :'';
+      const firmOpts=['En-7','GTV','DTC'].map(f=>
+        `<option value="${f}" ${brand===f?'selected':''}>${f}</option>`
+      ).join('');
       return `<div style="background:#f0f4ff;border:1px solid #c5d3f5;border-radius:6px;padding:8px;margin-bottom:6px">` +
         `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">` +
           `<span style="font-size:11px;font-weight:700;color:#1a3a8a">Блок ящиков ${bi+1}</span>` +
@@ -1105,9 +1125,12 @@ function renderPanel(){
         colInfo +
         `<div class="fl">Ниша</div>` +
         `<select style="width:100%;margin-bottom:6px;font-size:11px" onchange="updDrawerBlock(${s.id},${bi},'nicheIdx',this.value)">${nicheOpts}</select>` +
-        `<div class="g2">` +
+        `<div class="g2" style="margin-bottom:6px">` +
           `<div><div class="fl">Ящиков в колонке</div><input type="number" value="${db.count}" min="1" max="10" onchange="updDrawerBlock(${s.id},${bi},'count',this.value)"></div>` +
           `<div><div class="fl">Высота ящика</div><div style="font-size:12px;padding:5px 6px;background:#e8f0fe;border-radius:6px;color:#1a3a8a;font-weight:600">${drawerH} мм</div></div>` +
+        `</div>` +
+        `<div><div class="fl">Фирма телескопов</div>` +
+          `<select style="width:100%;font-size:11px" onchange="updDrawerBlock(${s.id},${bi},'brand',this.value)">${firmOpts}</select>` +
         `</div>` +
       `</div>`;
     }).join('');
@@ -2269,16 +2292,19 @@ function calcAllCosts(){
       totalHandles+=doorCount;
     }
     if(s.drawerBlocks) totalHandles+=s.drawerBlocks.reduce((b,db)=>b+db.count,0);
-    // телескопы
+    // телескопы — по фирме каждого блока ящиков
     if(s.drawerBlocks&&s.drawerBlocks.length>0){
       const colCount=getColumns(s).length;
-      const sl=pickSlide(s.depth||600);
-      if(sl){
-        const totalDrawers=s.drawerBlocks.reduce((b,db)=>b+db.count,0)*colCount;
-        const existing=slideDetails.find(x=>x.brand===sl.brand&&x.length===sl.length&&x.type===sl.type);
-        if(existing) existing.count+=totalDrawers;
-        else slideDetails.push({...sl,count:totalDrawers});
-      }
+      s.drawerBlocks.forEach(db=>{
+        const brand = db.brand || activeSlide.brand;
+        const sl = pickSlideByBrand(s.depth||600, brand);
+        if(sl){
+          const totalDrawers = db.count * colCount;
+          const existing=slideDetails.find(x=>x.brand===sl.brand&&x.length===sl.length&&x.type===sl.type);
+          if(existing) existing.count+=totalDrawers;
+          else slideDetails.push({...sl, count:totalDrawers});
+        }
+      });
     }
   });
   // антресоль петли per-section
