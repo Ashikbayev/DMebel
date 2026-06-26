@@ -2746,14 +2746,60 @@ function confCloseKP(){ document.getElementById('kp-modal').style.display='none'
 ============================================================ */
 const COLORS=['#7fb3d3','#82c785','#e8c56d','#e8896d','#b39ddb','#80cbc4','#ef9a9a','#a5d6a7','#ce93d8','#ffcc80','#90caf9','#f48fb1'];
 
-function drawSheet(sh,SW,SH,scale,showEdge){
+function drawSheet(sh,SW,SH,scale,showEdge,matColor){
   const pw=Math.round(SW*scale),ph=Math.round(SH*scale);
-  let ci=0,svgItems='';
+  const baseColor = matColor || '#b8c8a0';
+  let svgItems='';
   sh.items.forEach((item,idx)=>{
     const iw=Math.max(2,Math.round(item.w*scale)),ih=Math.max(2,Math.round(item.h*scale));
     const ix=Math.round(item.x*scale),iy=Math.round(item.y*scale);
-    const col=COLORS[ci%COLORS.length];ci++;
-    const num=item.num||'';
+    // Один цвет на всю секцию (как в кухне), чуть темнее для чётных
+    const col = idx%2===0 ? baseColor : baseColor+'cc';
+    const hasGrain=item.tex&&!item.rotated;
+    const grainArrow=hasGrain&&iw>20&&ih>20
+      ?`<line x1="${ix+iw/2}" y1="${iy+6}" x2="${ix+iw/2}" y2="${iy+ih-6}" stroke="rgba(0,0,0,0.3)" stroke-width="1.5" marker-end="url(#arr)"/>`
+      :'';
+    let edgeMarkup='';
+    if(showEdge&&item.edgeFront){
+      edgeMarkup+=`<rect x="${ix}" y="${iy}" width="3" height="${ih}" fill="#f0c040" opacity="0.9"/>`;
+    }
+    if(showEdge&&item.edgeBack){
+      edgeMarkup+=`<rect x="${ix+iw-2}" y="${iy}" width="2" height="${ih}" fill="#aaa" opacity="0.7"/>`;
+    }
+    const nm = item.name||'';
+    const dimTxt = item.w+'×'+item.h;
+    svgItems+=`<g>
+      <rect x="${ix}" y="${iy}" width="${iw}" height="${ih}" fill="${col}" stroke="#444" stroke-width="0.8" rx="1" opacity="0.88"/>
+      ${edgeMarkup}${grainArrow}
+      ${iw>22&&ih>10?`<text x="${ix+iw/2}" y="${iy+ih/2-3}" text-anchor="middle" font-size="${Math.max(4.5,Math.min(7,Math.min(iw,ih)/7))}" fill="#111">${nm}</text>`:''}
+      ${iw>22&&ih>16?`<text x="${ix+iw/2}" y="${iy+ih/2+6}" text-anchor="middle" font-size="4.5" fill="#444">${dimTxt}</text>`:''}
+      ${iw>30?`<text x="${ix+iw-2}" y="${iy+7}" text-anchor="end" font-size="4" fill="#333">${item.w}</text>`:''}
+    </g>`;
+  });
+  const maxY=sh.items.reduce((m,it)=>Math.max(m,it.y+it.h),0);
+  const effH=Math.round(maxY/SH*100);
+  const fillLine=maxY>0?`<line x1="0" y1="${Math.round(maxY*scale)}" x2="${pw}" y2="${Math.round(maxY*scale)}" stroke="#e53935" stroke-width="1" stroke-dasharray="4,3"/>`:'';
+  // Остаток — штриховка
+  let leftover='';
+  if(maxY < SH-10){
+    const fy=Math.round(maxY*scale);
+    const fh=ph-fy;
+    leftover=`<rect x="0" y="${fy}" width="${pw}" height="${fh}" fill="none" stroke="#ccc" stroke-width="0.5" stroke-dasharray="3,2"/>
+      <line x1="0" y1="${fy}" x2="${pw}" y2="${ph}" stroke="#ddd" stroke-width="0.5"/>
+      <line x1="${pw}" y1="${fy}" x2="0" y2="${ph}" stroke="#ddd" stroke-width="0.5"/>`;
+  }
+  // Метка листа — формат как в кухне
+  const shNum = sh.label.match(/\d+/)?.[0]||'1';
+  return`<div style="display:inline-block;vertical-align:top;margin:0 10px 12px 0">
+    <div style="font-size:10px;color:#555;margin-bottom:3px;font-weight:600">Лист ${shNum} — занято ${effH}% по ширине ${SH}мм</div>
+    <svg width="${pw}" height="${ph}" style="border:2px solid #555;border-radius:3px;background:#f5f5f0;display:block" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="arr${shNum}" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto">
+        <path d="M0,0 L0,4 L4,2 z" fill="rgba(0,0,0,0.3)"/>
+      </marker></defs>
+      ${svgItems}${fillLine}${leftover}
+      <text x="2" y="${ph-3}" font-size="6" fill="#bbb">${SW}×${SH}мм</text>
+    </svg>
+  </div>`;
     // Стрелка волокна: если текстурная деталь — вертикальная стрелка
     const hasGrain=item.tex&&!item.rotated;
     const grainArrow=hasGrain&&iw>20&&ih>20
@@ -2776,29 +2822,7 @@ function drawSheet(sh,SW,SH,scale,showEdge){
       <text x="${ix+iw/2}" y="${iy+8}" text-anchor="middle" font-size="9" font-weight="bold" fill="#222">${num}</text>
       <text x="${ix+iw/2}" y="${iy+ih/2}" text-anchor="middle" font-size="7" fill="#333">${item.name}</text>
       <text x="${ix+iw/2}" y="${iy+ih-5}" text-anchor="middle" font-size="7" fill="#555">${item.w}×${item.h}</text>
-    </g>`;
-  });
-  // Занятая высота (по стороне 1830)
-  const maxY=sh.items.reduce((m,it)=>Math.max(m,it.y+it.h),0);
-  const effH=Math.round(maxY/SH*100);
-  // Линия заполнения
-  const fillLine=maxY>0?`<line x1="0" y1="${Math.round(maxY*scale)}" x2="${pw}" y2="${Math.round(maxY*scale)}" stroke="#e53935" stroke-width="1" stroke-dasharray="4,3"/>`:''
-  return`<div class="sheet-wrap">
-    <div class="sheet-lbl">${sh.label} &nbsp;<span style="font-weight:400;color:#888">занято ${effH}% по ширине 1830</span></div>
-    <svg width="${pw}" height="${ph}" style="border:1.5px solid #aaa;background:#fdf8f0;display:block" xmlns="http://www.w3.org/2000/svg">
-      <defs><marker id="arr" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto">
-        <path d="M0,0 L0,4 L4,2 z" fill="rgba(0,0,0,0.35)"/>
-      </marker></defs>
-      ${svgItems}
-      ${fillLine}
-      <text x="2" y="${ph-3}" font-size="7" fill="#aaa">${SW}×${SH}мм</text>
-    </svg>
-    <div style="font-size:9px;color:#888;margin-top:3px;display:flex;gap:8px">
-      <span><span style="display:inline-block;width:8px;height:8px;background:#f0c040;border-radius:1px;margin-right:2px"></span>Лицевая кромка 2мм</span>
-      <span><span style="display:inline-block;width:8px;height:8px;background:#aaa;border-radius:1px;margin-right:2px"></span>Скрытая кромка 0.4мм</span>
-      <span style="font-size:9px;color:#888">↕ стрелка = направление волокна</span>
-    </div>
-  </div>`;
+
 }
 // helper для легенды — вызывается отдельно
 function sheetHasGrain(sh){ return sh.items.some(it=>it.tex&&!it.rotated); }
@@ -2853,20 +2877,20 @@ function showCut(){
   // ── Вкладка Раскрой ──────────────────────────────────────────
   let sheetsHtml='';
   if(ldspSheets.length) sheetsHtml+=`<div class="cut-mat-block">
-    <div class="cut-mat-title"><span class="color-dot" style="background:#c8a96e"></span>${matChoice.ldspName||'ЛДСП'} корпус 2750×1830 — ~${countSheetsQuarter(ldspSheets,LDSP_H)} листов</div>
-    <div class="cut-sheets-wrap">${ldspSheets.map(s=>drawSheet(s,LDSP_W,LDSP_H,sc,true)).join('')}</div>
+    <div class="cut-mat-title"><span class="color-dot" style="background:#b8d8b8"></span>🟩 ${matChoice.ldspName||'ЛДСП'} корпус 2750×1830 — ~${countSheetsQuarter(ldspSheets,LDSP_H)} листов <span style="font-size:10px;color:#888;font-weight:400">↕ текстура сохранена</span></div>
+    <div class="cut-sheets-wrap">${ldspSheets.map(s=>drawSheet(s,LDSP_W,LDSP_H,sc,true,'#b8d8b8')).join('')}</div>
   </div>`;
   if(hdfSheets.length) sheetsHtml+=`<div class="cut-mat-block">
-    <div class="cut-mat-title"><span class="color-dot" style="background:#d4c49a"></span>ХДФ задние стенки 2800×2070 — ~${countSheetsQuarter(hdfSheets,HDF_H)} листов <span style="font-size:10px;color:#888">(по длинной стороне)</span></div>
-    <div class="cut-sheets-wrap">${hdfSheets.map(s=>drawSheet(s,HDF_W,HDF_H,sc,false)).join('')}</div>
+    <div class="cut-mat-title"><span class="color-dot" style="background:#e0c89a"></span>🟫 ХДФ задние стенки 2800×2070 — ~${countSheetsQuarter(hdfSheets,HDF_H)} листов <span style="font-size:10px;color:#888;font-weight:400">(по длинной стороне)</span></div>
+    <div class="cut-sheets-wrap">${hdfSheets.map(s=>drawSheet(s,HDF_W,HDF_H,sc,false,'#e0c89a')).join('')}</div>
   </div>`;
   if(facTexSheets.length) sheetsHtml+=`<div class="cut-mat-block">
-    <div class="cut-mat-title"><span class="color-dot" style="background:#e2c484"></span>ЛДСП фасад с текстурой — ~${countSheetsQuarter(facTexSheets,LDSP_H)} листов <span class="badge-tex badge-grain">↕ без поворота</span></div>
-    <div class="cut-sheets-wrap">${facTexSheets.map(s=>drawSheet(s,LDSP_W,LDSP_H,sc,true)).join('')}</div>
+    <div class="cut-mat-title"><span class="color-dot" style="background:#b8c8e8"></span>🟦 ЛДСП фасад с текстурой — ~${countSheetsQuarter(facTexSheets,LDSP_H)} листов <span class="badge-tex badge-grain">↕ без поворота</span></div>
+    <div class="cut-sheets-wrap">${facTexSheets.map(s=>drawSheet(s,LDSP_W,LDSP_H,sc,true,'#b8c8e8')).join('')}</div>
   </div>`;
   if(facNoTexSheets.length) sheetsHtml+=`<div class="cut-mat-block">
-    <div class="cut-mat-title"><span class="color-dot" style="background:#e2c484"></span>ЛДСП фасад — ~${countSheetsQuarter(facNoTexSheets,LDSP_H)} листов <span class="badge-tex badge-notex">↔ с поворотом</span></div>
-    <div class="cut-sheets-wrap">${facNoTexSheets.map(s=>drawSheet(s,LDSP_W,LDSP_H,sc,true)).join('')}</div>
+    <div class="cut-mat-title"><span class="color-dot" style="background:#b8c8e8"></span>🟦 ЛДСП фасад — ~${countSheetsQuarter(facNoTexSheets,LDSP_H)} листов <span class="badge-tex badge-notex">↔ с поворотом</span></div>
+    <div class="cut-sheets-wrap">${facNoTexSheets.map(s=>drawSheet(s,LDSP_W,LDSP_H,sc,true,'#b8c8e8')).join('')}</div>
   </div>`;
   if(facMdf.length) sheetsHtml+=`<div class="cut-mat-block">
     <div class="cut-mat-title"><span class="color-dot" style="background:#fff0d4;border:1px solid #ccc"></span>МДФ фасады — расчёт по площади</div>
