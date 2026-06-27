@@ -69,7 +69,7 @@ input.qt{font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:6px
 /* КП СТИЛЬ-ПЕРЕКЛЮЧАТЕЛЬ */
 #kp-style-toggle{background:none;border:1px solid #e0e0e0;border-radius:6px;padding:4px 10px;font-size:10px;cursor:pointer;color:#888;white-space:nowrap}
 /* ─── КП ДОКУМЕНТ (modern) ─── */
-.kp-doc{background:#f2f4f7;margin:0;overflow:hidden;font-family:'Inter',system-ui,sans-serif}
+.kp-doc{background:#fff;margin:0;overflow:visible;font-family:'Inter',system-ui,sans-serif}
 /* ШАПКА — glassmorphism */
 .kh{position:relative;overflow:hidden;padding:0;background:linear-gradient(135deg,#071e1e 0%,#0d3b3b 45%,#1a5252 80%,#1d6a5a 100%)}
 .kh-glass{position:absolute;inset:0;backdrop-filter:blur(0px);background:linear-gradient(135deg,rgba(255,255,255,.04) 0%,rgba(255,255,255,.01) 100%);pointer-events:none}
@@ -546,17 +546,12 @@ select{width:100%;font-size:12px;padding:5px 6px;border:1px solid #ddd;border-ra
 .kp-close-btn{position:absolute;top:14px;right:16px;background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:18px;line-height:1;z-index:5}
 .kp-close-btn:hover{background:rgba(255,255,255,0.25)}
 .kp-spec-section{padding:0 32px 20px}
+@page{size:A4;margin:8mm}
 @media print{
-  .modal-wrap{position:static;background:none;padding:0}
-  #kp-modal .modal-inner{max-width:100%;box-shadow:none;border-radius:0}
-  .kp-close-btn,.kp-print-btn{display:none}
-  /* Скрываем всё кроме КП страницы */
-  body>*{display:none!important}
-  #pg-kp{display:block!important;position:static!important;overflow:visible!important;height:auto!important;width:100%!important}
-  .kp-back-bar{display:none!important}
-  .kp-doc{display:block!important;background:#fff!important;overflow:visible!important}
-  .bar{display:none!important}
-  @page{margin:10mm}
+  .bar,.kp-back-bar{display:none!important}
+  .pg{display:none!important}
+  #pg-kp{display:block!important;position:static!important;overflow:visible!important;height:auto!important}
+  .kp-doc{background:#fff!important}
 }
 
 /* ── KITCHEN PROJECTS BAR ─────────────────────────────────── */
