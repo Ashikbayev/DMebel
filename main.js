@@ -279,22 +279,7 @@ function showKP(showL=true, showP=true, showK=false){
   function addRow(name, desc, qty, priceL, priceP, priceK) {
     rowNum++;
     var numStr = rowNum < 10 ? "0"+rowNum : ""+rowNum;
-    var sumL = priceL * (parseFloat(qty)||1);
-    var sumP = priceP * (parseFloat(qty)||1);
-    var sumK = priceK * (parseFloat(qty)||1);
-    var priceCols = "";
-    if(nV > 1) {
-      vars.forEach(function(v){
-        var s = v.key==="L"?sumL:v.key==="P"?sumP:sumK;
-        priceCols += "<td style=\"text-align:right;padding:14px 12px;font-size:12.5px;font-weight:500;border-bottom:1px solid #E8E3DA;vertical-align:top\">"+(s>0?fm(s):"—")+"</td>";
-      });
-    } else {
-      var v0 = vars[0]?vars[0].key:"L";
-      var p0 = v0==="L"?priceL:v0==="P"?priceP:priceK;
-      var s0 = v0==="L"?sumL:v0==="P"?sumP:sumK;
-      priceCols = "<td style=\"text-align:right;padding:14px 12px;font-size:12.5px;border-bottom:1px solid #E8E3DA;vertical-align:top\">"+(p0>0?fm(p0):"—")+"</td>"
-        + "<td style=\"text-align:right;padding:14px 12px;font-size:12.5px;font-weight:500;border-bottom:1px solid #E8E3DA;vertical-align:top\">"+(s0>0?fm(s0):"—")+"</td>";
-    }
+    var priceCols = "<td style=\"text-align:center;padding:14px 12px;font-size:14px;color:#C9A96E;border-bottom:1px solid #E8E3DA;vertical-align:top\">✓</td>";
     tableRows += "<tr>"
       + "<td style=\"padding:14px 12px;font-size:11px;color:#9A9087;vertical-align:top;border-bottom:1px solid #E8E3DA\">"+numStr+"</td>"
       + "<td style=\"padding:14px 12px;vertical-align:top;border-bottom:1px solid #E8E3DA\">"
@@ -308,35 +293,32 @@ function showKP(showL=true, showP=true, showK=false){
 
   // Корпус
   var ldspArr = C.ldspIt||[];
-  if(ldspArr.length>0){ addRow("Корпус", ldspArr[0].n, "", 0, 0, 0); }
+  if(ldspArr.length>0) addRow("Корпус", ldspArr[0].n, "", 0,0,0);
   // Фасад ЛДСП
   var fldspArr = C.fldspIt||[];
-  fldspArr.forEach(function(it){ addRow("Фасад ЛДСП", it.n, "", 0, 0, 0); });
+  fldspArr.forEach(function(it){ addRow("Фасад ЛДСП", it.n, "", 0,0,0); });
   // Фасад МДФ плёнка
   var fplenArr = C.fplenIt||[];
-  fplenArr.forEach(function(it){ addRow("Фасад МДФ Плёнка", it.n, "", 0, 0, 0); });
+  fplenArr.forEach(function(it){ addRow("Фасад МДФ Плёнка", it.n, "", 0,0,0); });
   // Фасад МДФ краска
   var fkrArr = C.fkrIt||[];
-  fkrArr.forEach(function(it){ addRow("Фасад МДФ Краска", it.n, "", 0, 0, 0); });
-  // Фурнитура - разбиваем по типу
+  fkrArr.forEach(function(it){ addRow("Фасад МДФ Краска", it.n, "", 0,0,0); });
+  // Фурнитура
   var fuArr = (C.fuIt||[]).concat(C.kuIt||[]).concat(C.shIt||[]);
   fuArr.forEach(function(it){
     var nm = it.n.toLowerCase();
-    var title = "";
-    if(nm.indexOf("петл")>=0) title = "Петли";
-    else if(nm.indexOf("ручк")>=0) title = "Ручки";
-    else if(nm.indexOf("ножк")>=0||nm.indexOf("нога")>=0) title = "Ножки";
-    else if(nm.indexOf("штанг")>=0) title = "Штанга";
-    else title = it.n;
-    var showQty = (nm.indexOf("ручк")>=0) ? it.q+" шт" : "";
-    addRow(title, it.n, showQty, 0, 0, 0);
+    if(nm.indexOf("петл")>=0) addRow("Петли", it.n, "", 0,0,0);
+    else if(nm.indexOf("ручк")>=0) addRow("Ручки", it.n, it.q+" шт", 0,0,0);
+    else if(nm.indexOf("ножк")>=0||nm.indexOf("нога")>=0) addRow("Ножки", it.n, "", 0,0,0);
+    else if(nm.indexOf("штанг")>=0) addRow("Штанга", it.n, "", 0,0,0);
+    else addRow(it.n, "", it.q>1?it.q+" шт":"", 0,0,0);
   });
   // Освещение
   var svArr = C.svIt||[];
-  svArr.forEach(function(it){ addRow(it.n, "", it.q+" шт", 0, 0, 0); });
+  svArr.forEach(function(it){ addRow(it.n,"",it.q+" шт",0,0,0); });
   // Доп. позиции
   var dpArr = C.dpIt||[];
-  dpArr.forEach(function(it){ addRow(it.n, "", it.q+" шт", 0, 0, 0); });
+  dpArr.forEach(function(it){ addRow(it.n,"",it.q+" шт",0,0,0); });
   // Работы
   var wkArr = C.wkIt||[];
   wkArr.forEach(function(it){ addRow(it.n,"Монтаж / работы","1",it.p||0,it.p||0,it.p||0); });
@@ -395,7 +377,7 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "<div style=\"display:flex;flex-direction:column;gap:18px;min-width:140px\">";
   kpHtml += "<div style=\"text-align:right\"><span style=\"font-family:Georgia,serif;font-size:28px;font-weight:500;color:#C9A96E;display:block;line-height:1\">5+</span><span style=\"font-size:10px;color:#5A5550;letter-spacing:1px;text-transform:uppercase\">лет на рынке</span></div>";
   kpHtml += "<div style=\"text-align:right\"><span style=\"font-family:Georgia,serif;font-size:28px;font-weight:500;color:#C9A96E;display:block;line-height:1\">500+</span><span style=\"font-size:10px;color:#5A5550;letter-spacing:1px;text-transform:uppercase\">проектов</span></div>";
-  kpHtml += "<div style=\"text-align:right\"><span style=\"font-family:Georgia,serif;font-size:28px;font-weight:500;color:#C9A96E;display:block;line-height:1\">5 лет</span><span style=\"font-size:10px;color:#5A5550;letter-spacing:1px;text-transform:uppercase\">гарантия</span></div>";
+  // убрано: 5 лет гарантия
   kpHtml += "</div></div>";
 
   // КЛИЕНТ
@@ -423,8 +405,8 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "<th style=\"text-align:left;padding:10px 12px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;font-weight:500;width:40px\">№</th>";
   kpHtml += "<th style=\"text-align:left;padding:10px 12px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;font-weight:500\">Наименование</th>";
   kpHtml += "<th style=\"text-align:left;padding:10px 12px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;font-weight:500;width:70px\">Кол.</th>";
-  kpHtml += thPrices;
-  kpHtml += "</tr></thead><tbody>"+tableRows+"</tbody><tfoot>"+totRow+"</tfoot></table>";
+  kpHtml += "<th style=\"text-align:center;padding:10px 12px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;font-weight:500;width:60px\">&nbsp;</th>";
+  kpHtml += "</tr></thead><tbody>"+tableRows+"</tbody></table>";
   kpHtml += "</div>";
 
   // УСЛОВИЯ
@@ -436,7 +418,7 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "<div style=\"display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:#E8E3DA\">";
   kpHtml += "<div style=\"background:#fff;padding:20px\"><div style=\"font-size:20px;margin-bottom:10px\">📅</div><div style=\"font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;margin-bottom:5px\">Срок изготовления</div><div style=\"font-size:13px;font-weight:500;color:#1C1C1E;line-height:1.4\">15–45 рабочих дней</div></div>";
   kpHtml += "<div style=\"background:#fff;padding:20px\"><div style=\"font-size:20px;margin-bottom:10px\">💳</div><div style=\"font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;margin-bottom:5px\">Оплата</div><div style=\"font-size:13px;font-weight:500;color:#1C1C1E;line-height:1.4\">50% аванс / 50% по готовности</div></div>";
-  kpHtml += "<div style=\"background:#fff;padding:20px\"><div style=\"font-size:20px;margin-bottom:10px\">🛡</div><div style=\"font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;margin-bottom:5px\">Гарантия</div><div style=\"font-size:13px;font-weight:500;color:#1C1C1E;line-height:1.4\">5 лет на корпус, 2 года на фурнитуру</div></div>";
+  kpHtml += "<div style=\"background:#fff;padding:20px\"><div style=\"font-size:20px;margin-bottom:10px\">🛡</div><div style=\"font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;margin-bottom:5px\">Гарантия</div><div style=\"font-size:13px;font-weight:500;color:#1C1C1E;line-height:1.4\">1 год на фурнитуру</div></div>";
   kpHtml += "</div></div>";
 
   // ЗОЛОТАЯ ЛИНИЯ
@@ -448,7 +430,7 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "<div style=\"height:1px;background:#C9A96E;width:24px;flex-shrink:0;margin-bottom:3px\"></div>";
   kpHtml += "<div style=\"font-family:Georgia,serif;font-size:19px;color:#1C1C1E\">Примечания</div>";
   kpHtml += "</div><ul style=\"list-style:none\">";
-  kpHtml += "<li style=\"display:flex;gap:14px;padding:11px 0;border-bottom:1px solid #E8E3DA;font-size:13px;color:#3A3A3C;line-height:1.6;align-items:flex-start\"><span style=\"width:6px;height:6px;background:#C9A96E;border-radius:50%;flex-shrink:0;margin-top:7px\"></span><span>КП действительно 30 дней. Стоимость фиксируется при подписании договора.</span></li>";
+  kpHtml += "<li style=\"display:flex;gap:14px;padding:11px 0;border-bottom:1px solid #E8E3DA;font-size:13px;color:#3A3A3C;line-height:1.6;align-items:flex-start\"><span style=\"width:6px;height:6px;background:#C9A96E;border-radius:50%;flex-shrink:0;margin-top:7px\"></span><span>КП действительно 7 дней с даты выставления. Стоимость фиксируется при подписании договора.</span></li>";
   kpHtml += "<li style=\"display:flex;gap:14px;padding:11px 0;border-bottom:1px solid #E8E3DA;font-size:13px;color:#3A3A3C;line-height:1.6;align-items:flex-start\"><span style=\"width:6px;height:6px;background:#C9A96E;border-radius:50%;flex-shrink:0;margin-top:7px\"></span><span>Замер и 3D-визуализация предоставляются бесплатно при подписании договора.</span></li>";
   kpHtml += "<li style=\"display:flex;gap:14px;padding:11px 0;font-size:13px;color:#3A3A3C;line-height:1.6;align-items:flex-start\"><span style=\"width:6px;height:6px;background:#C9A96E;border-radius:50%;flex-shrink:0;margin-top:7px\"></span><span>Изменение габаритов и материалов возможно до подписания спецификации без доплаты.</span></li>";
   kpHtml += "</ul></div>";
