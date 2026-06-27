@@ -314,13 +314,13 @@ function showKP(showL=true, showP=true, showK=false){
       pL:it.p||0, pP:it.p||0, pK:it.p||0, sumL:sum, sumP:sum, sumK:sum});
   });
   // Освещение
-  (C.svIt||[]).forEach(function(it){
+  var svArr = C.svIt||[]; svArr.forEach(function(it){
     var sum = it.q*(it.p||0);
     items.push({n:it.n, desc:"Освещение", qty:it.q+" шт",
       pL:it.p||0, pP:it.p||0, pK:it.p||0, sumL:sum, sumP:sum, sumK:sum});
   });
   // Работы
-  (C.wkIt||[]).forEach(function(it){
+  var wkArr = C.wkIt||[]; wkArr.forEach(function(it){
     var sum = it.q*(it.p||0);
     items.push({n:it.n, desc:"Работы", qty:it.q,
       pL:it.p||0, pP:it.p||0, pK:it.p||0, sumL:sum, sumP:sum, sumK:sum});
