@@ -130,6 +130,7 @@
       <div class="fr"><span class="lb">КП №</span><input class="qt" type="text" id="kp-num" value="001"></div>
     </div>
     <button class="actn ad" onclick="openKpVarModal()">📄 Сформировать КП →</button>
+    <button class="actn" onclick="openDogovor()" style="background:linear-gradient(135deg,#7B5E2A,#C9A96E);color:#fff;border:none;margin-top:6px">📋 Договор →</button>
     <button class="actn" onclick="saveCalc()" style="background:linear-gradient(135deg,#1D9E75,#148060);color:#fff;border:none;margin-top:6px">💾 Сохранить расчёт</button>
     <button class="actn as" style="margin-top:6px" onclick="fullReset()">🔄 Новый расчёт</button>
   </div>
@@ -817,5 +818,113 @@
 
 <script src="main.js"></script>
 <script type="module" src="wardrobe.js"></script>
+
+<!-- ДОГОВОР МОДАЛКА -->
+<div id="dogovor-modal" class="modal-wrap" style="display:none">
+  <div class="modal-inner" style="max-width:560px;padding:0;overflow:hidden">
+    <div class="modal-hdr" style="background:linear-gradient(135deg,#1C1C1E,#3A2E1C);color:#C9A96E;border-radius:12px 12px 0 0;padding:18px 22px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:16px;font-weight:700;letter-spacing:0.5px">📋 Договор на изготовление мебели</div>
+        <div style="font-size:11px;color:#9A8060;margin-top:3px">Материалы и фурнитура подтягиваются из калькулятора</div>
+      </div>
+      <button onclick="closeDogovor()" style="background:none;border:none;color:#C9A96E;font-size:22px;cursor:pointer;line-height:1;padding:4px 8px">×</button>
+    </div>
+    <div style="padding:22px;max-height:78vh;overflow-y:auto">
+
+      <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9A8060;margin-bottom:12px;margin-top:4px">Данные заказчика</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:4px">ФИО заказчика *</div>
+          <input type="text" id="dog-client" placeholder="Иванов Иван Иванович" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+        </div>
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:4px">ИИН / БИН</div>
+          <input type="text" id="dog-iin" placeholder="123456789012" maxlength="12" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+        </div>
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:4px">Адрес</div>
+          <input type="text" id="dog-addr" placeholder="г. Сатпаев, ул. ..." style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+        </div>
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:4px">Телефон</div>
+          <input type="text" id="dog-phone" placeholder="+7 700 000 0000" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+        </div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9A8060;margin-bottom:12px">Предмет договора</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:4px">Наименование мебели *</div>
+          <input type="text" id="dog-object" placeholder="Кухня, шкаф-купе..." style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+        </div>
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:4px">Размеры Ш × Г × В, мм</div>
+          <input type="text" id="dog-size" placeholder="2400 × 600 × 2200" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+        </div>
+      </div>
+      <div style="background:#F5F9F5;border:1px solid #D0E8D5;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#3A6040">
+        ✓ Корпус, фасады, фурнитура и доп. работы — автоматически из калькулятора
+      </div>
+
+      <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9A8060;margin-bottom:12px">Стоимость</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:4px">Вариант КП *</div>
+          <select id="dog-variant" onchange="dogVariantChange()" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;background:#fff"></select>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:4px">Аванс при подписании</div>
+          <select id="dog-advance" onchange="dogVariantChange()" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+            <option value="50">50%</option>
+            <option value="60">60%</option>
+            <option value="70">70%</option>
+          </select>
+        </div>
+      </div>
+      <div style="background:#FBF8F3;border:1px solid #E8E0D0;border-radius:10px;padding:14px 16px;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:12px;color:#666">Общая стоимость</span>
+          <span id="dog-total-display" style="font-weight:700;font-size:15px;color:#1C1C1E"></span>
+        </div>
+        <div style="border-top:1px solid #E8E0D0;padding-top:8px;display:flex;flex-direction:column;gap:5px">
+          <div style="display:flex;justify-content:space-between;font-size:12px">
+            <span style="color:#666">1-й платёж (аванс при подписании)</span>
+            <span id="dog-pay1" style="font-weight:600;color:#7B5E2A"></span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:12px">
+            <span style="color:#666">2-й платёж (за 3 дня до монтажа, до 90%)</span>
+            <span id="dog-pay2" style="font-weight:600;color:#7B5E2A"></span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:12px">
+            <span style="color:#666">3-й платёж (после монтажа, 10%)</span>
+            <span id="dog-pay3" style="font-weight:600;color:#7B5E2A"></span>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9A8060;margin-bottom:12px">Реквизиты договора и сроки</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px">
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:4px">Номер договора</div>
+          <input type="text" id="dog-num" placeholder="001" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+        </div>
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:4px">Срок изготовления (раб. дней)</div>
+          <input type="number" id="dog-days" value="14" min="1" max="60" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+        </div>
+        <div>
+          <div style="font-size:11px;color:#888;margin-bottom:4px">Планируемая дата монтажа</div>
+          <input type="date" id="dog-mount-date" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <button onclick="closeDogovor()" style="flex:1;padding:12px;border:1.5px solid #ddd;border-radius:10px;background:#fff;font-size:14px;cursor:pointer;color:#555">Отмена</button>
+        <button onclick="generateDogovor()" style="flex:2;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#7B5E2A,#C9A96E);color:#fff;font-size:14px;font-weight:600;cursor:pointer">📋 Сформировать договор →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
