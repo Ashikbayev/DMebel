@@ -874,33 +874,38 @@
         </div>
         <div>
           <div style="font-size:11px;color:#888;margin-bottom:4px">Аванс при подписании</div>
-          <select id="dog-advance" onchange="dogVariantChange()" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+          <select id="dog-advance" onchange="dogCalcPayments()" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
             <option value="50">50%</option>
             <option value="60">60%</option>
             <option value="70">70%</option>
           </select>
         </div>
       </div>
-      <div style="background:#FBF8F3;border:1px solid #E8E0D0;border-radius:10px;padding:14px 16px;margin-bottom:16px">
+      <div style="background:#FBF8F3;border:1px solid #E8E0D0;border-radius:10px;padding:14px 16px;margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <span style="font-size:12px;color:#666">Общая стоимость</span>
-          <span id="dog-total-display" style="font-weight:700;font-size:15px;color:#1C1C1E"></span>
+          <span style="font-size:12px;color:#666">Сумма договора (редактируется)</span>
+          <input type="number" id="dog-total-input" oninput="dogCalcPayments()" min="0" step="1000"
+            style="width:160px;text-align:right;font-weight:700;font-size:14px;color:#1C1C1E;border:1.5px solid #C9A96E;border-radius:7px;padding:5px 10px;background:#fff;box-sizing:border-box">
         </div>
         <div style="border-top:1px solid #E8E0D0;padding-top:8px;display:flex;flex-direction:column;gap:5px">
           <div style="display:flex;justify-content:space-between;font-size:12px">
             <span style="color:#666">1-й платёж (аванс при подписании)</span>
             <span id="dog-pay1" style="font-weight:600;color:#7B5E2A"></span>
           </div>
-          <div style="display:flex;justify-content:space-between;font-size:12px">
+          <div id="dog-pay2-row" style="display:flex;justify-content:space-between;font-size:12px">
             <span style="color:#666">2-й платёж (за 3 дня до монтажа, до 90%)</span>
             <span id="dog-pay2" style="font-weight:600;color:#7B5E2A"></span>
           </div>
-          <div style="display:flex;justify-content:space-between;font-size:12px">
+          <div id="dog-pay3-row" style="display:flex;justify-content:space-between;font-size:12px">
             <span style="color:#666">3-й платёж (после монтажа, 10%)</span>
             <span id="dog-pay3" style="font-weight:600;color:#7B5E2A"></span>
           </div>
         </div>
       </div>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#EFF8EF;border:1px solid #B8E0B8;border-radius:8px;margin-bottom:16px;cursor:pointer;font-size:12px;color:#2A5C2A">
+        <input type="checkbox" id="dog-full-pay" onchange="dogCalcPayments()" style="width:16px;height:16px;accent-color:#2A7A2A;cursor:pointer">
+        <span>Клиент оплачивает всю сумму при подписании (2-й и 3-й платежи не нужны)</span>
+      </label>
 
       <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9A8060;margin-bottom:12px">Реквизиты договора и сроки</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px">
