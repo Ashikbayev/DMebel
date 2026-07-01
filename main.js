@@ -335,11 +335,11 @@ function generateDogovor() {
   }
   var petli  = fRow(allFurn, function(nm){ return nm.indexOf('\u043f\u0435\u0442\u043b') >= 0; });
   var naprav = fRow(allFurn, function(nm){ return nm.indexOf('\u043d\u0430\u043f\u0440\u0430\u0432') >= 0 || nm.indexOf('\u0442\u0435\u043b\u0435\u0441\u043a') >= 0 || nm.indexOf('\u0434\u043e\u0432\u043e\u0434\u0447') >= 0; });
-  var ruchki = fRow(allFurn, function(nm){ return nm.indexOf('\u0440\u0443\u0447\u043a') >= 0; });
+  var ruchki = fRow(allFurn, function(nm){ return nm.indexOf('\u0440\u0443\u0447') >= 0; });
   var dFurn  = allFurn.filter(function(x){
     var nm = x.n.toLowerCase();
     return nm.indexOf('\u043f\u0435\u0442\u043b') < 0 && nm.indexOf('\u043d\u0430\u043f\u0440\u0430\u0432') < 0 &&
-           nm.indexOf('\u0442\u0435\u043b\u0435\u0441\u043a') < 0 && nm.indexOf('\u0434\u043e\u0432\u043e\u0434\u0447') < 0 && nm.indexOf('\u0440\u0443\u0447\u043a') < 0;
+           nm.indexOf('\u0442\u0435\u043b\u0435\u0441\u043a') < 0 && nm.indexOf('\u0434\u043e\u0432\u043e\u0434\u0447') < 0 && nm.indexOf('\u0440\u0443\u0447') < 0;
   }).map(function(x){ return x.n + ' \u00d7 ' + x.q + ' \u0448\u0442.'; }).join('; ') || '\u2014';
 
   // ── автоматически из C: доп. работы / позиции ──────────────
