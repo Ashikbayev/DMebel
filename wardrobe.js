@@ -2813,15 +2813,43 @@ function confCloseKP(){ document.getElementById('kp-modal').style.display='none'
 ============================================================ */
 const COLORS=['#7fb3d3','#82c785','#e8c56d','#e8896d','#b39ddb','#80cbc4','#ef9a9a','#a5d6a7','#ce93d8','#ffcc80','#90caf9','#f48fb1'];
 
+// ── Проверка пересечений (bounding box) ─────────────────────
+// Read-only модуль: не меняет и не переписывает алгоритм раскроя
+// (packSheets/packParts). Просто попарно сравнивает уже размещённые
+// прямоугольники деталей на одном листе и находит наложения —
+// полезно как самопроверка после ручных правок раскроя.
+// tolerance (мм) — небольшой допуск, чтобы детали, стыкующиеся
+// впритык (общий рез), не считались ложным конфликтом.
+function findBBoxConflicts(items, tolerance){
+  tolerance = tolerance || 0.5;
+  const conflicts = new Set();
+  for(let i=0;i<items.length;i++){
+    for(let j=i+1;j<items.length;j++){
+      const a=items[i], b=items[j];
+      const overlapX = Math.min(a.x+a.w, b.x+b.w) - Math.max(a.x, b.x);
+      const overlapY = Math.min(a.y+a.h, b.y+b.h) - Math.max(a.y, b.y);
+      if(overlapX>tolerance && overlapY>tolerance){
+        conflicts.add(i); conflicts.add(j);
+      }
+    }
+  }
+  return conflicts;
+}
+window.findBBoxConflicts = findBBoxConflicts;
+
 function drawSheet(sh,SW,SH,scale,showEdge,matColor){
   const pw=Math.round(SW*scale),ph=Math.round(SH*scale);
   const baseColor = matColor || '#b8c8a0';
+  const conflicts = findBBoxConflicts(sh.items);
   let svgItems='';
   sh.items.forEach((item,idx)=>{
     const iw=Math.max(2,Math.round(item.w*scale)),ih=Math.max(2,Math.round(item.h*scale));
     const ix=Math.round(item.x*scale),iy=Math.round(item.y*scale);
-    // Один цвет на всю секцию (как в кухне), чуть темнее для чётных
-    const col = idx%2===0 ? baseColor : baseColor+'cc';
+    const isConflict = conflicts.has(idx);
+    // Один цвет на всю секцию (как в кухне), чуть темнее для чётных; конфликт — красным
+    const col = isConflict ? '#e53935' : (idx%2===0 ? baseColor : baseColor+'cc');
+    const strokeCol = isConflict ? '#b71c1c' : '#444';
+    const strokeW = isConflict ? 2 : 0.8;
     const hasGrain=item.tex&&!item.rotated;
     const grainArrow=hasGrain&&iw>20&&ih>20
       ?`<line x1="${ix+iw/2}" y1="${iy+6}" x2="${ix+iw/2}" y2="${iy+ih-6}" stroke="rgba(0,0,0,0.3)" stroke-width="1.5" marker-end="url(#arr)"/>`
@@ -2836,7 +2864,7 @@ function drawSheet(sh,SW,SH,scale,showEdge,matColor){
     const nm = item.name||'';
     const dimTxt = item.w+'×'+item.h;
     svgItems+=`<g>
-      <rect x="${ix}" y="${iy}" width="${iw}" height="${ih}" fill="${col}" stroke="#444" stroke-width="0.8" rx="1" opacity="0.88"/>
+      <rect x="${ix}" y="${iy}" width="${iw}" height="${ih}" fill="${col}" stroke="${strokeCol}" stroke-width="${strokeW}" rx="1" opacity="0.88"/>
       ${edgeMarkup}${grainArrow}
       ${iw>22&&ih>10?`<text x="${ix+iw/2}" y="${iy+ih/2-3}" text-anchor="middle" font-size="${Math.max(4.5,Math.min(7,Math.min(iw,ih)/7))}" fill="#111">${nm}</text>`:''}
       ${iw>22&&ih>16?`<text x="${ix+iw/2}" y="${iy+ih/2+6}" text-anchor="middle" font-size="4.5" fill="#444">${dimTxt}</text>`:''}
@@ -2857,8 +2885,12 @@ function drawSheet(sh,SW,SH,scale,showEdge,matColor){
   }
   // Метка листа — формат как в кухне
   const shNum = sh.label.match(/\d+/)?.[0]||'1';
+  const conflictBanner = conflicts.size>0
+    ? '<div style="font-size:10px;color:#e53935;font-weight:700;margin-bottom:3px">⚠ Пересечение деталей: ' + conflicts.size + ' шт — проверьте раскрой</div>'
+    : '';
   return`<div style="display:inline-block;vertical-align:top;margin:0 10px 12px 0">
     <div style="font-size:10px;color:#555;margin-bottom:3px;font-weight:600">Лист ${shNum} — занято ${effH}% по ширине ${SH}мм</div>
+    ${conflictBanner}
     <svg width="${pw}" height="${ph}" style="border:2px solid #555;border-radius:3px;background:#f5f5f0;display:block" xmlns="http://www.w3.org/2000/svg">
       <defs><marker id="arr${shNum}" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto">
         <path d="M0,0 L0,4 L4,2 z" fill="rgba(0,0,0,0.3)"/>
@@ -5179,11 +5211,15 @@ function kShowCut(){
       const lastRow = sh.rows[sh.rows.length-1];
       const widthUsed = lastRow ? lastRow.y + lastRow.h + SAW_EXT : 0;
       const widthPct = Math.round(widthUsed / (SH - SAW_EXT*2) * 100);
+      const conflicts = findBBoxConflicts(sh.items);
 
       html += `<div>`;
       html += `<div style="font-size:10px;color:#555;margin-bottom:3px;font-weight:600">`;
       html += `Лист ${si+1} — занято ${widthPct}% по ширине ${SH}мм`;
       html += `</div>`;
+      if(conflicts.size>0){
+        html += '<div style="font-size:10px;color:#e53935;font-weight:700;margin-bottom:3px">⚠ Пересечение деталей: ' + conflicts.size + ' шт</div>';
+      }
       html += `<svg width="${svgW}" height="${svgH}" style="border:2px solid #555;border-radius:3px;background:#f5f5f0;display:block">`;
 
       // Граница рабочей зоны
@@ -5198,10 +5234,14 @@ function kShowCut(){
         html += `<line x1="${extX}" y1="${lineY}" x2="${extX+extW}" y2="${lineY}" stroke="#e44" stroke-width="0.8" stroke-dasharray="4,2"/>`;
       }
 
-      sh.items.forEach((it)=>{
+      sh.items.forEach((it,itIdx)=>{
         const x=Math.round(it.x*sc), y=Math.round(it.y*sc);
         const w=Math.max(2,Math.round(it.w*sc)), h=Math.max(2,Math.round(it.h*sc));
-        html += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}" stroke="#444" stroke-width="0.8" rx="1" opacity="0.85"/>`;
+        const isConflict = conflicts.has(itIdx);
+        const fillCol = isConflict ? '#e53935' : color;
+        const strokeCol = isConflict ? '#b71c1c' : '#444';
+        const strokeW = isConflict ? 2 : 0.8;
+        html += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fillCol}" stroke="${strokeCol}" stroke-width="${strokeW}" rx="1" opacity="0.85"/>`;
         if(w>22 && h>10){
           const fs = Math.max(4.5, Math.min(7, Math.min(w,h)/7));
           const nm = it.name + (it.rotated ? '↻' : '');
