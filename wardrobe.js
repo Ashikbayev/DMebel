@@ -640,15 +640,16 @@ function setAllFacadeMat(mat){
 }
 function addSection(){ sections.push(mkSection()); renderPanel(); render3D(); projMarkUnsaved(); }
 function removeSection(id){ sections=sections.filter(s=>s.id!==id); renderPanel(); render3D(); projMarkUnsaved(); }
-function addShelf(sid){
+function addShelf(sid, colIdx){
   const s=sections.find(x=>x.id===sid);
-  s.shelves.push({id:s.shelfId++, height:Math.round(s.height/2)});
+  colIdx=parseInt(colIdx)||0;
+  s.shelves.push({id:s.shelfId++, height:Math.round(s.height/2), col:colIdx});
   s.shelves.sort((a,b)=>a.height-b.height);
   renderPanel(); render3D(); projMarkUnsaved();
 }
 function autoShelves(sid){
   const s=sections.find(x=>x.id===sid);
-  const n=parseInt(prompt(`Количество полок для секции (высота ${s.height} мм):`,'3'));
+  const n=parseInt(prompt('Количество полок для секции (высота '+s.height+' мм):','3'));
   if(!n||n<1||n>20)return;
   // свободная зона: от дна (T) до крыши (H-T), минус зона ящиков снизу
   const zoneBottom=T;
@@ -656,10 +657,16 @@ function autoShelves(sid){
   const usable=zoneTop-zoneBottom;
   if(usable<100){alert('Недостаточно места для полок');return;}
   const step=Math.round(usable/(n+1));
+  const heights=[];
+  for(let i=1;i<=n;i++) heights.push(zoneBottom+step*i);
+  // заполняем КАЖДУЮ нишу (колонку) одинаковым набором полок
+  const cols=getColumns(s);
   s.shelves=[];
-  for(let i=1;i<=n;i++){
-    s.shelves.push({id:s.shelfId++,height:zoneBottom+step*i});
-  }
+  cols.forEach(function(c,ci){
+    heights.forEach(function(h){
+      s.shelves.push({id:s.shelfId++, height:h, col:ci});
+    });
+  });
   // сбрасываем nicheIdx ящиков если ниша больше не существует
   const newNicheCount=n+1; // n полок дают n+1 нишу
   s.drawerBlocks.forEach(db=>{
@@ -673,7 +680,19 @@ function removeShelf(sid,shid){
 }
 function addDivider(sid){
   const s=sections.find(x=>x.id===sid);
+  const wasSingleColumn = s.dividers.length===0;
   s.dividers.push({id:s.divId++, pos:Math.round(s.width/2)});
+  if(wasSingleColumn && s.shelves.length){
+    // Полка на всю секцию физически разрезается новой перегородкой на
+    // два независимых сегмента на той же высоте — дублируем в обе ниши,
+    // чтобы визуально ничего не "потерялось".
+    const dup=[];
+    s.shelves.forEach(sh=>{
+      dup.push({id:s.shelfId++, height:sh.height, col:0});
+      dup.push({id:s.shelfId++, height:sh.height, col:1});
+    });
+    s.shelves=dup;
+  }
   renderPanel(); render3D(); projMarkUnsaved();
 }
 function removeDivider(sid,did){
@@ -1111,14 +1130,34 @@ function renderPanel(){
     const delBtn=sections.length>1
       ?`<button class="delbtn" onclick="removeSection(${s.id})"><i class="ti ti-trash"></i></button>`
       :'';
-    const shelvesHtml=s.shelves.map(sh=>
-      `<div class="irow">
+    const shelfCols=getColumns(s);
+    const shelfColLabel=function(ci){
+      if(shelfCols.length<=1) return '';
+      const nm=ci===0?'Лев':ci===shelfCols.length-1?'Прав':('Н'+(ci+1));
+      return '<span style="font-size:9px;color:#1a3a8a;background:#e8eaf6;padding:1px 5px;border-radius:3px;margin-right:4px">'+nm+'</span>';
+    };
+    const shelvesHtml=s.shelves.map(sh=>{
+      const ci=Math.min(sh.col||0, Math.max(0,shelfCols.length-1));
+      return `<div class="irow">
+        ${shelfColLabel(ci)}
         <span class="hint">от пола</span>
         <input type="number" value="${sh.height}" onchange="updShelf(${s.id},${sh.id},this.value)">
         <span class="hint">мм</span>
         <button class="ibtn" onclick="removeShelf(${s.id},${sh.id})"><i class="ti ti-x"></i></button>
-      </div>`
-    ).join('');
+      </div>`;
+    }).join('');
+    const shelfColSelId='shelf-col-sel-'+s.id;
+    const shelfColOptions=shelfCols.length>1
+      ? '<select id="'+shelfColSelId+'" style="font-size:11px;padding:5px 6px;border-radius:6px;border:1px solid #ddd">' +
+          shelfCols.map(function(c,ci){
+            const nm=ci===0?'Левая ниша':ci===shelfCols.length-1?'Правая ниша':('Ниша '+(ci+1));
+            return '<option value="'+ci+'">'+nm+'</option>';
+          }).join('') +
+        '</select>'
+      : '';
+    const addShelfOnclick=shelfCols.length>1
+      ? "addShelf("+s.id+", document.getElementById('"+shelfColSelId+"').value)"
+      : "addShelf("+s.id+", 0)";
     const divsHtml=s.dividers.map(d=>
       `<div class="irow">
         <span class="hint">от лев.</span>
@@ -1246,8 +1285,9 @@ function renderPanel(){
       // ── Полки ──
       acc('shelves','▤ Полки',shBadge,
         shelvesHtml +
-        `<div style="display:flex;gap:5px;margin-top:4px">` +
-          `<button class="addbtn" style="margin-bottom:0" onclick="addShelf(${s.id})">+ полка</button>` +
+        `<div style="display:flex;gap:5px;margin-top:4px;align-items:center;flex-wrap:wrap">` +
+          shelfColOptions +
+          `<button class="addbtn" style="margin-bottom:0" onclick="${addShelfOnclick}">+ полка</button>` +
           `<button class="addbtn" style="margin-bottom:0;background:#f0f4ff;color:#1a3a8a;border-color:#c5d3f5;flex-shrink:0;width:auto;padding:4px 10px" onclick="autoShelves(${s.id})">⚡ Авто</button>` +
         `</div>`,
         s.shelves.length>0
@@ -1903,11 +1943,15 @@ function render3D(){
     addBoard(ox,LH+T,zFront,T,Hc,Dc); addBoard(ox+W-T,LH+T,zFront,T,Hc,Dc);
     addBoard(ox,LH+T+Hc,zFront,W,T,Dc); addBoard(ox,LH,zFront,W,T,Dc,ML2);
     addBoard(ox,LH+T,zFront+Dc,W,Hc,HDF_THICK,MH);
+    const shelfCols3d=getColumns(s);
     s.shelves.forEach(sh=>{
-      const sm=addBoard(ox+T,LH+sh.height,zFront,W-2*T,T,Dc,ML,false,{
+      const sci=Math.min(sh.col||0, Math.max(0,shelfCols3d.length-1));
+      const scol=shelfCols3d[sci] || {left:T, width:W-2*T};
+      const sx=ox+scol.left, sw=scol.width;
+      const sm=addBoard(sx,LH+sh.height,zFront,sw,T,Dc,ML,false,{
         drag:true, secId:s.id, shelfId:sh.id,
         minY:LH+T*2, maxY:LH+Math.max(T*2+1,H-T*2),
-        ox:ox+T, oz:zFront, sw:W-2*T, sd:Dc
+        ox:sx, oz:zFront, sw:sw, sd:Dc
       });
     });
     // ящики по нишам и колонкам
@@ -1973,16 +2017,20 @@ function render3D(){
     sections.forEach(s=>{
       if(s.antresol&&s.antresol.enabled){
         const AH=s.antresol.height, AW=s.width, AD=s.depth, ay=LH+s.height;
-        addBoard(aox,ay,0,T,AH,AD);
-        addBoard(aox+AW-T,ay,0,T,AH,AD);
-        addBoard(aox+T,ay+AH-T,0,AW-2*T,T,AD);
-        addBoard(aox+T,ay,0,AW-2*T,T,AD,ML2);
-        addBoard(aox,ay,AD-8,AW,AH,8,MH);
+        const AHDF_THICK=3;
+        const ADc=AD-T-AHDF_THICK;
+        const AHc=AH-2*T;
+        const azFront=T;
+        addBoard(aox,ay+T,azFront,T,AHc,ADc);
+        addBoard(aox+AW-T,ay+T,azFront,T,AHc,ADc);
+        addBoard(aox,ay+T+AHc,azFront,AW,T,ADc);
+        addBoard(aox,ay,azFront,AW,T,ADc,ML2);
+        addBoard(aox,ay+T,azFront+ADc,AW,AHc,AHDF_THICK,MH);
         if(s.antresol.facade.type!=='none'){
           const fm=s.antresol.facade.material==='mdf'?MFM:MFL;
           const cnt=s.antresol.facade.type==='doors3'?3:s.antresol.facade.type==='doors2'?2:1;
-          const gap=4,thick=18,dw=(AW-gap*(cnt+1))/cnt;
-          for(let i=0;i<cnt;i++) addBoard(aox+gap+(dw+gap)*i,ay+gap,-thick,dw,AH-gap*2,thick,fm,true);
+          const gap=4,thick=T,dw=(AW-gap*(cnt+1))/cnt;
+          for(let i=0;i<cnt;i++) addBoard(aox+gap+(dw+gap)*i,ay+gap,0,dw,AH-gap*2,thick,fm,true);
         }
       }
 
@@ -2163,10 +2211,14 @@ function calcParts(){
     ldsp.push({name:`${L} Дно`,w:W,h:Dc,tex:false,edgeFront:ef,edgeBack:eb});
     addEdge(`${L} Дно`,W,Dc,'vis','hid','hid','hid');
 
-    // Полки: видимый — передний торец (W-2T)
+    // Полки: ширина — от её ниши (колонки), если есть перегородки;
+    // видимый — передний торец
+    const shelfCols=getColumns(s);
     s.shelves.forEach((sh,j)=>{
-      ldsp.push({name:`${L} Полка ${j+1}`,w:W-2*T,h:Dc,tex:false,edgeFront:ef,edgeBack:eb});
-      addEdge(`${L} Полка ${j+1}`,W-2*T,Dc,'vis','hid','hid','hid');
+      const sci=Math.min(sh.col||0, Math.max(0,shelfCols.length-1));
+      const shW=shelfCols[sci] ? shelfCols[sci].width : W-2*T;
+      ldsp.push({name:`${L} Полка ${j+1}`,w:shW,h:Dc,tex:false,edgeFront:ef,edgeBack:eb});
+      addEdge(`${L} Полка ${j+1}`,shW,Dc,'vis','hid','hid','hid');
     });
 
     // Перегородки: видимые — оба торца по высоте (Hc, тот же уровень, что боковины)
@@ -2236,17 +2288,55 @@ function calcParts(){
   sections.forEach((s,si)=>{
     if(!s.antresol||!s.antresol.enabled)return;
     const AH=s.antresol.height, AW=s.width, AD=s.depth, L=`С${si+1}А`;
-    ldsp.push({name:`${L} Бок лев`,w:AD,h:AH,tex:false});
-    ldsp.push({name:`${L} Бок пр`,w:AD,h:AH,tex:false});
-    ldsp.push({name:`${L} Крыша`,w:AW-2*T,h:AD,tex:false});
-    ldsp.push({name:`${L} Дно`,w:AW-2*T,h:AD,tex:false});
-    hdf.push({name:`${L} Задняя`,w:AW,h:AH,tex:false});
+    // Тот же глубинный/высотный бюджет, что и у основного корпуса секции
+    // (антресоль — такая же накладная конструкция сверху)
+    const ADc = AD - T - 3;
+    const AHc = AH - 2*T;
+    const aef=s.edgeFront||'2mm', aeb=s.edgeBack||'none';
+
+    // Кромка антресольных панелей — раньше вообще не считалась (0 пм).
+    // Логика идентична основной addEdge() выше, но своя копия,
+    // т.к. антресоль обсчитывается отдельным forEach-циклом.
+    function addAntrEdge(name,w,h,topDef,bottomDef,leftDef,rightDef){
+      function resolve(userMode,defBucket){
+        if(userMode==='none') return null;
+        if(userMode==='match') return 'vis';
+        return defBucket;
+      }
+      const bT=resolve(s.edgeTop||'auto',topDef);
+      const bB=resolve(s.edgeBottom||'auto',bottomDef);
+      const bL=resolve(s.edgeLeft||'auto',leftDef);
+      const bR=resolve(s.edgeRight||'auto',rightDef);
+      let visLen=0, hidLen=0;
+      if(bT==='vis') visLen+=w; else if(bT==='hid') hidLen+=w;
+      if(bB==='vis') visLen+=w; else if(bB==='hid') hidLen+=w;
+      if(bL==='vis') visLen+=h; else if(bL==='hid') hidLen+=h;
+      if(bR==='vis') visLen+=h; else if(bR==='hid') hidLen+=h;
+      const pm04=((aef==='04mm'?visLen:0)+(aeb==='04mm'?hidLen:0))/1000;
+      const pm2=((aef==='2mm'?visLen:0)+(aeb==='2mm'?hidLen:0))/1000;
+      if(pm04>0||pm2>0) edgeRows.push({name,pm04,pm2});
+    }
+
+    ldsp.push({name:`${L} Бок лев`,w:ADc,h:AHc,tex:false,edgeFront:aef,edgeBack:aeb});
+    addAntrEdge(L+' Бок лев',ADc,AHc,'vis','hid','vis','hid');
+    ldsp.push({name:`${L} Бок пр`,w:ADc,h:AHc,tex:false,edgeFront:aef,edgeBack:aeb});
+    addAntrEdge(L+' Бок пр',ADc,AHc,'vis','hid','vis','hid');
+    // Крыша/Дно антресоли — накладные, полная ширина AW (как у основного корпуса)
+    ldsp.push({name:`${L} Крыша`,w:AW,h:ADc,tex:false,edgeFront:aef,edgeBack:aeb});
+    addAntrEdge(L+' Крыша',AW,ADc,'vis','hid','hid','hid');
+    ldsp.push({name:`${L} Дно`,w:AW,h:ADc,tex:false,edgeFront:aef,edgeBack:aeb});
+    addAntrEdge(L+' Дно',AW,ADc,'vis','hid','hid','hid');
+    hdf.push({name:`${L} Задняя`,w:AW,h:AHc,tex:false});
     if(s.antresol.facade.type!=='none'){
       const cnt=s.antresol.facade.type==='doors3'?3:s.antresol.facade.type==='doors2'?2:1;
       const gap=4,dw=Math.round((AW-gap*(cnt+1))/cnt),dh=AH-gap*2;
       for(let i=0;i<cnt;i++){
         const p={name:`${L} Фасад ${i+1}`,w:dw,h:dh,tex:false};
         if(s.antresol.facade.material==='mdf') facMdf.push(p); else facLdsp.push(p);
+        // Кромка фасада антресоли — тоже раньше не считалась
+        if(s.antresol.facade.material==='ldsp'){
+          addAntrEdge(L+' Фасад '+(i+1),dw,dh,'vis','vis','vis','vis');
+        }
       }
     }
   });
@@ -3169,8 +3259,13 @@ function renderMobile3D(){
     addB(ox+T,H-T,0,W-2*T,T,D); addB(ox+T,0,0,W-2*T,T,D,mML2);
     addB(ox,0,D-8,W,H,8,mMH);
 
-    // полки
-    s.shelves.forEach(sh=>addB(ox+T,sh.height,0,W-2*T,T,D));
+    // полки — ширина/позиция от ниши (колонки), если есть перегородки
+    const mCols=getColumns(s);
+    s.shelves.forEach(sh=>{
+      const mci=Math.min(sh.col||0, Math.max(0,mCols.length-1));
+      const mcol=mCols[mci] || {left:T, width:W-2*T};
+      addB(ox+mcol.left, sh.height, 0, mcol.width, T, D);
+    });
 
     // перегородки
     s.dividers.forEach(dv=>addB(ox+dv.pos,T,0,T,H-2*T,D));
@@ -6218,9 +6313,12 @@ function showConfBlueprint(){
     svg += l(xOff+2, baseY+BD, xOff+2, baseY+H-BD, '#94a3b8', 0.5, '3,2');
 
     // ── Полки ──────────────────────────────────────────────
+    const bpCols=getColumns(sec);
     sec.shelves.forEach(sh => {
+      const bci=Math.min(sh.col||0, Math.max(0,bpCols.length-1));
+      const bcol=bpCols[bci] || {left:BD, width:W-BD*2};
       const sy_ = baseY + sh.height;
-      svg += r(xOff+BD, sy_, W-BD*2, BD, C_SHELF, '#64748b', 0.7);
+      svg += r(xOff+bcol.left, sy_, bcol.width, BD, C_SHELF, '#64748b', 0.7);
     });
 
     // ── Перегородки (вертикальные внутри) ─────────────────
