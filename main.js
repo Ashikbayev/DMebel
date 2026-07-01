@@ -41,6 +41,7 @@ async function loadFromSheets() {
       DB.vit = data.vit;
       renderWorks();
       recalc();
+      kpManagerLoadList();
       showStatus('OK: Цены загружены из Google Sheets', '#1D9E75');
       setTimeout(hideStatus, 2500);
     } else {
@@ -221,6 +222,28 @@ function recalc(){
     st(pfx+"-t",B.taxA);st(pfx+"-tot",B.tot);st(pfx+"-cr",B.credit);st(pfx+"-inc",B.inc);
   }
   fB("il",BL);fB("ip",BP);fB("ik",BK);
+}
+
+// ── Менеджер: сохранение и загрузка ──────────────────────────
+function kpManagerSave() {
+  var name = ($('kp-manager')||{}).value || '';
+  if (!name.trim()) return;
+  var list = JSON.parse(localStorage.getItem('moff_managers') || '[]');
+  if (list.indexOf(name) < 0) {
+    list.push(name);
+    localStorage.setItem('moff_managers', JSON.stringify(list));
+  }
+  kpManagerLoadList();
+  showStatus('\u041c\u0435\u043d\u0435\u0434\u0436\u0435\u0440 \u0441\u043e\u0445\u0440\u0430\u043d\u0451\u043d', '#1a5252');
+}
+function kpManagerLoadList() {
+  var dl = document.getElementById('kp-manager-list');
+  if (!dl) return;
+  var list = JSON.parse(localStorage.getItem('moff_managers') || '[]');
+  if (list.length === 0) list = ['\u0414\u0430\u043b\u0438'];
+  dl.innerHTML = list.map(function(n){ return '<option value="'+n+'">'; }).join('');
+  var inp = $('kp-manager');
+  if (inp && !inp.value && list.length > 0) inp.value = list[list.length - 1];
 }
 
 // ── Договор ───────────────────────────────────────────────────
@@ -585,9 +608,10 @@ function kpToggleStyle(){
 }
 
 function showKP(showL=true, showP=true, showK=false){
-  var client = ($("kp-client")||{}).value||"—";
-  var obj    = ($("kp-object")||{}).value||"—";
-  var num    = ($("kp-num")   ||{}).value||"001";
+  var client  = ($("kp-client")  ||{}).value||"—";
+  var obj     = ($("kp-object")  ||{}).value||"—";
+  var num     = ($("kp-num")     ||{}).value||"001";
+  var manager = ($("kp-manager") ||{}).value||"Менеджер";
   var d = new Date();
   var today  = d.toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit",year:"numeric"});
   var expiry = new Date(d.getTime()+30*86400000).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit",year:"numeric"});
@@ -652,6 +676,9 @@ function showKP(showL=true, showP=true, showK=false){
   // Работы
   var wkArr = C.wkIt||[];
   wkArr.forEach(function(it){ addRow(it.n,"Монтаж / работы","1",it.p||0,it.p||0,it.p||0); });
+  // Витрины
+  var vitKpArr = C.vitIt||[];
+  vitKpArr.forEach(function(it){ addRow(it.n,"\u0414\u043e\u043f. \u043f\u043e\u0437\u0438\u0446\u0438\u044f",it.q+" \u0448\u0442.",0,0,0); });
 
   // Заголовки колонок цен
   var thPrices = "";
@@ -679,10 +706,10 @@ function showKP(showL=true, showP=true, showK=false){
     vars.forEach(function(v){
       hdrCells += "<td style=\"text-align:right;padding:8px 12px 4px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:"+varColors[v.key]+";font-weight:700;background:#F8F7F5\">"+v.name+"</td>";
       totVarCells += "<td style=\"text-align:right;padding:14px 12px;vertical-align:top;white-space:nowrap\">";
-      totVarCells += "<span style=\"font-family:Georgia,serif;font-size:20px;font-weight:700;color:#1C1C1E\">"+fm(totals[v.key])+"</span></td>";
+      totVarCells += "<span style=\"font-family:'Times New Roman',Times,serif;font-size:20px;font-weight:700;color:#1C1C1E\">"+fm(totals[v.key])+"</span></td>";
       if(showCredit){
         creditVarCells += "<td style=\"text-align:right;padding:8px 12px;vertical-align:top;white-space:nowrap\">";
-        creditVarCells += "<span style=\"font-family:Georgia,serif;font-size:15px;font-weight:500;color:#9A9087\">"+fm(credits[v.key])+"</span></td>";
+        creditVarCells += "<span style=\"font-family:'Times New Roman',Times,serif;font-size:15px;font-weight:500;color:#9A9087\">"+fm(credits[v.key])+"</span></td>";
       }
     });
     headerRow = "<tr style=\"border-top:2px solid #1C1C1E\"><td colspan=\"3\" style=\"padding:8px 12px 4px;background:#F8F7F5\"></td>"+hdrCells+"</tr>";
@@ -692,9 +719,9 @@ function showKP(showL=true, showP=true, showK=false){
     var v1 = vars[0]?vars[0].key:"L";
     headerRow = "<tr style=\"border-top:2px solid #1C1C1E\"><td colspan=\"3\" style=\"padding:8px 12px 4px;background:#F8F7F5\"></td><td colspan=\"2\" style=\"text-align:right;padding:8px 12px 4px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:"+varColors[v1]+";font-weight:700;background:#F8F7F5\">"+(vars[0]?vars[0].name:"")+"</td></tr>";
     totRow = "<tr style=\"background:#F8F7F5\"><td colspan=\"3\" style=\"padding:14px 12px;font-size:14px;font-weight:700;color:#1C1C1E\">\u041a \u043e\u043f\u043b\u0430\u0442\u0435</td>"
-      + "<td colspan=\"2\" style=\"text-align:right;padding:14px 12px;white-space:nowrap\"><span style=\"font-family:Georgia,serif;font-size:24px;font-weight:700;color:#1C1C1E\">"+fm(totals[v1])+"</span></td></tr>";
+      + "<td colspan=\"2\" style=\"text-align:right;padding:14px 12px;white-space:nowrap\"><span style=\"font-family:'Times New Roman',Times,serif;font-size:24px;font-weight:700;color:#1C1C1E\">"+fm(totals[v1])+"</span></td></tr>";
     if(showCredit) creditRow = "<tr style=\"background:#F2F1EE\"><td colspan=\"3\" style=\"padding:8px 12px;font-size:12px;color:#9A9087\">\uD83D\uDCB3 \u0412 \u043a\u0440\u0435\u0434\u0438\u0442</td>"
-      + "<td colspan=\"2\" style=\"text-align:right;padding:8px 12px;white-space:nowrap\"><span style=\"font-family:Georgia,serif;font-size:18px;font-weight:500;color:#9A9087\">"+fm(credits[v1])+"</span></td></tr>";
+      + "<td colspan=\"2\" style=\"text-align:right;padding:8px 12px;white-space:nowrap\"><span style=\"font-family:'Times New Roman',Times,serif;font-size:18px;font-weight:500;color:#9A9087\">"+fm(credits[v1])+"</span></td></tr>";
   }
 
   // Золотой разделитель
@@ -730,7 +757,7 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "<div class=\"kp-row\" style=\"padding:8px 20px;border-bottom:1px solid #EBEBEB;display:flex;gap:24px;align-items:flex-start\">";
   kpHtml += "<div><div style=\""+S.small+"\">Клиент</div><div style=\"margin-top:2px;font-size:12px;font-weight:600\">"+client+"</div></div>";
   kpHtml += "<div><div style=\""+S.small+"\">Объект</div><div style=\"margin-top:2px;font-size:12px;font-weight:600\">"+obj+"</div></div>";
-  kpHtml += "<div style=\"margin-left:auto;text-align:right\"><div style=\""+S.small+"\">Менеджер &nbsp;/&nbsp; Тел.</div><div style=\"margin-top:2px;font-size:11px\">Дали &nbsp;&middot;&nbsp; +7 707 540 7626</div></div>";
+  kpHtml += "<div style=\"margin-left:auto;text-align:right\"><div style=\""+S.small+"\">Менеджер &nbsp;/&nbsp; Тел.</div><div style=\"margin-top:2px;font-size:11px\">"+manager+" &nbsp;&middot;&nbsp; +7 707 540 7626</div></div>";
   kpHtml += "</div>";
 
   // СПЕЦИФИКАЦИЯ
@@ -760,7 +787,7 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "<div style=\"display:flex;gap:20px\">";
   kpHtml += "<div><div style=\""+S.small+"\">Срок</div><div style=\"font-size:11px;font-weight:600;margin-top:2px\">15–45 раб. дн.</div></div>";
   kpHtml += "<div><div style=\""+S.small+"\">Оплата</div><div style=\"font-size:11px;font-weight:600;margin-top:2px\">по договору</div></div>";
-  kpHtml += "<div><div style=\""+S.small+"\">Гарантия</div><div style=\"font-size:11px;font-weight:600;margin-top:2px\">12 месяцев</div></div>";
+  kpHtml += "<div><div style=\""+S.small+"\">Гарантия</div><div style=\"font-size:11px;font-weight:600;margin-top:2px\">12 мес. на фурнитуру</div></div>";
   kpHtml += "</div></div>";
   kpHtml += "<div style=\"flex:1.4;padding-left:16px\">";
   kpHtml += "<div style=\""+S.sec+"\">Примечания</div>";
@@ -781,7 +808,7 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "<div style=\"text-align:right\">";
   kpHtml += "<div style=\""+S.small+";margin-bottom:18px\">Подпись менеджера</div>";
   kpHtml += "<div style=\"width:140px;height:1px;background:#1C1C1E;margin-left:auto;margin-bottom:4px\"></div>";
-  kpHtml += "<div style=\"font-size:10px;color:#777\">Дали</div>";
+  kpHtml += "<div style=\"font-size:10px;color:#777\">"+manager+"</div>";
   kpHtml += "</div></div>";
 
   kpHtml += "</div>";
@@ -1825,7 +1852,7 @@ function getSnap(){
   const snap={};
   // Коэф и настройки
   ["c-kl","c-rl","c-sl","c-taxl","c-crl","c-kp","c-rp","c-sp","c-taxp","c-crp","c-kk","c-rk","c-sk","c-taxk","c-crk",
-   "hdf-qty","krom-qty","d-sat","d-pdm","svet-inc","kp-client","kp-object","kp-num"].forEach(id=>{
+   "hdf-qty","krom-qty","d-sat","d-pdm","svet-inc","kp-client","kp-object","kp-num","kp-manager"].forEach(id=>{
     const e=$(id);if(e)snap[id]=e.value;
   });
   // Работы
@@ -1938,7 +1965,7 @@ async function loadCalc(id){
   const snap=rec.snap;
   // Простые инпуты
   ["c-kl","c-rl","c-sl","c-taxl","c-crl","c-kp","c-rp","c-sp","c-taxp","c-crp","c-kk","c-rk","c-sk","c-taxk","c-crk",
-   "hdf-qty","krom-qty","d-sat","d-pdm","svet-inc","kp-client","kp-object","kp-num"].forEach(fid=>{
+   "hdf-qty","krom-qty","d-sat","d-pdm","svet-inc","kp-client","kp-object","kp-num","kp-manager"].forEach(fid=>{
     const e=$(fid);if(e&&snap[fid]!==undefined)e.value=snap[fid];
   });
   // Работы qty

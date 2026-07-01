@@ -128,6 +128,12 @@
       <div class="fr"><span class="lb">Клиент</span><input class="qt" type="text" id="kp-client" placeholder="Имя клиента"></div>
       <div class="fr"><span class="lb">Объект</span><input class="qt" type="text" id="kp-object" placeholder="Кухня, шкаф..."></div>
       <div class="fr"><span class="lb">КП №</span><input class="qt" type="text" id="kp-num" value="001"></div>
+      <div class="fr">
+        <span class="lb">Менеджер</span>
+        <input class="qt" type="text" id="kp-manager" placeholder="Имя менеджера" list="kp-manager-list" style="flex:1">
+        <datalist id="kp-manager-list"></datalist>
+        <button onclick="kpManagerSave()" title="Сохранить менеджера" style="margin-left:4px;padding:4px 8px;border:1px solid #C9A96E;border-radius:6px;background:#fff;color:#7B5E2A;cursor:pointer;font-size:12px;flex-shrink:0">💾</button>
+      </div>
     </div>
     <button class="actn ad" onclick="openKpVarModal()">📄 Сформировать КП →</button>
     <button class="actn" onclick="openDogovor()" style="background:linear-gradient(135deg,#7B5E2A,#C9A96E);color:#fff;border:none;margin-top:6px">📋 Договор →</button>
