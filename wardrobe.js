@@ -546,6 +546,7 @@ function mkSection(){
     facadeDoors:[],
     antresol:{enabled:false, height:400, facade:{type:'none', material:'ldsp'}},
     edgeFront:'2mm', edgeBack:'04mm',
+    edgeTop:'auto', edgeBottom:'auto', edgeLeft:'auto', edgeRight:'auto',
     drawerBlocks:[],
     shelfId:0, divId:0
   };
@@ -696,6 +697,19 @@ function updEdge(sid,field,val){
   s[field]=val;
   updateStats(); projMarkUnsaved();
 }
+
+// Строит селект "Авто/Нет/В цвет кромки" для одной грани панели.
+// Используется только как UI-слой поверх существующей привязки кромки в addEdge().
+function edgeFaceSelect(sid, field, label, val){
+  val = val || 'auto';
+  return '<div><div class="fl">' + label + '</div>' +
+    '<select onchange="updEdge(' + sid + ',\'' + field + '\',this.value)">' +
+      '<option value="auto"' + (val==='auto' ? ' selected' : '') + '>Авто</option>' +
+      '<option value="none"' + (val==='none' ? ' selected' : '') + '>Нет</option>' +
+      '<option value="match"' + (val==='match' ? ' selected' : '') + '>В цвет кромки</option>' +
+    '</select></div>';
+}
+window.edgeFaceSelect = edgeFaceSelect;
 
 
 function toggleRod(sid){
@@ -1280,7 +1294,7 @@ function renderPanel(){
 
       // ── Кромка ──
       acc('edge','📏 Кромка ПВХ','',
-        `<div class="g2" style="margin-bottom:0">` +
+        `<div class="g2" style="margin-bottom:8px">` +
           `<div><div class="fl">Лицевые торцы</div>` +
           `<select onchange="updEdge(${s.id},'edgeFront',this.value)">` +
             `<option value="2mm" ${s.edgeFront==='2mm'?'selected':''}>2 мм</option>` +
@@ -1293,7 +1307,14 @@ function renderPanel(){
             `<option value="2mm" ${s.edgeBack==='2mm'?'selected':''}>2 мм</option>` +
             `<option value="none" ${s.edgeBack==='none'?'selected':''}>Без кромки</option>` +
           `</select></div>` +
-        `</div>`,
+        `</div>` +
+        '<div class="fl" style="margin-bottom:4px;opacity:0.75">Кромка по граням (переопределение)</div>' +
+        '<div class="g2">' +
+          edgeFaceSelect(s.id,'edgeTop','Верх',s.edgeTop) +
+          edgeFaceSelect(s.id,'edgeBottom','Низ',s.edgeBottom) +
+          edgeFaceSelect(s.id,'edgeLeft','Лево',s.edgeLeft) +
+          edgeFaceSelect(s.id,'edgeRight','Право',s.edgeRight) +
+        '</div>',
         false
       ) +
       `</div>`;
@@ -2087,45 +2108,55 @@ function calcParts(){
     const W=s.width,H=s.height,D=s.depth,L=`С${i+1}`;
     const ef=s.edgeFront||'2mm', eb=s.edgeBack||'04mm';
 
-    // helper: add edge for a part
-    // visibleEdges: array of lengths in мм that get "front" кромку
-    // hiddenEdges: array of lengths that get "back" кромку
-    function addEdge(name,visEdges,hidEdges){
-      const pm04=(
-        (ef==='04mm'?visEdges.reduce((a,v)=>a+v,0):0) +
-        (eb==='04mm'?hidEdges.reduce((a,v)=>a+v,0):0)
-      )/1000;
-      const pm2=(
-        (ef==='2mm'?visEdges.reduce((a,v)=>a+v,0):0) +
-        (eb==='2mm'?hidEdges.reduce((a,v)=>a+v,0):0)
-      )/1000;
+    // helper: кромка панели по 4 граням отдельно.
+    // w,h — размеры панели (как в ldsp.push). topDef/bottomDef относятся
+    // к рёбрам длиной w, leftDef/rightDef — к рёбрам длиной h.
+    // defBucket ('vis'|'hid') — базовое (авто) назначение грани по видимости.
+    // Пользователь может переопределить каждую грань в UI: 'auto'|'none'|'match'.
+    function addEdge(name,w,h,topDef,bottomDef,leftDef,rightDef){
+      function resolve(userMode,defBucket){
+        if(userMode==='none') return null;
+        if(userMode==='match') return 'vis';
+        return defBucket;
+      }
+      const bT=resolve(s.edgeTop||'auto',topDef);
+      const bB=resolve(s.edgeBottom||'auto',bottomDef);
+      const bL=resolve(s.edgeLeft||'auto',leftDef);
+      const bR=resolve(s.edgeRight||'auto',rightDef);
+      let visLen=0, hidLen=0;
+      if(bT==='vis') visLen+=w; else if(bT==='hid') hidLen+=w;
+      if(bB==='vis') visLen+=w; else if(bB==='hid') hidLen+=w;
+      if(bL==='vis') visLen+=h; else if(bL==='hid') hidLen+=h;
+      if(bR==='vis') visLen+=h; else if(bR==='hid') hidLen+=h;
+      const pm04=((ef==='04mm'?visLen:0)+(eb==='04mm'?hidLen:0))/1000;
+      const pm2=((ef==='2mm'?visLen:0)+(eb==='2mm'?hidLen:0))/1000;
       if(pm04>0||pm2>0) edgeRows.push({name,pm04,pm2});
     }
 
     // Боковины: видимые — передний торец (H) и верхний (D), скрытые — задний (H) и нижний (D)
     ldsp.push({name:`${L} Бок лев`,w:D,h:H,tex:false,edgeFront:ef,edgeBack:eb});
-    addEdge(`${L} Бок лев`,[H,D],[H,D]);
+    addEdge(`${L} Бок лев`,D,H,'vis','hid','vis','hid');
     ldsp.push({name:`${L} Бок пр`,w:D,h:H,tex:false,edgeFront:ef,edgeBack:eb});
-    addEdge(`${L} Бок пр`,[H,D],[H,D]);
+    addEdge(`${L} Бок пр`,D,H,'vis','hid','vis','hid');
 
     // Крыша: видимый — передний торец (W-2T), скрытый — остальные
     ldsp.push({name:`${L} Крыша`,w:W-2*T,h:D,tex:false,edgeFront:ef,edgeBack:eb});
-    addEdge(`${L} Крыша`,[W-2*T],[D,D,W-2*T]);
+    addEdge(`${L} Крыша`,W-2*T,D,'vis','hid','hid','hid');
 
     // Дно: видимый — передний торец (W-2T)
     ldsp.push({name:`${L} Дно`,w:W-2*T,h:D,tex:false,edgeFront:ef,edgeBack:eb});
-    addEdge(`${L} Дно`,[W-2*T],[D,D,W-2*T]);
+    addEdge(`${L} Дно`,W-2*T,D,'vis','hid','hid','hid');
 
     // Полки: видимый — передний торец (W-2T)
     s.shelves.forEach((sh,j)=>{
       ldsp.push({name:`${L} Полка ${j+1}`,w:W-2*T,h:D,tex:false,edgeFront:ef,edgeBack:eb});
-      addEdge(`${L} Полка ${j+1}`,[W-2*T],[D,D,W-2*T]);
+      addEdge(`${L} Полка ${j+1}`,W-2*T,D,'vis','hid','hid','hid');
     });
 
     // Перегородки: видимые — оба торца по высоте (H-2T)
     s.dividers.forEach((dv,j)=>{
       ldsp.push({name:`${L} Перегор.${j+1}`,w:D,h:H-2*T,tex:false,edgeFront:ef,edgeBack:eb});
-      addEdge(`${L} Перегор.${j+1}`,[H-2*T,H-2*T],[D,D]);
+      addEdge(`${L} Перегор.${j+1}`,D,H-2*T,'hid','hid','vis','vis');
     });
 
     // Ящики по нишам и колонкам
@@ -2172,7 +2203,7 @@ function calcParts(){
         if(s.facade.material==='mdf') facMdf.push(p); else facLdsp.push(p);
         // фасад — весь периметр лицевой кромкой
         if(s.facade.material==='ldsp'){
-          addEdge(`${L} Фасад ${i+1}`,[dw*2+dh*2],[]);
+          addEdge(`${L} Фасад ${i+1}`,dw,dh,'vis','vis','vis','vis');
         }
       }
     }
