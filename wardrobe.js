@@ -1894,15 +1894,20 @@ function render3D(){
   sections.forEach(s=>{
     const W=s.width||600,H=s.height||2200,D=s.depth||600;
     const LH=100; // высота ножек — корпус всегда начинается с Y=LH
-    // ── Корпус (поднят на LH) ──
-    addBoard(ox,LH,0,T,H,D); addBoard(ox+W-T,LH,0,T,H,D);
-    addBoard(ox+T,LH+H-T,0,W-2*T,T,D); addBoard(ox+T,LH,0,W-2*T,T,D,ML2);
-    addBoard(ox,LH,D-8,W,H,8,MH);
+    // ── Глубинный/высотный бюджет (тот же расчёт, что в calcParts) ──
+    const FACADE_REVEAL=T, HDF_THICK=3;
+    const Dc=D-FACADE_REVEAL-HDF_THICK;
+    const Hc=H-2*T;
+    const zFront=FACADE_REVEAL; // z=0 — истинный перед всего шкафа (лицо фасада), корпус начинается за ним
+    // ── Корпус (поднят на LH; дно и крыша — накладные, полная ширина W) ──
+    addBoard(ox,LH+T,zFront,T,Hc,Dc); addBoard(ox+W-T,LH+T,zFront,T,Hc,Dc);
+    addBoard(ox,LH+T+Hc,zFront,W,T,Dc); addBoard(ox,LH,zFront,W,T,Dc,ML2);
+    addBoard(ox,LH+T,zFront+Dc,W,Hc,HDF_THICK,MH);
     s.shelves.forEach(sh=>{
-      const sm=addBoard(ox+T,LH+sh.height,0,W-2*T,T,D,ML,false,{
+      const sm=addBoard(ox+T,LH+sh.height,zFront,W-2*T,T,Dc,ML,false,{
         drag:true, secId:s.id, shelfId:sh.id,
         minY:LH+T*2, maxY:LH+Math.max(T*2+1,H-T*2),
-        ox:ox+T, oz:0, sw:W-2*T, sd:D
+        ox:ox+T, oz:zFront, sw:W-2*T, sd:Dc
       });
     });
     // ящики по нишам и колонкам
@@ -1917,14 +1922,15 @@ function render3D(){
         const nicheH=niche.top-niche.bottom;
         const dH=Math.floor((nicheH-(dCount+1)*gap)/dCount);
         if(dH<20)return;
+        const dD=Dc-10; // глубина короба — как в calcParts
         cols.forEach(col=>{
           const dW=col.width-4;
           if(dW<50)return;
           for(let di=0;di<dCount;di++){
             const dy=niche.bottom+gap+(dH+gap)*di;
-            const dg=new THREE.BoxGeometry(dW,dH-2,D-60);
+            const dg=new THREE.BoxGeometry(dW,dH-2,dD);
             const dm=new THREE.Mesh(dg,MD);
-            dm.position.set(ox+col.left+dW/2+2, LH+dy+dH/2, (D-60)/2+8);
+            dm.position.set(ox+col.left+dW/2+2, LH+dy+dH/2, zFront+dD/2+8);
             dm.castShadow=true; dm.userData={w:true}; scene.add(dm);
             const de=new THREE.LineSegments(new THREE.EdgesGeometry(dg),ME);
             de.position.copy(dm.position); de.userData={w:true}; scene.add(de);
@@ -1932,14 +1938,14 @@ function render3D(){
         });
       });
     }
-    s.dividers.forEach(dv=>addBoard(ox+dv.pos,LH+T,0,T,H-2*T,D));
+    s.dividers.forEach(dv=>addBoard(ox+dv.pos,LH+T,zFront,T,Hc,Dc));
     if(s.hasRod){
       const rh=LH+Math.min(s.rodHeight,H-T*3);
       const g2=new THREE.CylinderGeometry(10,10,W-2*T-20,16);
       const rm=new THREE.Mesh(g2,MR); rm.rotation.z=Math.PI/2;
-      rm.position.set(ox+W/2,rh,D/2); rm.castShadow=true; rm.userData={w:true}; scene.add(rm);
+      rm.position.set(ox+W/2,rh,zFront+Dc/2); rm.castShadow=true; rm.userData={w:true}; scene.add(rm);
     }
-    // ── Ножки (всегда, 4 шт, высота LH=100мм) ──
+    // ── Ножки (всегда, 4 шт, высота LH=100мм) — по полному внешнему габариту D ──
     {
       const legMat=new THREE.MeshStandardMaterial({color:0x888888,roughness:0.3,metalness:0.6});
       const legGeo=new THREE.CylinderGeometry(15,12,LH,12);
@@ -1954,8 +1960,8 @@ function render3D(){
     if(s.facade.type!=='none'){
       const fm=s.facade.material==='mdf'?MFM:MFL;
       const count=s.facade.type==='doors3'?3:s.facade.type==='doors2'?2:1;
-      const gap=4,thick=18,dw=(W-gap*(count+1))/count;
-      for(let i=0;i<count;i++) addBoard(ox+gap+(dw+gap)*i,LH+gap,-thick,dw,H-gap*2,thick,fm,true);
+      const gap=4,thick=T,dw=(W-gap*(count+1))/count;
+      for(let i=0;i<count;i++) addBoard(ox+gap+(dw+gap)*i,LH+gap,0,dw,H-gap*2,thick,fm,true);
     }
     ox+=W;
   });
