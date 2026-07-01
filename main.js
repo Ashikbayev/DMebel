@@ -934,10 +934,27 @@ function aiGetContext(){
   }
 
   // Шкафный конфигуратор
-  if(activePage === 'pg-conf' && typeof sections !== 'undefined' && sections.length){
-    ctx += `\nШкаф: ${sections.length} секций. `;
-    ctx += sections.map((s,i)=>`Секция ${i+1}: ${s.width}×${s.height}мм, глубина ${s.depth}мм${s.hasRod?', штанга':''}${s.antresol?.enabled?', антресоль '+s.antresol.height+'мм':''}`).join('. ');
+  const aiSections = window._ai_sections;
+  if(activePage === 'pg-conf' && Array.isArray(aiSections) && aiSections.length){
+    ctx += `\nШкаф: ${aiSections.length} секций. `;
+    ctx += aiSections.map((s,i)=>`Секция ${i+1}: ${s.width}×${s.height}мм, глубина ${s.depth}мм${s.hasRod?', штанга':''}${s.antresol?.enabled?', антресоль '+s.antresol.height+'мм':''}`).join('. ');
   }
+
+  // Сохранённые шаблоны наполнения секций (кнопка 💾 в блоке "Шаблоны наполнения")
+  try{
+    const savedTpls = JSON.parse(localStorage.getItem('mebeloff_sec_templates')||'[]');
+    if(savedTpls.length){
+      ctx += '\nСохранённые шаблоны наполнения секций шкафа (можно применять к секциям по имени): ';
+      ctx += savedTpls.map(function(t){
+        const d = t.data||{};
+        const parts=[];
+        if(d.shelves && d.shelves.length) parts.push(d.shelves.length+' полок');
+        if(d.hasRod) parts.push('штанга');
+        if(d.drawerBlocks && d.drawerBlocks.length) parts.push(d.drawerBlocks.reduce(function(a,b){return a+(b.count||0);},0)+' ящ.');
+        return '"'+t.name+'" ('+(parts.join(', ')||'пусто')+')';
+      }).join(', ') + '.';
+    }
+  }catch(e){}
 
   // База материалов
   if(DB && DB.ldsp?.length){
@@ -1005,6 +1022,12 @@ function aiGetSystemPrompt(){
 ]
 </actions>
 
+ПРИМЕР — запрос "для секции 1 используй шаблон 2" (если в контексте есть сохранённый шаблон с именем "2"):
+Применяю шаблон "2" к секции 1.
+<actions>
+[{"action":"applyWardrobeTemplate","sectionIndex":0,"templateName":"2"}]
+</actions>
+
 ДОСТУПНЫЕ ACTIONS:
 - {"action":"navigateTo","page":"kitchen|conf|calc"} — перейти на страницу (ВСЕГДА первым)
 - {"action":"clearKitchen"} — очистить кухню
@@ -1022,6 +1045,7 @@ function aiGetSystemPrompt(){
   - shelvesPerColumn: [n0, n1, ...] — количество полок в каждой колонке отдельно (индекс = номер колонки слева направо, 0-based). Если columns не указан — используй одноэлементный массив или просто "shelves"
   - shelves: число — если columns НЕ указан, просто N полок на всю ширину секции
   - drawerBlocks: [{"nicheIdx":N,"count":M}] — блок из M ящиков в нише N. Ниши считаются СНИЗУ ВВЕРХ, 0-based, по границам полок (без перегородок: 0 = от дна до полки 1, 1 = полка 1 → полка 2, и т.д.; последняя ниша = до крыши). Если в секции есть перегородки — ниша с этим nicheIdx появится ВО ВСЕХ колонках сразу (не только в одной).
+- {"action":"applyWardrobeTemplate","sectionIndex":0,"templateName":"2"} — применить СОХРАНЁННЫЙ пользователем шаблон наполнения (полки/штанга/ящики) к секции по номеру (0-based). Название шаблона бери ТОЧНО из списка "Сохранённые шаблоны" в контексте выше — если пользователь говорит "шаблон 2" или называет шаблон своим именем, ищи совпадение среди реально существующих названий. Если такого шаблона в контексте нет — не выдумывай action, спроси пользователя, какой шаблон он имеет в виду (список доступных шаблонов есть в контексте, перечисли варианты).
 - {"action":"addLdsp","colorName":"Белый Глянец","qty":3.5}
 - {"action":"addFurn","cat":"Петля","qty":8}
 - {"action":"setHdfQty","qty":2.5}
@@ -1165,6 +1189,24 @@ function aiExecuteActions(actionsJson){
 
             window._ai_sections.push(s); // геттер даёт актуальный sections[]
             needConfRender = true; applied++;
+          }
+          break;
+        }
+
+        case 'applyWardrobeTemplate':{
+          const secArr = window._ai_sections || [];
+          const idx = (typeof act.sectionIndex==='number') ? act.sectionIndex : secArr.length-1;
+          const sec = secArr[idx];
+          if(sec && typeof window.applyUserTemplate==='function'){
+            let tpls=[];
+            try{ tpls=JSON.parse(localStorage.getItem('mebeloff_sec_templates')||'[]'); }catch(e){}
+            const wanted=(act.templateName||'').toLowerCase().trim();
+            const tpl = tpls.find(t=>(t.name||'').toLowerCase().trim()===wanted)
+                     || tpls.find(t=>(t.name||'').toLowerCase().includes(wanted));
+            if(tpl){
+              window.applyUserTemplate(sec.id, tpl.id);
+              needConfRender = true; applied++;
+            }
           }
           break;
         }
