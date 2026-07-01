@@ -681,7 +681,9 @@ function removeShelf(sid,shid){
 function addDivider(sid){
   const s=sections.find(x=>x.id===sid);
   const wasSingleColumn = s.dividers.length===0;
-  s.dividers.push({id:s.divId++, pos:Math.round(s.width/2)});
+  // pos — левый край перегородки (панель толщиной T), поэтому чтобы
+  // перегородка визуально встала по центру секции, отступаем на T/2
+  s.dividers.push({id:s.divId++, pos:Math.round(s.width/2 - T/2)});
   if(wasSingleColumn && s.shelves.length){
     // Полка на всю секцию физически разрезается новой перегородкой на
     // два независимых сегмента на той же высоте — дублируем в обе ниши,
@@ -773,20 +775,18 @@ function getNiches(s){
 
 // Колонки секции по перегородкам: [{left, right, width}]
 // left/right — координаты относительно внутренней части секции (от T до W-T)
+// Перегородка рисуется как панель толщиной T, начинающаяся В ТОЧКЕ pos
+// (т.е. занимает [pos, pos+T]) — см. addBoard(ox+dv.pos,...,T,...) в render3D.
 function getColumns(s){
   const W=s.width;
   const divX=[...s.dividers.map(d=>d.pos)].sort((a,b)=>a-b);
-  const pts=[T,...divX,W-T];
   const cols=[];
-  for(let i=0;i<pts.length-1;i++){
-    const left=pts[i];
-    const right=pts[i+1];
-    const isLast=(i===pts.length-2);
-    // left = правый край левой стенки/перегородки (чистое начало пространства)
-    // right = начало правой перегородки или левый край правой стенки
-    // если не последняя колонка — справа перегородка толщиной T, её не включаем
-    const innerWidth=isLast ? right-left : right-left-T;
-    cols.push({left, right, width: Math.max(0, innerWidth)});
+  let leftBound=T;
+  for(let i=0;i<=divX.length;i++){
+    const isLast=(i===divX.length);
+    const rightBound=isLast ? (W-T) : divX[i];
+    cols.push({left:leftBound, right:rightBound, width:Math.max(0, rightBound-leftBound)});
+    leftBound = isLast ? leftBound : divX[i]+T;
   }
   return cols;
 }
