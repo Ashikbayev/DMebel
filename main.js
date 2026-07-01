@@ -702,10 +702,11 @@ function showKP(showL=true, showP=true, showK=false){
 
   // Итоговый HTML
   var kpHtml = "";
+  kpHtml += "<style>@media print{.kp-band{display:none!important}.kp-hdr{padding:8px 20px 6px!important}.kp-s{padding:8px 20px!important;page-break-inside:avoid}.kp-footer{padding:8px 20px!important}}.kp-s{page-break-inside:avoid}.kp-hdr{page-break-inside:avoid}.kp-footer{page-break-inside:avoid}</style>";
   kpHtml += "<div style=\"font-family:Inter,system-ui,sans-serif;background:#fff;color:#1C1C1E;max-width:820px;margin:0 auto\">";
 
   // ШАПКА
-  kpHtml += "<div style=\"display:flex;justify-content:space-between;align-items:flex-start;padding:44px 56px 32px;border-bottom:3px solid #C9A96E\">";
+  kpHtml += "<div class=\"kp-hdr\" style=\"display:flex;justify-content:space-between;align-items:flex-start;padding:44px 56px 32px;border-bottom:3px solid #C9A96E\">";
   kpHtml += "<div>";
   kpHtml += "<div style=\"font-family:Georgia,serif;font-size:28px;font-weight:600;letter-spacing:-0.5px;color:#1C1C1E\">MebelOFF<span style=\"color:#C9A96E\">.kz</span></div>";
   kpHtml += "<div style=\"font-size:11px;color:#9A9087;letter-spacing:2px;text-transform:uppercase;margin-top:5px\">Мебель под заказ · Сатпаев</div>";
@@ -716,7 +717,7 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "</div></div>";
 
   // ТЁМНАЯ ПОЛОСА
-  kpHtml += "<div style=\"background:#1C1C1E;padding:40px 56px;display:flex;gap:48px;align-items:center\">";
+  kpHtml += "<div class=\"kp-band\" style=\"background:#1C1C1E;padding:40px 56px;display:flex;gap:48px;align-items:center\">";
   kpHtml += "<div style=\"flex:1\">";
   kpHtml += "<div style=\"font-family:Georgia,serif;font-size:27px;font-weight:400;color:#fff;line-height:1.3;margin-bottom:14px\">Мебель, созданная<br>по вашим <span style=\"color:#C9A96E\">меркам</span></div>";
   kpHtml += "<div style=\"font-size:13px;color:#7A7570;line-height:1.75\">Индивидуальное производство корпусной мебели в Сатпаеве. Замер, проектирование, изготовление и установка — в одном договоре.</div>";
@@ -728,7 +729,7 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "</div></div>";
 
   // КЛИЕНТ
-  kpHtml += "<div style=\"padding:36px 56px;border-bottom:1px solid #E8E3DA\">";
+  kpHtml += "<div class=\"kp-s\" style=\"padding:36px 56px;border-bottom:1px solid #E8E3DA\">";
   kpHtml += "<div style=\"display:flex;align-items:baseline;gap:16px;margin-bottom:20px\">";
   kpHtml += "<div style=\"height:1px;background:#C9A96E;width:24px;flex-shrink:0;margin-bottom:3px\"></div>";
   kpHtml += "<div style=\"font-family:Georgia,serif;font-size:19px;color:#1C1C1E\">Клиент</div>";
@@ -741,7 +742,7 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "</div></div>";
 
   // ТАБЛИЦА СПЕЦИФИКАЦИИ
-  kpHtml += "<div style=\"padding:36px 56px;border-bottom:1px solid #E8E3DA\">";
+  kpHtml += "<div class=\"kp-s\" style=\"padding:36px 56px;border-bottom:1px solid #E8E3DA\">";
   kpHtml += "<div style=\"display:flex;align-items:baseline;gap:16px;margin-bottom:20px\">";
   kpHtml += "<div style=\"height:1px;background:#C9A96E;width:24px;flex-shrink:0;margin-bottom:3px\"></div>";
   kpHtml += "<div style=\"font-family:Georgia,serif;font-size:19px;color:#1C1C1E\">Спецификация</div>";
@@ -757,14 +758,14 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "</div>";
 
   // УСЛОВИЯ
-  kpHtml += "<div style=\"padding:36px 56px 0;border-bottom:1px solid #E8E3DA\">";
+  kpHtml += "<div class=\"kp-s\" style=\"padding:36px 56px 0;border-bottom:1px solid #E8E3DA\">";
   kpHtml += "<div style=\"display:flex;align-items:baseline;gap:16px;margin-bottom:20px\">";
   kpHtml += "<div style=\"height:1px;background:#C9A96E;width:24px;flex-shrink:0;margin-bottom:3px\"></div>";
   kpHtml += "<div style=\"font-family:Georgia,serif;font-size:19px;color:#1C1C1E\">Условия сотрудничества</div>";
   kpHtml += "</div>";
   kpHtml += "<div style=\"display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:#E8E3DA\">";
   kpHtml += "<div style=\"background:#fff;padding:20px\"><div style=\"font-size:20px;margin-bottom:10px\">📅</div><div style=\"font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;margin-bottom:5px\">Срок изготовления</div><div style=\"font-size:13px;font-weight:500;color:#1C1C1E;line-height:1.4\">15–45 рабочих дней</div></div>";
-  kpHtml += "<div style=\"background:#fff;padding:20px\"><div style=\"font-size:20px;margin-bottom:10px\">💳</div><div style=\"font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;margin-bottom:5px\">Оплата</div><div style=\"font-size:13px;font-weight:500;color:#1C1C1E;line-height:1.4\">50% аванс / 50% по готовности</div></div>";
+  kpHtml += "<div style=\"background:#fff;padding:20px\"><div style=\"font-size:20px;margin-bottom:10px\">💳</div><div style=\"font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;margin-bottom:5px\">Оплата</div><div style=\"font-size:13px;font-weight:500;color:#1C1C1E;line-height:1.4\">по договору</div></div>";
   kpHtml += "<div style=\"background:#fff;padding:20px\"><div style=\"font-size:20px;margin-bottom:10px\">🛡</div><div style=\"font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;margin-bottom:5px\">Гарантия</div><div style=\"font-size:13px;font-weight:500;color:#1C1C1E;line-height:1.4\">1 год на фурнитуру</div></div>";
   kpHtml += "</div></div>";
 
@@ -772,7 +773,7 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += rule;
 
   // ПРИМЕЧАНИЯ
-  kpHtml += "<div style=\"padding:36px 56px;border-bottom:1px solid #E8E3DA\">";
+  kpHtml += "<div class=\"kp-s\" style=\"padding:36px 56px;border-bottom:1px solid #E8E3DA\">";
   kpHtml += "<div style=\"display:flex;align-items:baseline;gap:16px;margin-bottom:20px\">";
   kpHtml += "<div style=\"height:1px;background:#C9A96E;width:24px;flex-shrink:0;margin-bottom:3px\"></div>";
   kpHtml += "<div style=\"font-family:Georgia,serif;font-size:19px;color:#1C1C1E\">Примечания</div>";
@@ -783,7 +784,7 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "</ul></div>";
 
   // ПОДВАЛ
-  kpHtml += "<div style=\"background:#F5F0E8;padding:36px 56px;display:flex;justify-content:space-between;align-items:center\">";
+  kpHtml += "<div class=\"kp-footer\" style=\"background:#F5F0E8;padding:36px 56px;display:flex;justify-content:space-between;align-items:center\">";
   kpHtml += "<div>";
   kpHtml += "<div style=\"font-size:13px;color:#4A3F32;line-height:2.2\"><span style=\"color:#C9A96E;margin-right:8px\">📞</span>+7 707 540 7626</div>";
   kpHtml += "<div style=\"font-size:13px;color:#4A3F32;line-height:2.2\"><span style=\"color:#C9A96E;margin-right:8px\">📸</span>@mebeloff.kz</div>";
