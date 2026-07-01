@@ -609,7 +609,7 @@ function showKP(showL=true, showP=true, showK=false){
   function addRow(name, desc, qty, priceL, priceP, priceK) {
     rowNum++;
     var numStr = rowNum < 10 ? "0"+rowNum : ""+rowNum;
-    var priceCols = "<td style=\"text-align:center;padding:6px 8px;font-size:11px;color:#C9A96E;border-bottom:1px solid #EBEBEB;vertical-align:top\">\u2713</td>";
+    var priceCols = "<td style=\"text-align:center;padding:6px 8px;font-size:11px;color:#C9A96E;border-bottom:1px solid #EBEBEB;vertical-align:top\">&#10003;</td>";
     tableRows += "<tr>"
       + "<td style=\"padding:6px 8px;font-size:10px;color:#999;vertical-align:top;border-bottom:1px solid #EBEBEB\">"+numStr+"</td>"
       + "<td style=\"padding:6px 8px;vertical-align:top;border-bottom:1px solid #EBEBEB\">"
@@ -702,77 +702,59 @@ function showKP(showL=true, showP=true, showK=false){
 
   // Итоговый HTML
   var kpHtml = "";
-  // ── Компактный А4-стиль КП ────────────────────────────────
   var S = {
     wrap:  "font-family:Inter,Arial,sans-serif;font-size:11px;color:#1C1C1E;background:#fff;max-width:780px;margin:0 auto;line-height:1.4",
     gold:  "color:#C9A96E",
-    gray:  "color:#777",
     small: "font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#999;font-weight:600",
-    th:    "text-align:left;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#777;font-weight:600;padding:7px 8px;border-bottom:1.5px solid #1C1C1E",
-    td:    "padding:6px 8px;font-size:11px;border-bottom:1px solid #EBEBEB;vertical-align:top",
     sec:   "font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#C9A96E;margin-bottom:6px"
   };
   kpHtml += "<style>";
-  kpHtml += "*{box-sizing:border-box;margin:0;padding:0}";
-  kpHtml += "ul{list-style:none}";
-  kpHtml += "@media print{";
-  kpHtml += "@page{size:A4;margin:10mm 12mm}";
-  kpHtml += ".no-print{display:none!important}";
-  kpHtml += ".kp-wrap{font-size:10px}";
-  kpHtml += ".kp-hdr{padding:8px 14px!important}";
-  kpHtml += ".kp-row{padding:6px 14px!important}";
-  kpHtml += ".kp-foot{padding:6px 14px!important}";
-  kpHtml += ".kp-band{display:none!important}";
-  kpHtml += "table td,table th{padding:4px 6px!important;font-size:9.5px!important}";
-  kpHtml += "}";
+  kpHtml += "*{box-sizing:border-box;margin:0;padding:0}ul{list-style:none}";
+  kpHtml += "@media print{@page{size:A4;margin:10mm 12mm}.no-print{display:none!important}.kp-wrap{font-size:10px}.kp-hdr{padding:8px 14px!important}.kp-row{padding:6px 14px!important}.kp-foot{padding:6px 14px!important}.kp-band{display:none!important}table td,table th{padding:4px 6px!important;font-size:9.5px!important}}";
   kpHtml += ".kp-hdr,.kp-row,.kp-foot{page-break-inside:avoid}";
   kpHtml += "</style>";
   kpHtml += "<div class=\"kp-wrap\" style=\""+S.wrap+"\">";
 
-  // ── ШАПКА ─────────────────────────────────────────────────
+  // ШАПКА
   kpHtml += "<div class=\"kp-hdr\" style=\"display:flex;justify-content:space-between;align-items:flex-end;padding:14px 20px 12px;border-bottom:2px solid #C9A96E\">";
   kpHtml += "<div>";
   kpHtml += "<div style=\"font-size:18px;font-weight:700;letter-spacing:0.5px;color:#1C1C1E\">MEBELOFF<span style=\""+S.gold+"\">.KZ</span></div>";
-  kpHtml += "<div style=\""+S.small+";margin-top:3px\">Мебель на заказ &nbsp;·&nbsp; Сатпаев</div>";
+  kpHtml += "<div style=\""+S.small+";margin-top:3px\">Мебель на заказ &nbsp;&middot;&nbsp; Сатпаев</div>";
   kpHtml += "</div>";
   kpHtml += "<div style=\"text-align:right\">";
-  kpHtml += "<div style=\"font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;border:1px solid #C9A96E;color:#C9A96E;padding:3px 10px;display:inline-block;margin-bottom:5px\">Коммерческое предложение</div>";
+  kpHtml += "<div style=\"font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;border:1px solid #C9A96E;color:#C9A96E;padding:3px 10px;display:inline-block;margin-bottom:5px\">Коммерческое предложение</div>";
   kpHtml += "<div style=\"font-size:10px;color:#555;line-height:1.7\">№ <b style=\"color:#1C1C1E\">КП-"+num+"</b> &nbsp;|&nbsp; Дата: <b style=\"color:#1C1C1E\">"+today+"</b> &nbsp;|&nbsp; Действ. до: <b style=\"color:#1C1C1E\">"+expiry+"</b></div>";
   kpHtml += "</div></div>";
 
-  // ── КЛИЕНТ ────────────────────────────────────────────────
-  kpHtml += "<div class=\"kp-row\" style=\"padding:8px 20px;border-bottom:1px solid #EBEBEB;display:flex;gap:32px\">";
-  kpHtml += "<div><span style=\""+S.small+"\">Клиент</span><div style=\"margin-top:2px;font-size:12px;font-weight:600\">"+client+"</div></div>";
-  kpHtml += "<div><span style=\""+S.small+"\">Объект</span><div style=\"margin-top:2px;font-size:12px;font-weight:600\">"+obj+"</div></div>";
-  kpHtml += "<div style=\"margin-left:auto;text-align:right\"><span style=\""+S.small+"\">Менеджер / Тел.</span><div style=\"margin-top:2px;font-size:11px\">Дали &nbsp;·&nbsp; +7 707 540 7626</div></div>";
+  // КЛИЕНТ
+  kpHtml += "<div class=\"kp-row\" style=\"padding:8px 20px;border-bottom:1px solid #EBEBEB;display:flex;gap:24px;align-items:flex-start\">";
+  kpHtml += "<div><div style=\""+S.small+"\">Клиент</div><div style=\"margin-top:2px;font-size:12px;font-weight:600\">"+client+"</div></div>";
+  kpHtml += "<div><div style=\""+S.small+"\">Объект</div><div style=\"margin-top:2px;font-size:12px;font-weight:600\">"+obj+"</div></div>";
+  kpHtml += "<div style=\"margin-left:auto;text-align:right\"><div style=\""+S.small+"\">Менеджер &nbsp;/&nbsp; Тел.</div><div style=\"margin-top:2px;font-size:11px\">Дали &nbsp;&middot;&nbsp; +7 707 540 7626</div></div>";
   kpHtml += "</div>";
 
-  // ── СПЕЦИФИКАЦИЯ ──────────────────────────────────────────
-  kpHtml += "<div class=\"kp-row\" style=\"padding:10px 20px 6px;border-bottom:1px solid #EBEBEB\">";
+  // СПЕЦИФИКАЦИЯ
+  kpHtml += "<div class=\"kp-row\" style=\"padding:10px 20px 8px;border-bottom:1px solid #EBEBEB\">";
   kpHtml += "<div style=\""+S.sec+"\">Спецификация &nbsp;<span style=\"color:#999;font-weight:400\">"+rowNum+" позиций</span></div>";
   kpHtml += "<table style=\"width:100%;border-collapse:collapse\">";
   kpHtml += "<thead><tr>";
-  kpHtml += "<th style=\""+S.th+";width:32px\">№</th>";
-  kpHtml += "<th style=\""+S.th+"\">Наименование</th>";
-  kpHtml += "<th style=\""+S.th+";width:60px\">Кол.</th>";
-
-  // Заголовки вариантов
+  kpHtml += "<th style=\"text-align:left;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#777;font-weight:600;padding:7px 8px;border-bottom:1.5px solid #1C1C1E;width:32px\">№</th>";
+  kpHtml += "<th style=\"text-align:left;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#777;font-weight:600;padding:7px 8px;border-bottom:1.5px solid #1C1C1E\">Наименование</th>";
+  kpHtml += "<th style=\"text-align:left;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#777;font-weight:600;padding:7px 8px;border-bottom:1.5px solid #1C1C1E;width:60px\">Кол.</th>";
+  var vcolors = {L:"#534AB7", P:"#1a5252", K:"#8B4513"};
   if (nV > 1) {
-    var vcolors = {L:"#534AB7", P:"#1a5252", K:"#8B4513"};
     vars.forEach(function(v){
       kpHtml += "<th style=\"text-align:right;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:"+vcolors[v.key]+";font-weight:700;padding:7px 8px;border-bottom:1.5px solid #1C1C1E\">"+v.name+"</th>";
     });
   } else {
-    var v1s = vars[0]?vars[0].key:"L";
-    kpHtml += "<th style=\"text-align:right;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:#534AB7;font-weight:700;padding:7px 8px;border-bottom:1.5px solid #1C1C1E\">"+(vars[0]?vars[0].name:"")+"</th>";
+    kpHtml += "<th style=\"text-align:right;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:"+vcolors[vars[0]?vars[0].key:"L"]+";font-weight:700;padding:7px 8px;border-bottom:1.5px solid #1C1C1E\">"+(vars[0]?vars[0].name:"")+"</th>";
   }
   kpHtml += "</tr></thead>";
   kpHtml += "<tbody>"+tableRows+headerRow+totRow+creditRow+"</tbody>";
   kpHtml += "</table></div>";
 
-  // ── УСЛОВИЯ + ПРИМЕЧАНИЯ ──────────────────────────────────
+  // УСЛОВИЯ + ПРИМЕЧАНИЯ
   kpHtml += "<div class=\"kp-row\" style=\"padding:8px 20px;border-bottom:1px solid #EBEBEB;display:flex;gap:0\">";
-  // Условия 3 ячейки
   kpHtml += "<div style=\"flex:1;padding-right:16px;border-right:1px solid #EBEBEB\">";
   kpHtml += "<div style=\""+S.sec+"\">Условия</div>";
   kpHtml += "<div style=\"display:flex;gap:20px\">";
@@ -780,22 +762,21 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "<div><div style=\""+S.small+"\">Оплата</div><div style=\"font-size:11px;font-weight:600;margin-top:2px\">по договору</div></div>";
   kpHtml += "<div><div style=\""+S.small+"\">Гарантия</div><div style=\"font-size:11px;font-weight:600;margin-top:2px\">12 месяцев</div></div>";
   kpHtml += "</div></div>";
-  // Примечания
   kpHtml += "<div style=\"flex:1.4;padding-left:16px\">";
   kpHtml += "<div style=\""+S.sec+"\">Примечания</div>";
-  kpHtml += "<ul style=\"color:#555;font-size:10px;line-height:1.7\">";
-  kpHtml += "<li>· КП действительно 7 дней. Стоимость фиксируется при подписании договора.</li>";
-  kpHtml += "<li>· Замер и 3D-визуализация — бесплатно при заключении договора.</li>";
-  kpHtml += "<li>· Изменение параметров возможно до подписания спецификации.</li>";
-  kpHtml += "</ul></div>";
+  kpHtml += "<div style=\"color:#555;font-size:10px;line-height:1.8\">";
+  kpHtml += "&middot; КП действительно 7 дней. Стоимость фиксируется при подписании договора.<br>";
+  kpHtml += "&middot; Замер и 3D-визуализация &mdash; бесплатно при заключении договора.<br>";
+  kpHtml += "&middot; Изменение параметров возможно до подписания спецификации.";
+  kpHtml += "</div></div>";
   kpHtml += "</div>";
 
-  // ── ПОДВАЛ ────────────────────────────────────────────────
+  // ПОДВАЛ
   kpHtml += "<div class=\"kp-foot\" style=\"padding:8px 20px;background:#F8F6F2;display:flex;justify-content:space-between;align-items:center\">";
   kpHtml += "<div style=\"display:flex;gap:20px;font-size:10px;color:#555\">";
-  kpHtml += "<span><span style=\""+S.gold+"\">📞</span> +7 707 540 7626</span>";
-  kpHtml += "<span><span style=\""+S.gold+"\">📸</span> @mebeloff.kz</span>";
-  kpHtml += "<span><span style=\""+S.gold+"\">📍</span> Абая 68, БЦ каб. 4, Сатпаев</span>";
+  kpHtml += "<span><span style=\""+S.gold+"\">&#128222;</span> +7 707 540 7626</span>";
+  kpHtml += "<span><span style=\""+S.gold+"\">&#128248;</span> @mebeloff.kz</span>";
+  kpHtml += "<span><span style=\""+S.gold+"\">&#128205;</span> Абая 68, БЦ каб. 4, Сатпаев</span>";
   kpHtml += "</div>";
   kpHtml += "<div style=\"text-align:right\">";
   kpHtml += "<div style=\""+S.small+";margin-bottom:18px\">Подпись менеджера</div>";
@@ -804,7 +785,6 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "</div></div>";
 
   kpHtml += "</div>";
-  $(\"kp-doc\").innerHTML = kpHtml;
 
   $("kp-doc").innerHTML = kpHtml;
   page("kp");
