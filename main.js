@@ -973,9 +973,11 @@ function aiGetSystemPrompt(){
 
 КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА ОТВЕТА:
 1. Всегда отвечай на русском языке. Будь кратким — 2-4 предложения максимум.
-2. ОБЯЗАТЕЛЬНО добавляй <actions> блок если запрос касается кухни, шкафа или настройки мебели.
+2. ОБЯЗАТЕЛЬНО добавляй <actions> блок если запрос касается кухни, шкафа или настройки мебели — НО СМ. ПРАВИЛО 5 про уточняющие вопросы.
 3. НЕ пиши таблицы, списки планировок или Markdown — только краткий текст + actions.
 4. <actions> блок ВСЕГДА в конце ответа, ВСЕГДА валидный JSON массив.
+5. ШКАФ: если пользователь называет ТОЛЬКО общую ширину шкафа (например "хочу шкаф 3000мм") и не указывает ни количество секций/дверей, ни ширину по секциям — НЕ добавляй actions, а задай короткий уточняющий вопрос: "Сколько дверей/секций хотите?" Дождись ответа. Если количество секций указано явно (числом или перечислением "1 секция..., 2 секция...") — action добавляй сразу, ширину дели поровну на count секций (округляй до 10мм), не спрашивай лишний раз.
+6. Если пользователь описывает шкаф ПОСТЕПЕННО, по одному сообщению за раз (сначала общие размеры, потом детали каждой секции) — храни это построение в голове по ходу диалога и в actions ПОСЛЕДНЕГО сообщения выдавай ПОЛНЫЙ шкаф целиком (clearWardrobe + все addWardobeSection с накопленными деталями), а не только новую часть.
 
 ПРИМЕР — запрос "кухня 3 метра белый фасад мойка":
 Настраиваю кухню 3000мм с белым фасадом, мойкой и духовкой.
@@ -983,10 +985,24 @@ function aiGetSystemPrompt(){
 [{"action":"navigateTo","page":"kitchen"},{"action":"clearKitchen"},{"action":"setKitchenGlobal","floorH":850,"depth":501},{"action":"addKitchenLower","width":600,"type":"drawers","facade":"door"},{"action":"addKitchenLower","width":600,"type":"shelves","facade":"door"},{"action":"addKitchenLower","width":600,"type":"sink","facade":"none"},{"action":"addKitchenLower","width":600,"type":"appliance","facade":"none"},{"action":"addKitchenLower","width":600,"type":"shelves","facade":"door"},{"action":"addKitchenUpper","width":600,"height":720,"facade":"door"},{"action":"addKitchenUpper","width":600,"height":720,"facade":"door"},{"action":"addKitchenUpper","width":600,"height":720,"facade":"door"}]
 </actions>
 
-ПРИМЕР — запрос "шкаф 2.4м 3 секции штанга":
+ПРИМЕР — запрос "шкаф 2.4м 3 секции штанга" (количество секций указано сразу):
 Настраиваю шкаф-купе 2400мм, 3 секции со штангой.
 <actions>
 [{"action":"navigateTo","page":"conf"},{"action":"clearWardrobe"},{"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":true,"shelves":2},{"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":true,"shelves":2},{"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":false,"shelves":3}]
+</actions>
+
+ПРИМЕР — запрос "хочу шкаф 3000мм" (кол-во секций НЕ указано):
+Сколько секций (дверей) хотите — 2, 3 или больше?
+Уточните, пожалуйста, и я сразу соберу шкаф.
+
+ПРИМЕР — после ответа "3 двери, нижняя секция 2000 антресоль 500. 1 секция полка со штангой, 2 секция полки, 3 секция полка, перегородка, ящики на 2 уровне 2 ящика":
+Настраиваю шкаф 3000мм, 3 секции по 1000мм, высота 2000мм + антресоль 500мм.
+<actions>
+[{"action":"navigateTo","page":"conf"},{"action":"clearWardrobe"},
+{"action":"addWardobeSection","width":1000,"height":2000,"depth":600,"antresolHeight":500,"facadeType":"full","hasRod":true,"shelves":1},
+{"action":"addWardobeSection","width":1000,"height":2000,"depth":600,"antresolHeight":500,"facadeType":"full","shelves":3},
+{"action":"addWardobeSection","width":1000,"height":2000,"depth":600,"antresolHeight":500,"facadeType":"full","columns":2,"shelvesPerColumn":[1,1],"drawerBlocks":[{"nicheIdx":1,"count":2}]}
+]
 </actions>
 
 ДОСТУПНЫЕ ACTIONS:
@@ -996,7 +1012,16 @@ function aiGetSystemPrompt(){
 - {"action":"setKitchenGlobal","floorH":850,"depth":501} — размеры кухни
 - {"action":"addKitchenLower","width":600,"type":"shelves|drawers|sink|appliance","facade":"door|none"}
 - {"action":"addKitchenUpper","width":600,"height":720,"facade":"door|none"}
-- {"action":"addWardobeSection","width":800,"height":2200,"depth":600,"hasRod":true,"shelves":2}
+- {"action":"addWardobeSection", ...} — одна секция шкафа, поля:
+  - width, height, depth — базовые размеры (мм)
+  - hasRod: true|false — штанга на всю секцию (без перегородок)
+  - facadeType: "none"|"full"|"doors2"|"doors3" — без фасада / 1 дверь сплошная / 2 двери / 3 двери
+  - antresolHeight: число мм — если указано, добавляет антресоль такой высоты сверху
+  - antresolFacadeType: "none"|"full"|"doors2"|"doors3" — фасад антресоли (по умолчанию как facadeType)
+  - columns: число (2, 3...) — делит секцию перегородками на N РАВНЫХ ниш по ширине (N-1 перегородок автоматически)
+  - shelvesPerColumn: [n0, n1, ...] — количество полок в каждой колонке отдельно (индекс = номер колонки слева направо, 0-based). Если columns не указан — используй одноэлементный массив или просто "shelves"
+  - shelves: число — если columns НЕ указан, просто N полок на всю ширину секции
+  - drawerBlocks: [{"nicheIdx":N,"count":M}] — блок из M ящиков в нише N. Ниши считаются СНИЗУ ВВЕРХ, 0-based, по границам полок (без перегородок: 0 = от дна до полки 1, 1 = полка 1 → полка 2, и т.д.; последняя ниша = до крыши). Если в секции есть перегородки — ниша с этим nicheIdx появится ВО ВСЕХ колонках сразу (не только в одной).
 - {"action":"addLdsp","colorName":"Белый Глянец","qty":3.5}
 - {"action":"addFurn","cat":"Петля","qty":8}
 - {"action":"setHdfQty","qty":2.5}
@@ -1004,7 +1029,7 @@ function aiGetSystemPrompt(){
 - {"action":"explain"} — только для вопросов о цене/экономии
 
 ПРАВИЛА КУХНИ: ширина модулей кратна 100мм (400-900мм), sink и appliance всегда facade:"none".
-ПРАВИЛА ШКАФА: ширина секции 600-1200мм, hasRod:true = штанга.
+ПРАВИЛА ШКАФА: ширина секции 600-1200мм (если после деления общей ширины на кол-во секций получается больше 1200 — предложи больше секций; меньше 500 — предложи меньше). hasRod:true = штанга на всю секцию, использовать ТОЛЬКО если в секции нет columns/перегородок. Высота и антресоль по умолчанию одинаковые для всех секций шкафа, если пользователь явно не указал разные — тогда используй свои значения для каждой section.
 НЕ придумывай цены. Вопросы не о мебели — вежливо отклони.`;
 }
 
@@ -1080,15 +1105,64 @@ function aiExecuteActions(actionsJson){
         case 'addWardobeSection':{
           const mkS = window._ai_mkSection;
           if(mkS){
+            const T=16; // толщина ЛДСП — совпадает с константой в wardrobe.js
             const s = mkS();
             s.width  = act.width  || 800;
             s.height = act.height || 2200;
             s.depth  = act.depth  || 600;
             s.hasRod = act.hasRod || false;
-            if(act.shelves){
-              const step = Math.round(s.height / (act.shelves + 1));
-              s.shelves = Array.from({length: act.shelves}, (_, i) => ({id: s.shelfId++, height: step*(i+1)}));
+
+            // Фасад (кол-во дверей)
+            if(act.facadeType) s.facade.type = act.facadeType; // 'none'|'full'|'doors2'|'doors3'
+
+            // Антресоль
+            if(act.antresolHeight){
+              s.antresol.enabled = true;
+              s.antresol.height = act.antresolHeight;
+              if(act.antresolFacadeType) s.antresol.facade.type = act.antresolFacadeType;
             }
+
+            // Перегородки — либо явные относительные позиции (0..1), либо
+            // просто число колонок (тогда делим секцию поровну)
+            let dividerPositions = [];
+            if(Array.isArray(act.dividers) && act.dividers.length){
+              dividerPositions = act.dividers.map(rel => Math.round(rel*s.width));
+            } else if(act.columns && act.columns>1){
+              const C = act.columns;
+              const colW = (s.width - T*(C+1)) / C;
+              let pos = T + colW;
+              for(let k=0;k<C-1;k++){
+                dividerPositions.push(Math.round(pos));
+                pos += T + colW;
+              }
+            }
+            dividerPositions.forEach(pos=>{
+              s.dividers.push({id:s.divId++, pos});
+            });
+
+            // Полки — по колонкам (shelvesPerColumn), либо одним числом на всю секцию
+            const colCount = dividerPositions.length+1;
+            if(Array.isArray(act.shelvesPerColumn) && act.shelvesPerColumn.length){
+              act.shelvesPerColumn.forEach((n, ci) => {
+                if(!n) return;
+                const step = Math.round(s.height / (n + 1));
+                for(let i=1;i<=n;i++) s.shelves.push({id:s.shelfId++, height:step*i, col:ci});
+              });
+            } else if(act.shelves){
+              const step = Math.round(s.height / (act.shelves + 1));
+              for(let ci=0; ci<colCount; ci++){
+                for(let i=1;i<=act.shelves;i++) s.shelves.push({id:s.shelfId++, height:step*i, col:ci});
+              }
+            }
+
+            // Ящики — {nicheIdx, count} по Y-уровню (ниша считается по общей
+            // сетке полок и распространяется на все колонки в этой нише)
+            if(Array.isArray(act.drawerBlocks)){
+              act.drawerBlocks.forEach(db=>{
+                if(db && db.count) s.drawerBlocks.push({nicheIdx: db.nicheIdx||0, count: db.count, brand:'En-7'});
+              });
+            }
+
             window._ai_sections.push(s); // геттер даёт актуальный sections[]
             needConfRender = true; applied++;
           }
