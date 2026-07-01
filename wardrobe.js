@@ -419,7 +419,7 @@ function hingePrice(){
 
 // Prices — фиксированные цены (не из каталога)
 let prices={
-  edgeThick: 280,  // ПВХ 2мм — за 1 пм (видимые торцы)
+  edgeThick: 280,  // ПВХ 1мм — за 1 пм (видимые торцы)
   mdfWaste: 12,    // % отхода МДФ
   handle: 800,     // 1 ручка
   rod: 2000,       // 1 штанга
@@ -545,7 +545,7 @@ function mkSection(){
     facade:{type:'none', material:'ldsp', hasTexture:false},
     facadeDoors:[],
     antresol:{enabled:false, height:400, facade:{type:'none', material:'ldsp'}},
-    edgeFront:'2mm', edgeBack:'04mm',
+    edgeFront:'2mm', edgeBack:'none',
     edgeTop:'auto', edgeBottom:'auto', edgeLeft:'auto', edgeRight:'auto',
     drawerBlocks:[],
     shelfId:0, divId:0
@@ -1297,15 +1297,15 @@ function renderPanel(){
         `<div class="g2" style="margin-bottom:8px">` +
           `<div><div class="fl">Лицевые торцы</div>` +
           `<select onchange="updEdge(${s.id},'edgeFront',this.value)">` +
-            `<option value="2mm" ${s.edgeFront==='2mm'?'selected':''}>2 мм</option>` +
+            `<option value="2mm" ${s.edgeFront==='2mm'?'selected':''}>1 мм</option>` +
             `<option value="04mm" ${s.edgeFront==='04mm'?'selected':''}>0.4 мм</option>` +
             `<option value="none" ${s.edgeFront==='none'?'selected':''}>Без кромки</option>` +
           `</select></div>` +
           `<div><div class="fl">Скрытые торцы</div>` +
           `<select onchange="updEdge(${s.id},'edgeBack',this.value)">` +
-            `<option value="04mm" ${s.edgeBack==='04mm'?'selected':''}>0.4 мм</option>` +
-            `<option value="2mm" ${s.edgeBack==='2mm'?'selected':''}>2 мм</option>` +
             `<option value="none" ${s.edgeBack==='none'?'selected':''}>Без кромки</option>` +
+            `<option value="04mm" ${s.edgeBack==='04mm'?'selected':''}>0.4 мм</option>` +
+            `<option value="2mm" ${s.edgeBack==='2mm'?'selected':''}>1 мм</option>` +
           `</select></div>` +
         `</div>` +
         '<div class="fl" style="margin-bottom:4px;opacity:0.75">Кромка по граням (переопределение)</div>' +
@@ -2106,7 +2106,7 @@ function calcParts(){
 
   sections.forEach((s,i)=>{
     const W=s.width,H=s.height,D=s.depth,L=`С${i+1}`;
-    const ef=s.edgeFront||'2mm', eb=s.edgeBack||'04mm';
+    const ef=s.edgeFront||'2mm', eb=s.edgeBack||'none';
 
     // helper: кромка панели по 4 граням отдельно.
     // w,h — размеры панели (как в ldsp.push). topDef/bottomDef относятся
@@ -2534,7 +2534,7 @@ function showSpec(){
   }
   if(d.totalPm2>0){
     html+=`<tr>
-      <td><span class="color-dot" style="background:#c0392b;margin-right:6px"></span>Кромка ПВХ 2 мм<br>
+      <td><span class="color-dot" style="background:#c0392b;margin-right:6px"></span>Кромка ПВХ 1 мм<br>
         <span style="font-size:10px;color:#888">лицевые торцы</span></td>
       <td class="num">${d.totalPm2.toFixed(2)}</td>
       <td class="num">пм</td>
@@ -2673,7 +2673,7 @@ function confShowKP(){
     matRows+=kpRow('МДФ фасад'+(matChoice.mdfName?' ('+matChoice.mdfName+')':''),d.mdfM2Total.toFixed(3),'м²',fmt(d.mdfPricePerM2),fmt(d.mdfCost));
   }
   if(d.totalPm04>0) matRows+=kpRow('Кромка ПВХ 0.4 мм',d.totalPm04.toFixed(2),'пм',fmt(catalog.edgeThin||0),fmt(d.edgeCost04));
-  if(d.totalPm2>0)  matRows+=kpRow('Кромка ПВХ 2 мм',d.totalPm2.toFixed(2),'пм',fmt(prices.edgeThick),fmt(d.edgeCost2));
+  if(d.totalPm2>0)  matRows+=kpRow('Кромка ПВХ 1 мм',d.totalPm2.toFixed(2),'пм',fmt(prices.edgeThick),fmt(d.edgeCost2));
   if(d.totalHinges>0) matRows+=kpRow('Петли '+activehingeBrand,d.totalHinges,'шт',fmt(hingePrice()),fmt(d.hingeCost));
   d.slideDetails.forEach(sl=>{
     matRows+=kpRow(sl.brand+' '+sl.type+' '+sl.length+'мм',sl.count,'пара',fmt(sl.price),fmt(sl.price*sl.count));
@@ -2885,10 +2885,10 @@ window.cutSwitchTab=cutSwitchTab;
 function buildDetailTable(parts, matName, color){
   if(!parts.length) return '';
   const rows=parts.map(p=>{
-    const edgeFront=p.edgeFront==='2mm'?'<span class="edge-dot" style="background:#f0c040"></span>2мм'
+    const edgeFront=p.edgeFront==='2mm'?'<span class="edge-dot" style="background:#f0c040"></span>1мм'
       :p.edgeFront==='04mm'?'<span class="edge-dot" style="background:#aaa"></span>0.4мм':'—';
     const edgeBack=p.edgeBack==='04mm'?'<span class="edge-dot" style="background:#aaa"></span>0.4мм'
-      :p.edgeBack==='2mm'?'<span class="edge-dot" style="background:#f0c040"></span>2мм':'—';
+      :p.edgeBack==='2mm'?'<span class="edge-dot" style="background:#f0c040"></span>1мм':'—';
     return `<tr>
       <td>${p.num||''}</td>
       <td>${p.name}</td>
