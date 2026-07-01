@@ -6,6 +6,41 @@ import * as THREE from 'three';
 const LDSP_W=2750, LDSP_H=1830, HDF_W=2800, HDF_H=2070;
 const T=16; // толщина ЛДСП мм
 
+// ── Настройки раскроя (допуски и рез) ───────────────────────
+// Допуск расхождения размеров панелей (мм). Панели, отличающиеся
+// меньше чем на это значение, считаются одинаковыми при группировке.
+let SIZE_TOLERANCE_MM = 1;
+function dimsEqual(a,b,tol){
+  tol = (tol===undefined||tol===null) ? SIZE_TOLERANCE_MM : tol;
+  return Math.abs(a-b) < tol;
+}
+window.dimsEqual = dimsEqual;
+function setSizeTolerance(v){
+  SIZE_TOLERANCE_MM = Math.max(0, parseFloat(v)||0);
+}
+window.setSizeTolerance = setSizeTolerance;
+
+// Настройки раскроя листа: обрезка листа (внешний рез со всех сторон)
+// и толщина пилы/фрезы (рез между деталями). Редактируются из UI.
+// Обрезка общая для шкафа и кухни (оба изначально использовали 7мм).
+// Толщина пилы разная: у шкафа изначально был gap=4мм, у кухни SAW_INT=12мм —
+// сохраняем раздельные значения, чтобы правка UI не меняла поведение по умолчанию.
+let CUT_EDGE_TRIM_MM = 7;
+let CUT_SAW_KERF_MM  = 4;
+let CUT_SAW_KERF_KITCHEN_MM = 12;
+function setCutTrim(v){
+  CUT_EDGE_TRIM_MM = Math.max(0, parseFloat(v)||0);
+}
+window.setCutTrim = setCutTrim;
+function setCutKerf(v){
+  CUT_SAW_KERF_MM = Math.max(0, parseFloat(v)||0);
+}
+window.setCutKerf = setCutKerf;
+function setCutKerfKitchen(v){
+  CUT_SAW_KERF_KITCHEN_MM = Math.max(0, parseFloat(v)||0);
+}
+window.setCutKerfKitchen = setCutKerfKitchen;
+
 /* ============================================================
    PROJECT SYSTEM
    Storage layout:
@@ -2180,7 +2215,8 @@ function calcParts(){
 ============================================================ */
 function packSheets(parts,SW,SH,label,allowRotate,preferLong){
   if(!parts.length)return[];
-  const gap=4;
+  const gap=CUT_SAW_KERF_MM;
+  const trim=CUT_EDGE_TRIM_MM;
   // Предобработка: если preferLong — ориентируем деталь так чтобы
   // её длинная сторона шла вдоль длинной стороны листа (SW)
   if(preferLong){
@@ -2219,7 +2255,7 @@ function packSheets(parts,SW,SH,label,allowRotate,preferLong){
       }
     }
     if(!placed){
-      const sh={label:`${label} Лист ${sheets.length+1}`,items:[],free:[{x:0,y:0,w:SW,h:SH}]};
+      const sh={label:`${label} Лист ${sheets.length+1}`,items:[],free:[{x:trim,y:trim,w:SW-2*trim,h:SH-2*trim}]};
       const f=tryFit(p,sh.free[0],allowRotate);
       if(f){
         sh.items.push({name:p.name,w:f.uw,h:f.uh,x:0,y:0,rotated:f.rotated,tex:p.tex});
@@ -2888,6 +2924,14 @@ function showCut(){
   if(facMdf.length) listHtml+=buildDetailTable(facMdf,'МДФ фасад','#fff0d4');
 
   const html=`
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;padding:8px 10px;background:#f7f7f7;border-radius:6px;border:1px solid #e5e5e5">
+      <div><div style="font-size:10px;color:#888;margin-bottom:2px">Обрезка листа, мм</div>
+        <input type="number" min="0" max="30" value="${CUT_EDGE_TRIM_MM}" style="width:70px;box-sizing:border-box" onchange="setCutTrim(this.value);showCut()"></div>
+      <div><div style="font-size:10px;color:#888;margin-bottom:2px">Толщина пилы, мм</div>
+        <input type="number" min="1" max="20" value="${CUT_SAW_KERF_MM}" style="width:70px;box-sizing:border-box" onchange="setCutKerf(this.value);showCut()"></div>
+      <div><div style="font-size:10px;color:#888;margin-bottom:2px">Допуск размеров, мм</div>
+        <input type="number" min="0" max="10" step="0.5" value="${SIZE_TOLERANCE_MM}" style="width:70px;box-sizing:border-box" onchange="setSizeTolerance(this.value);showCut()"></div>
+    </div>
     <div class="cut-tabs">
       <button class="cut-tab active" data-tab="sheets" onclick="cutSwitchTab('sheets')">📐 Раскрой листов</button>
       <button class="cut-tab" data-tab="list" onclick="cutSwitchTab('list')">📋 Список деталей</button>
@@ -4822,7 +4866,7 @@ function kQuarterSheet(pct){
 // Подсчёт листов по ширине с системой Четверть
 function kCalcSheets(parts, SW, SH, allowRotate){
   if(!parts.length) return 0;
-  const SAW_EXT = 7, SAW_INT = 12;
+  const SAW_EXT = CUT_EDGE_TRIM_MM, SAW_INT = CUT_SAW_KERF_KITCHEN_MM;
   const RW = SW - SAW_EXT*2;
   const RH = SH - SAW_EXT*2;
   const sorted = [...parts].sort((a,b)=>{
@@ -4932,8 +4976,8 @@ function kShowCut(){
   const upperD = 350;     // глубина верхних
   const LEG_H = 100;
   const CORP_H = floorH - K_TOP - LEG_H;  // 712мм
-  const SAW_EXT = 7;      // рез снаружи
-  const SAW_INT = 12;     // рез внутри
+  const SAW_EXT = CUT_EDGE_TRIM_MM;      // рез снаружи
+  const SAW_INT = CUT_SAW_KERF_KITCHEN_MM;     // рез внутри
 
   const kFacadeMat = document.getElementById('k-facade-mat')?.value || 'ldsp';
 
@@ -5151,16 +5195,18 @@ function kShowCut(){
     });
     html += `</div>`;
 
-    // Таблица деталей
-    const grouped = {};
+    // Таблица деталей (группировка с учётом допуска расхождения размеров)
+    const groupList = [];
     parts.forEach(p=>{
-      const k=`${p.name}_${p.w}_${p.h}`;
-      if(!grouped[k]) grouped[k]={name:p.name, w:p.w, h:p.h, qty:0};
-      grouped[k].qty++;
+      const match = groupList.find(function(g){
+        return g.name===p.name && dimsEqual(g.w,p.w) && dimsEqual(g.h,p.h);
+      });
+      if(match){ match.qty++; }
+      else{ groupList.push({name:p.name, w:p.w, h:p.h, qty:1}); }
     });
     html += `<table style="border-collapse:collapse;font-size:11px;width:100%;margin-bottom:8px">`;
     html += `<thead><tr style="background:#eee"><th style="text-align:left;padding:4px 8px">Деталь</th><th style="padding:4px 8px;text-align:right">Ш×Г (мм)</th><th style="padding:4px 8px;text-align:center">Кол.</th></tr></thead><tbody>`;
-    Object.values(grouped).forEach(p=>{
+    groupList.forEach(p=>{
       html += `<tr style="border-bottom:1px solid #f0f0f0"><td style="padding:3px 8px">${p.name}</td><td style="padding:3px 8px;text-align:right">${p.w}×${p.h}</td><td style="padding:3px 8px;text-align:center">${p.qty}</td></tr>`;
     });
     html += `</tbody></table></div>`;

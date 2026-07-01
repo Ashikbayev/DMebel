@@ -497,6 +497,14 @@
                   <option value="2800x2070">2800×2070</option>
                 </select>
               </div>
+              <div>
+                <div style="font-size:10px;color:#888;margin-bottom:2px">Обрезка листа, мм</div>
+                <input class="kglobal-inp" style="width:100%;box-sizing:border-box" type="number" id="k-cut-trim" value="7" min="0" max="30" onchange="setCutTrim(this.value)">
+              </div>
+              <div>
+                <div style="font-size:10px;color:#888;margin-bottom:2px">Толщина пилы, мм</div>
+                <input class="kglobal-inp" style="width:100%;box-sizing:border-box" type="number" id="k-cut-kerf" value="12" min="1" max="30" onchange="setCutKerfKitchen(this.value)">
+              </div>
             </div>
           </div>
         </div>
