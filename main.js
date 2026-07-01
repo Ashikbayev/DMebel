@@ -710,8 +710,8 @@ function showKP(showL=true, showP=true, showK=false){
   };
   kpHtml += "<style>";
   kpHtml += "*{box-sizing:border-box;margin:0;padding:0}ul{list-style:none}";
-  kpHtml += "@media print{@page{size:A4;margin:10mm 12mm}.no-print{display:none!important}.kp-wrap{font-size:10px}.kp-hdr{padding:8px 14px!important}.kp-row{padding:6px 14px!important}.kp-foot{padding:6px 14px!important}.kp-band{display:none!important}table td,table th{padding:4px 6px!important;font-size:9.5px!important}}";
-  kpHtml += ".kp-hdr,.kp-row,.kp-foot{page-break-inside:avoid}";
+  kpHtml += "@media print{@page{size:A4;margin:10mm 12mm}.no-print{display:none!important}.kp-wrap{font-size:10px}.kp-hdr{padding:8px 14px!important}.kp-row{padding:6px 14px!important}.kp-spec{padding:4px 14px!important}.kp-cond{padding:6px 14px!important}.kp-foot{padding:6px 14px!important}.kp-band{display:none!important}table td,table th{padding:4px 6px!important;font-size:9.5px!important}}";
+  kpHtml += ".kp-hdr,.kp-cond,.kp-foot{page-break-inside:avoid}";
   kpHtml += "</style>";
   kpHtml += "<div class=\"kp-wrap\" style=\""+S.wrap+"\">";
 
@@ -734,7 +734,7 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "</div>";
 
   // СПЕЦИФИКАЦИЯ
-  kpHtml += "<div class=\"kp-row\" style=\"padding:10px 20px 8px;border-bottom:1px solid #EBEBEB\">";
+  kpHtml += "<div class=\"kp-spec\" style=\"padding:10px 20px 8px;border-bottom:1px solid #EBEBEB\">";
   kpHtml += "<div style=\""+S.sec+"\">Спецификация &nbsp;<span style=\"color:#999;font-weight:400\">"+rowNum+" позиций</span></div>";
   kpHtml += "<table style=\"width:100%;border-collapse:collapse\">";
   kpHtml += "<thead><tr>";
@@ -754,7 +754,7 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "</table></div>";
 
   // УСЛОВИЯ + ПРИМЕЧАНИЯ
-  kpHtml += "<div class=\"kp-row\" style=\"padding:8px 20px;border-bottom:1px solid #EBEBEB;display:flex;gap:0\">";
+  kpHtml += "<div class=\"kp-cond\" style=\"padding:8px 20px;border-bottom:1px solid #EBEBEB;display:flex;gap:0\">";
   kpHtml += "<div style=\"flex:1;padding-right:16px;border-right:1px solid #EBEBEB\">";
   kpHtml += "<div style=\""+S.sec+"\">Условия</div>";
   kpHtml += "<div style=\"display:flex;gap:20px\">";
