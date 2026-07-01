@@ -253,35 +253,32 @@ function dogVariantChange() {
   var tot = v === 'P' ? C.BP.tot : (v === 'K' ? C.BK.tot : C.BL.tot);
   var ti = $('dog-total-input');
   if (ti) ti.value = Math.round(tot);
+  var p1i = $('dog-pay1-input');
+  if (p1i) p1i.value = Math.round(tot * 0.5);
+  dogCalcPayments();
+}
+
+function dogSetAdvancePct(pct) {
+  var ti = $('dog-total-input');
+  var tot = ti ? (parseFloat(ti.value) || 0) : 0;
+  var p1i = $('dog-pay1-input');
+  if (p1i) p1i.value = Math.round(tot * pct / 100);
   dogCalcPayments();
 }
 
 function dogCalcPayments() {
-  var ti = $('dog-total-input');
-  var tot = ti ? (parseFloat(ti.value) || 0) : 0;
-  var advPct = parseInt(($('dog-advance')||{}).value) || 50;
+  var ti  = $('dog-total-input');
+  var p1i = $('dog-pay1-input');
+  var tot  = ti  ? (parseFloat(ti.value)  || 0) : 0;
+  var p1   = p1i ? (parseFloat(p1i.value) || 0) : 0;
   var fullPay = $('dog-full-pay') ? $('dog-full-pay').checked : false;
-  var p1f = $('dog-pay1');
-  var p2f = $('dog-pay2');
-  var p3f = $('dog-pay3');
-  var r2 = $('dog-pay2-row');
-  var r3 = $('dog-pay3-row');
-  if (fullPay) {
-    if (p1f) p1f.textContent = tot > 0 ? fm(tot) : '';
-    if (p2f) p2f.textContent = '';
-    if (p3f) p3f.textContent = '';
-    if (r2) r2.style.opacity = '0.35';
-    if (r3) r3.style.opacity = '0.35';
-  } else {
-    var p1 = Math.round(tot * advPct / 100);
-    var p3 = Math.round(tot * 0.10);
-    var p2 = tot - p1 - p3;
-    if (p1f) p1f.textContent = tot > 0 ? fm(p1) : '';
-    if (p2f) p2f.textContent = tot > 0 ? fm(p2) : '';
-    if (p3f) p3f.textContent = tot > 0 ? fm(p3) : '';
-    if (r2) r2.style.opacity = '1';
-    if (r3) r3.style.opacity = '1';
-  }
+  var p3 = fullPay ? 0 : Math.round(tot * 0.10);
+  var p2 = fullPay ? 0 : Math.max(0, tot - p1 - p3);
+  var p2f = $('dog-pay2'); if (p2f) p2f.textContent = (!fullPay && tot > 0) ? fm(p2) : '';
+  var p3f = $('dog-pay3'); if (p3f) p3f.textContent = (!fullPay && tot > 0) ? fm(p3) : '';
+  var r2 = $('dog-pay2-row'); if (r2) r2.style.opacity = fullPay ? '0.35' : '1';
+  var r3 = $('dog-pay3-row'); if (r3) r3.style.opacity = fullPay ? '0.35' : '1';
+  if (fullPay && p1i) p1i.value = tot > 0 ? Math.round(tot) : '';
 }
 
 function closeDogovor() { $('dogovor-modal').style.display = 'none'; }
@@ -297,13 +294,14 @@ function generateDogovor() {
   var daysVal = ($('dog-days')      ||{}).value || '14';
   var mntDate = ($('dog-mount-date')||{}).value || '';
   var varV    = ($('dog-variant')   ||{}).value || 'L';
-  var advPct  = parseInt(($('dog-advance')||{}).value) || 50;
   var fullPay = $('dog-full-pay') ? $('dog-full-pay').checked : false;
-  var totInput = parseFloat(($('dog-total-input')||{}).value) || 0;
+  var totInput = parseFloat(($('dog-total-input') ||{}).value) || 0;
+  var p1Input  = parseFloat(($('dog-pay1-input')  ||{}).value) || 0;
   var tot     = totInput > 0 ? totInput : (varV === 'P' ? C.BP.tot : (varV === 'K' ? C.BK.tot : C.BL.tot));
-  var p1 = fullPay ? Math.round(tot) : Math.round(tot * advPct / 100);
+  var p1 = fullPay ? Math.round(tot) : (p1Input > 0 ? Math.round(p1Input) : Math.round(tot * 0.5));
   var p3 = fullPay ? 0 : Math.round(tot * 0.10);
-  var p2 = fullPay ? 0 : (tot - p1 - p3);
+  var p2 = fullPay ? 0 : Math.max(0, tot - p1 - p3);
+  var advPct = tot > 0 ? Math.round(p1 / tot * 100) : 50;
   var today   = new Date();
   var todayRU = ruDateFmt(today);
   var mntRU   = '\u00ab____\u00bb ________________ 20___ \u0433.';
