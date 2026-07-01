@@ -2106,6 +2106,16 @@ function calcParts(){
 
   sections.forEach((s,i)=>{
     const W=s.width,H=s.height,D=s.depth,L=`С${i+1}`;
+    // ── Глубинный/высотный бюджет корпуса ────────────────────
+    // Dc — рабочая глубина боковин/дна/крыши/полок/перегородок:
+    //      минус отступ спереди под фасад (=T, фасад той же толщины, что ЛДСП)
+    //      минус толщина ХДФ задней стенки (3мм, накладная).
+    // Hc — высота стояка: дно и крыша теперь НАКЛАДНЫЕ (полная ширина W,
+    //      садятся на торцы боковин), поэтому боковина короче на 2*T.
+    const FACADE_REVEAL = T; // 16мм — толщина фасада = толщина ЛДСП корпуса
+    const HDF_THICK = 3;     // 3мм — толщина ХДФ задней стенки
+    const Dc = D - FACADE_REVEAL - HDF_THICK;
+    const Hc = H - 2*T;
     const ef=s.edgeFront||'2mm', eb=s.edgeBack||'none';
 
     // helper: кромка панели по 4 граням отдельно.
@@ -2133,30 +2143,30 @@ function calcParts(){
       if(pm04>0||pm2>0) edgeRows.push({name,pm04,pm2});
     }
 
-    // Боковины: видимые — передний торец (H) и верхний (D), скрытые — задний (H) и нижний (D)
-    ldsp.push({name:`${L} Бок лев`,w:D,h:H,tex:false,edgeFront:ef,edgeBack:eb});
-    addEdge(`${L} Бок лев`,D,H,'vis','hid','vis','hid');
-    ldsp.push({name:`${L} Бок пр`,w:D,h:H,tex:false,edgeFront:ef,edgeBack:eb});
-    addEdge(`${L} Бок пр`,D,H,'vis','hid','vis','hid');
+    // Боковины: видимые — передний торец (Hc) и верхний (Dc), скрытые — задний (Hc) и нижний (Dc)
+    ldsp.push({name:`${L} Бок лев`,w:Dc,h:Hc,tex:false,edgeFront:ef,edgeBack:eb});
+    addEdge(`${L} Бок лев`,Dc,Hc,'vis','hid','vis','hid');
+    ldsp.push({name:`${L} Бок пр`,w:Dc,h:Hc,tex:false,edgeFront:ef,edgeBack:eb});
+    addEdge(`${L} Бок пр`,Dc,Hc,'vis','hid','vis','hid');
 
-    // Крыша: видимый — передний торец (W-2T), скрытый — остальные
-    ldsp.push({name:`${L} Крыша`,w:W-2*T,h:D,tex:false,edgeFront:ef,edgeBack:eb});
-    addEdge(`${L} Крыша`,W-2*T,D,'vis','hid','hid','hid');
+    // Крыша (накладная, полная ширина W): видимый — передний торец (W), скрытый — остальные
+    ldsp.push({name:`${L} Крыша`,w:W,h:Dc,tex:false,edgeFront:ef,edgeBack:eb});
+    addEdge(`${L} Крыша`,W,Dc,'vis','hid','hid','hid');
 
-    // Дно: видимый — передний торец (W-2T)
-    ldsp.push({name:`${L} Дно`,w:W-2*T,h:D,tex:false,edgeFront:ef,edgeBack:eb});
-    addEdge(`${L} Дно`,W-2*T,D,'vis','hid','hid','hid');
+    // Дно (накладное, полная ширина W): видимый — передний торец (W)
+    ldsp.push({name:`${L} Дно`,w:W,h:Dc,tex:false,edgeFront:ef,edgeBack:eb});
+    addEdge(`${L} Дно`,W,Dc,'vis','hid','hid','hid');
 
     // Полки: видимый — передний торец (W-2T)
     s.shelves.forEach((sh,j)=>{
-      ldsp.push({name:`${L} Полка ${j+1}`,w:W-2*T,h:D,tex:false,edgeFront:ef,edgeBack:eb});
-      addEdge(`${L} Полка ${j+1}`,W-2*T,D,'vis','hid','hid','hid');
+      ldsp.push({name:`${L} Полка ${j+1}`,w:W-2*T,h:Dc,tex:false,edgeFront:ef,edgeBack:eb});
+      addEdge(`${L} Полка ${j+1}`,W-2*T,Dc,'vis','hid','hid','hid');
     });
 
-    // Перегородки: видимые — оба торца по высоте (H-2T)
+    // Перегородки: видимые — оба торца по высоте (Hc, тот же уровень, что боковины)
     s.dividers.forEach((dv,j)=>{
-      ldsp.push({name:`${L} Перегор.${j+1}`,w:D,h:H-2*T,tex:false,edgeFront:ef,edgeBack:eb});
-      addEdge(`${L} Перегор.${j+1}`,D,H-2*T,'hid','hid','vis','vis');
+      ldsp.push({name:`${L} Перегор.${j+1}`,w:Dc,h:Hc,tex:false,edgeFront:ef,edgeBack:eb});
+      addEdge(`${L} Перегор.${j+1}`,Dc,Hc,'hid','hid','vis','vis');
     });
 
     // Ящики по нишам и колонкам
@@ -2170,28 +2180,31 @@ function calcParts(){
         const gap=4, dCount=db.count;
         const nicheH=niche.top-niche.bottom;
         const dH=Math.floor((nicheH-(dCount+1)*gap)/dCount);
-        const dD=D-60;
+        const dD=Dc-10; // глубина короба (телескоп): рабочая глубина корпуса минус 10мм
         colsCalc.forEach((col,ci)=>{
-          const dW=col.width-4;
-          if(dW<50)return;
+          const facW=col.width-4;   // ширина фасада — зазор 2мм с каждой стороны проёма
+          const boxW=col.width-25;  // ширина короба — зазор под телескопы (12.5мм на сторону)
+          if(facW<50||boxW<50)return;
           for(let di=0;di<dCount;di++){
             drawerNum++;
             const lbl=colsCalc.length>1?`${L} К${ci+1} Яш.${drawerNum}`:`${L} Яш.${drawerNum}`;
-            const facPart={name:`${lbl} фас`,w:dW,h:dH,tex:s.facade.hasTexture};
+            const facPart={name:`${lbl} фас`,w:facW,h:dH,tex:s.facade.hasTexture};
             if(s.facade.material==='mdf') facMdf.push(facPart);
             else facLdsp.push(facPart);
-            ldsp.push({name:`${lbl} дно`,w:dW,h:dD,tex:false});
+            // Дно короба — накладное (подшивается снизу к боковинам), полная ширина короба
+            ldsp.push({name:`${lbl} дно`,w:boxW,h:dD,tex:false});
             ldsp.push({name:`${lbl} бок.л`,w:dD,h:dH-2*T,tex:false});
             ldsp.push({name:`${lbl} бок.п`,w:dD,h:dH-2*T,tex:false});
-            ldsp.push({name:`${lbl} пер`,w:dW-2*T,h:dH-2*T,tex:false});
-            ldsp.push({name:`${lbl} зад`,w:dW-2*T,h:dH-2*T,tex:false});
+            ldsp.push({name:`${lbl} пер`,w:boxW-2*T,h:dH-2*T,tex:false});
+            ldsp.push({name:`${lbl} зад`,w:boxW-2*T,h:dH-2*T,tex:false});
           }
         });
       });
     }
 
-    // Задняя стенка — без кромки
-    hdf.push({name:`${L} Задняя`,w:W,h:H,tex:false});
+    // Задняя стенка — без кромки. Ш×В = ширина секции × высота стояка
+    // (дно и крыша накладные и уже закрывают верх/низ, ХДФ идёт только между ними)
+    hdf.push({name:`${L} Задняя`,w:W,h:Hc,tex:false});
 
 
     // Фасады: кромка по всему периметру — передний тип
