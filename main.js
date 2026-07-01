@@ -664,20 +664,31 @@ function showKP(showL=true, showP=true, showK=false){
       + "<th style=\"text-align:right;padding:10px 12px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;font-weight:500;width:120px\">Сумма</th>";
   }
 
-  // Итоговая строка
+  // Итоговая строка + кредит
+  var credits = {L: C.BL.credit, P: C.BP.credit, K: C.BK.credit};
+  var showCredit = vars.some(function(v){ return credits[v.key] > totals[v.key] + 1; });
   var totRow = "";
+  var creditRow = "";
   var totCols = nV+2; // № + наименование + кол + варианты
   if(nV > 1) {
     var totVarCells = "";
+    var creditVarCells = "";
     vars.forEach(function(v){
       totVarCells += "<td style=\"text-align:right;padding:16px 12px;vertical-align:top\">";
       totVarCells += "<span style=\"font-family:Georgia,serif;font-size:20px;font-weight:600;color:#1C1C1E\">"+fm(totals[v.key])+"</span></td>";
+      if(showCredit){
+        creditVarCells += "<td style=\"text-align:right;padding:8px 12px;vertical-align:top\">";
+        creditVarCells += "<span style=\"font-family:Georgia,serif;font-size:16px;font-weight:500;color:#9A9087\">"+fm(credits[v.key])+"</span></td>";
+      }
     });
-    totRow = "<tr style=\"border-top:2px solid #1C1C1E\"><td colspan=\"3\" style=\"padding:16px 12px;font-size:14px;font-weight:600;color:#1C1C1E\">К оплате</td>"+totVarCells+"</tr>";
+    totRow = "<tr style=\"border-top:2px solid #1C1C1E\"><td colspan=\"3\" style=\"padding:16px 12px;font-size:14px;font-weight:600;color:#1C1C1E\">\u041a \u043e\u043f\u043b\u0430\u0442\u0435</td>"+totVarCells+"</tr>";
+    if(showCredit) creditRow = "<tr style=\"background:#F9F7F3\"><td colspan=\"3\" style=\"padding:8px 12px;font-size:12px;color:#9A9087\">\uD83D\uDCB3 \u0412 \u043a\u0440\u0435\u0434\u0438\u0442</td>"+creditVarCells+"</tr>";
   } else {
     var v1 = vars[0]?vars[0].key:"L";
-    totRow = "<tr style=\"border-top:2px solid #1C1C1E\"><td colspan=\"3\" style=\"padding:16px 12px;font-size:14px;font-weight:600;color:#1C1C1E\">К оплате</td>"
+    totRow = "<tr style=\"border-top:2px solid #1C1C1E\"><td colspan=\"3\" style=\"padding:16px 12px;font-size:14px;font-weight:600;color:#1C1C1E\">\u041a \u043e\u043f\u043b\u0430\u0442\u0435</td>"
       + "<td colspan=\"2\" style=\"text-align:right;padding:16px 12px\"><span style=\"font-family:Georgia,serif;font-size:22px;font-weight:600;color:#1C1C1E\">"+fm(totals[v1])+"</span></td></tr>";
+    if(showCredit) creditRow = "<tr style=\"background:#F9F7F3\"><td colspan=\"3\" style=\"padding:8px 12px;font-size:12px;color:#9A9087\">\uD83D\uDCB3 \u0412 \u043a\u0440\u0435\u0434\u0438\u0442</td>"
+      + "<td colspan=\"2\" style=\"text-align:right;padding:8px 12px\"><span style=\"font-family:Georgia,serif;font-size:18px;font-weight:500;color:#9A9087\">"+fm(credits[v1])+"</span></td></tr>";
   }
 
   // Золотой разделитель
@@ -736,7 +747,7 @@ function showKP(showL=true, showP=true, showK=false){
   kpHtml += "<th style=\"text-align:left;padding:10px 12px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;font-weight:500\">Наименование</th>";
   kpHtml += "<th style=\"text-align:left;padding:10px 12px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;font-weight:500;width:70px\">Кол.</th>";
   kpHtml += "<th style=\"text-align:center;padding:10px 12px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9A9087;font-weight:500;width:60px\">&nbsp;</th>";
-  kpHtml += "</tr></thead><tbody>"+tableRows+"</tbody></table>";
+  kpHtml += "</tr></thead><tbody>"+tableRows+totRow+creditRow+"</tbody></table>";
   kpHtml += "</div>";
 
   // УСЛОВИЯ
