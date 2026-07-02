@@ -2486,6 +2486,11 @@ function calcParts(){
             if(dmat==='mdfKraska') facMdfKraska.push(facPart);
             else if(dmat==='mdfPlenka') facMdfPlenka.push(facPart);
             else facLdsp.push(facPart);
+            // Кромка фасада ящика — весь периметр, только для ЛДСП
+            // (раньше не считалась вообще, для МДФ по-прежнему не считаем)
+            if(dmat==='ldsp'){
+              addEdge(lbl+' фас',facW,dH,'vis','vis','vis','vis');
+            }
             // Дно короба — накладное (подшивается снизу к боковинам), полная ширина короба
             ldsp.push({name:`${lbl} дно`,w:boxW,h:dD,tex:false});
             ldsp.push({name:`${lbl} бок.л`,w:dD,h:dH-2*T,tex:false});
@@ -2512,8 +2517,9 @@ function calcParts(){
         if(secMat==='mdfKraska') facMdfKraska.push(p);
         else if(secMat==='mdfPlenka') facMdfPlenka.push(p);
         else facLdsp.push(p);
-        // фасад — весь периметр лицевой кромкой
-        if(s.facade.material==='ldsp'){
+        // фасад — весь периметр лицевой кромкой, но ТОЛЬКО для ЛДСП
+        // (у МДФ Плёнка/Краска кромка своя с завода, ПВХ не нужен)
+        if(secMat==='ldsp'){
           addEdge(`${L} Фасад ${i+1}`,dw,dh,'vis','vis','vis','vis');
         }
       }
@@ -2583,7 +2589,7 @@ function calcParts(){
         if(antrMat==='mdfKraska') facMdfKraska.push(p);
         else if(antrMat==='mdfPlenka') facMdfPlenka.push(p);
         else facLdsp.push(p);
-        // Кромка фасада антресоли — тоже раньше не считалась
+        // Кромка фасада антресоли — только для ЛДСП
         if(antrMat==='ldsp'){
           addAntrEdge(L+' Фасад '+(i+1),dw,dh,'vis','vis','vis','vis');
         }
