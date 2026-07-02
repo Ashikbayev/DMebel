@@ -1232,14 +1232,15 @@ function renderPanel(){
       return group.list.map(function(sh,idx){
         const below = idx>0 ? group.list[idx-1] : null;
         const gap = sh.height - (below ? below.height : T);
-        return '<div class="irow">' +
-          shelfColLabel(group.ci) +
-          '<span class="hint">от пола</span>' +
-          '<input type="number" value="'+sh.height+'" onchange="updShelf('+s.id+','+sh.id+',this.value)" style="width:60px">' +
-          '<span class="hint">заз.снизу</span>' +
-          '<input type="number" value="'+gap+'" min="0" onchange="updShelfGap('+s.id+','+sh.id+',this.value)" style="width:52px">' +
-          '<span class="hint">мм</span>' +
-          '<button class="ibtn" onclick="removeShelf('+s.id+','+sh.id+')"><i class="ti ti-x"></i></button>' +
+        return '<div style="background:#faf8f2;border:1px solid #eee;border-radius:6px;padding:6px 8px 8px;margin-bottom:5px">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+            '<span>'+shelfColLabel(group.ci)+'</span>' +
+            '<button class="ibtn" onclick="removeShelf('+s.id+','+sh.id+')"><i class="ti ti-x"></i></button>' +
+          '</div>' +
+          '<div class="g2" style="margin-bottom:0">' +
+            '<div><div class="fl">От пола, мм</div><input type="number" value="'+sh.height+'" onchange="updShelf('+s.id+','+sh.id+',this.value)"></div>' +
+            '<div><div class="fl">Зазор снизу, мм</div><input type="number" value="'+gap+'" min="0" onchange="updShelfGap('+s.id+','+sh.id+',this.value)"></div>' +
+          '</div>' +
         '</div>';
       }).join('');
     }).join('');
