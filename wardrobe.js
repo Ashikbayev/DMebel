@@ -544,7 +544,7 @@ function mkSection(){
     hasRod:false, rodHeight:1600, rodCol:null,
     facade:{type:'none', material:'ldsp', hasTexture:false},
     facadeDoors:[],
-    antresol:{enabled:false, height:400, facade:{type:'none', material:'ldsp'}},
+    antresol:{enabled:false, height:400, facade:{type:'none', material:'ldsp'}, shelves:[], shelfId:0},
     edgeFront:'2mm', edgeBack:'none',
     edgeTop:'auto', edgeBottom:'auto', edgeLeft:'auto', edgeRight:'auto',
     drawerBlocks:[],
@@ -563,6 +563,29 @@ function updAntresol(sid,field,val){
   if(field==='enabled') renderPanel();
   render3D(); updateStats(); projMarkUnsaved();
 }
+// ── Полки в антресоли (простые, без ниш/перегородок — антресоль их не имеет) ──
+function addAntresolShelf(sid){
+  const s=sections.find(x=>x.id===sid); if(!s||!s.antresol.enabled)return;
+  if(!s.antresol.shelves) s.antresol.shelves=[];
+  if(s.antresol.shelfId===undefined) s.antresol.shelfId=0;
+  s.antresol.shelves.push({id:s.antresol.shelfId++, height:Math.round(s.antresol.height/2)});
+  s.antresol.shelves.sort((a,b)=>a.height-b.height);
+  renderPanel(); render3D(); projMarkUnsaved();
+}
+function removeAntresolShelf(sid,shid){
+  const s=sections.find(x=>x.id===sid); if(!s)return;
+  s.antresol.shelves=(s.antresol.shelves||[]).filter(x=>x.id!==shid);
+  renderPanel(); render3D(); projMarkUnsaved();
+}
+function updAntresolShelf(sid,shid,val){
+  const s=sections.find(x=>x.id===sid); if(!s)return;
+  const sh=(s.antresol.shelves||[]).find(x=>x.id===shid);
+  if(sh) sh.height=Math.max(0,parseInt(val)||0);
+  render3D(); projMarkUnsaved();
+}
+window.addAntresolShelf=addAntresolShelf;
+window.removeAntresolShelf=removeAntresolShelf;
+window.updAntresolShelf=updAntresolShelf;
 
 // ── Фасад по дверям ───────────────────────────────────────────
 function updDoorMat(sid,doorIdx,val){
@@ -661,8 +684,11 @@ function duplicateSection(sid){
   copy.antresol = {
     enabled: src.antresol.enabled,
     height: src.antresol.height,
-    facade: { type: src.antresol.facade.type, material: src.antresol.facade.material }
+    facade: { type: src.antresol.facade.type, material: src.antresol.facade.material },
+    shelves: [],
+    shelfId: 0
   };
+  copy.antresol.shelves = (src.antresol.shelves||[]).map(sh=>({id:copy.antresol.shelfId++, height:sh.height}));
 
   copy.edgeFront = src.edgeFront;
   copy.edgeBack = src.edgeBack;
@@ -752,17 +778,28 @@ function updShelf(sid,shid,val){
 }
 // Меняет высоту полки ЧЕРЕЗ зазор от соседней полки снизу (в той же колонке),
 // а не через абсолютную высоту от пола. Если снизу нет полки — зазор от дна (T).
+// Все полки ВЫШЕ отредактированной (в той же колонке) автоматически
+// перераспределяются равными зазорами до потолка — не нужно поправлять их руками.
 function updShelfGap(sid,shid,val){
   const s=sections.find(x=>x.id===sid); if(!s) return;
   const sh=s.shelves.find(x=>x.id===shid); if(!sh) return;
   const ci=sh.col||0;
   const gap=Math.max(0,parseInt(val)||0);
-  const below=s.shelves
-    .filter(x=>(x.col||0)===ci && x.id!==shid && x.height<sh.height)
-    .sort((a,b)=>a.height-b.height)
-    .pop();
+  const sameCol=s.shelves.filter(x=>(x.col||0)===ci).sort(function(a,b){return a.height-b.height;});
+  const idx=sameCol.findIndex(function(x){return x.id===shid;});
+  const below = idx>0 ? sameCol[idx-1] : null;
   const baseHeight = below ? below.height : T;
   sh.height = baseHeight + gap;
+
+  const above = sameCol.slice(idx+1); // полки, которые были выше отредактированной
+  if(above.length){
+    const top = s.height - T;
+    const remaining = top - sh.height;
+    const step = remaining / (above.length + 1);
+    above.forEach(function(a,i){
+      a.height = Math.round(sh.height + step*(i+1));
+    });
+  }
   renderPanel(); render3D(); projMarkUnsaved();
 }
 window.updShelfGap = updShelfGap;
@@ -1484,6 +1521,15 @@ function renderPanel(){
 
     // ── антресоль секции ──────────────────────────────────────
     const antr=s.antresol;
+    const antrShelves=antr.shelves||[];
+    const antrShelvesHtml=antrShelves.map(function(sh){
+      return '<div class="irow">' +
+        '<span class="hint">от пола антр.</span>' +
+        '<input type="number" value="'+sh.height+'" onchange="updAntresolShelf('+s.id+','+sh.id+',this.value)">' +
+        '<span class="hint">мм</span>' +
+        '<button class="ibtn" onclick="removeAntresolShelf('+s.id+','+sh.id+')"><i class="ti ti-x"></i></button>' +
+      '</div>';
+    }).join('');
     const antrDetails=antr.enabled
       ? `<div class="g2" style="margin-bottom:6px">` +
           `<div><div class="fl">Высота, мм</div>` +
@@ -1493,7 +1539,7 @@ function renderPanel(){
             `<div style="font-size:12px;padding:5px 6px;background:#f5f0e0;border-radius:6px;color:#7a5c2e;font-weight:600">${s.width} мм</div>` +
           `</div>` +
         `</div>` +
-        `<div class="g2">` +
+        `<div class="g2" style="margin-bottom:6px">` +
           `<div><div class="fl">Фасад</div>` +
             `<select onchange="updAntresol(${s.id},'facType',this.value)">` +
               `<option value="none" ${antr.facade.type==='none'?'selected':''}>Без фасада</option>` +
@@ -1506,7 +1552,10 @@ function renderPanel(){
               `<option value="ldsp" ${antr.facade.material==='ldsp'?'selected':''}>ЛДСП</option>` +
               `<option value="mdf" ${antr.facade.material==='mdf'?'selected':''}>МДФ</option>` +
             `</select></div>` +
-        `</div>`
+        `</div>` +
+        `<div class="fl" style="margin-bottom:4px">Полки антресоли</div>` +
+        antrShelvesHtml +
+        `<button class="addbtn" style="margin-bottom:0" onclick="addAntresolShelf(${s.id})">+ полка антресоли</button>`
       : '';
     const antrDiv=document.createElement('div');
     antrDiv.className='antr-card';
@@ -2153,6 +2202,10 @@ function render3D(){
         addBoard(aox,ay+T+AHc,azFront,AW,T,ADc);
         addBoard(aox,ay,azFront,AW,T,ADc,ML2);
         addBoard(aox,ay+T,azFront+ADc,AW,AHc,AHDF_THICK,MH);
+        const antrShelves=s.antresol.shelves||[];
+        antrShelves.forEach(function(sh){
+          addBoard(aox+T,ay+sh.height,azFront,AW-2*T,T,ADc,ML);
+        });
         if(s.antresol.facade.type!=='none'){
           const fm=s.antresol.facade.material==='mdf'?MFM:MFL;
           const cnt=s.antresol.facade.type==='doors3'?3:s.antresol.facade.type==='doors2'?2:1;
@@ -2454,6 +2507,13 @@ function calcParts(){
     addAntrEdge(L+' Крыша',AW,ADc,'vis','hid','hid','hid');
     ldsp.push({name:`${L} Дно`,w:AW,h:ADc,tex:false,edgeFront:aef,edgeBack:aeb});
     addAntrEdge(L+' Дно',AW,ADc,'vis','hid','hid','hid');
+    // Полки антресоли: видимый — передний торец (AW-2T)
+    const antrShelvesCalc=s.antresol.shelves||[];
+    antrShelvesCalc.forEach(function(sh,j){
+      const lbl=L+' Полка '+(j+1);
+      ldsp.push({name:lbl,w:AW-2*T,h:ADc,tex:false,edgeFront:aef,edgeBack:aeb});
+      addAntrEdge(lbl,AW-2*T,ADc,'vis','hid','hid','hid');
+    });
     hdf.push({name:`${L} Задняя`,w:AW,h:AHc,tex:false});
     if(s.antresol.facade.type!=='none'){
       const cnt=s.antresol.facade.type==='doors3'?3:s.antresol.facade.type==='doors2'?2:1;
@@ -3458,6 +3518,10 @@ function renderMobile3D(){
       addB(ox,ay+T,zFront,T,AHc,ADc); addB(ox+W-T,ay+T,zFront,T,AHc,ADc);
       addB(ox,ay+T+AHc,zFront,W,T,ADc); addB(ox,ay,zFront,W,T,ADc,mML2);
       addB(ox,ay+T,zFront+ADc,W,AHc,HDF_THICK,mMH);
+      const antrShelvesM=s.antresol.shelves||[];
+      antrShelvesM.forEach(function(sh){
+        addB(ox+T,ay+sh.height,zFront,W-2*T,T,ADc);
+      });
       if(s.antresol.facade.type!=='none'){
         const fm=s.antresol.facade.material==='mdf'?mMFM:mMFL;
         const cnt=s.antresol.facade.type==='doors3'?3:s.antresol.facade.type==='doors2'?2:1;
