@@ -648,28 +648,43 @@ function addSlide(){
 function removeSlide(i){ slideCatalog.splice(i,1); saveHardware(); renderPricesPane(); updateStats(); }
 function setActiveSlide(brand,type){ activeSlide={brand,type}; saveHardware(); renderPricesPane(); updateStats(); }
 
-// Какие гипотетические варианты фасада показывать в сравнении цены
-// (не влияет на реальные материалы секций — см. calcAllCosts().facadeVariants)
-let selectedFacadeVariants={ldsp:true, mdfPlenka:true, mdfKraska:true};
-function toggleFacadeVariant(key,val){
-  selectedFacadeVariants[key]=val;
+// Выбор ЛДСП/МДФ для передачи в расчёт (main.js: sendConfToCalc()).
+// Отметка чекбокса — как и раньше — сразу массово выставляет двери всем
+// секциям и антресолям (цвет/текстура значения не имеют, используется
+// стандартный материал). Можно отметить оба сразу: тогда при нажатии
+// "В расчёт" в калькулятор уйдут ОБА варианта площади — ЛДСП и МДФ,
+// причём МДФ заполняет ОБЕ строки калькулятора (Плёнка и Краска) одним
+// и тем же количеством м², т.к. площадь фасада не зависит от отделки.
+let selectedFacadeSend={ldsp:false, mdf:false};
+function toggleFacadeSend(key,val){
+  selectedFacadeSend[key]=val;
+  if(val){
+    setAllFacadeMat(key==='mdf' ? 'mdfPlenka' : 'ldsp');
+  }
+  updateGlobalFacadeBar();
   updateStats();
 }
-window.toggleFacadeVariant=toggleFacadeVariant;
+window.toggleFacadeSend=toggleFacadeSend;
+window._getFacadeSend=()=>selectedFacadeSend;
 
 function renderFacadeVariantsSummary(facadeVariants){
   const box=document.getElementById('facade-variants-summary');
   if(!box) return;
-  const keys=['ldsp','mdfPlenka','mdfKraska'];
-  const active=keys.filter(function(k){ return selectedFacadeVariants[k] && facadeVariants[k]; });
-  if(!active.length){ box.innerHTML=''; return; }
-  box.innerHTML=active.map(function(k){
-    const v=facadeVariants[k];
-    return '<div class="fv-card"><span class="fv-label">'+v.label+'</span><span class="fv-price">'+fmt(v.total)+' ₸</span></div>';
-  }).join('');
+  const cards=[];
+  if(selectedFacadeSend.ldsp && facadeVariants.ldsp){
+    cards.push('<div class="fv-card"><span class="fv-label">ЛДСП → в расчёт</span><span class="fv-price">'+fmt(facadeVariants.ldsp.total)+' ₸</span></div>');
+  }
+  if(selectedFacadeSend.mdf && facadeVariants.mdfPlenka){
+    cards.push('<div class="fv-card"><span class="fv-label">МДФ (Плёнка+Краска) → в расчёт</span><span class="fv-price">'+facadeVariants.mdfPlenka.m2.toFixed(2)+' м²</span></div>');
+  }
+  box.innerHTML=cards.join('');
 }
 
 function updateGlobalFacadeBar(){
+  const lc=document.getElementById('gfv-ldsp');
+  const mc=document.getElementById('gfv-mdf');
+  if(lc) lc.checked=!!selectedFacadeSend.ldsp;
+  if(mc) mc.checked=!!selectedFacadeSend.mdf;
   if(!sections.length) return;
   const nb=document.getElementById('gf-none');
   const types=sections.map(s=>s.facade.type);
@@ -678,6 +693,7 @@ function updateGlobalFacadeBar(){
 }
 
 function setAllFacadeMat(mat){
+  if(mat==='none'){ selectedFacadeSend.ldsp=false; selectedFacadeSend.mdf=false; }
   sections.forEach(s=>{
     if(mat==='none'){
       s.facade.type='none';
@@ -2800,8 +2816,10 @@ function calcAllCosts(){
     const vNoTex=allFacadeParts.filter(p=>!p.tex);
     const vTexSheets=packSheets(vTex,LDSP_W,LDSP_H,'',false);
     const vNoTexSheets=packSheets(vNoTex,LDSP_W,LDSP_H,'',true);
-    const vCost=calcSheetsCost([...vTexSheets,...vNoTexSheets],LDSP_W,LDSP_H,ldspPricePerSheet);
-    facadeVariants.ldsp={label:'ЛДСП',facadeCost:vCost,matTotal:baseWithoutFacade+vCost,total:baseWithoutFacade+vCost+workTotal};
+    const vAllSheets=[...vTexSheets,...vNoTexSheets];
+    const vCost=calcSheetsCost(vAllSheets,LDSP_W,LDSP_H,ldspPricePerSheet);
+    const vEquiv=vAllSheets.length>0 ? countSheetsQuarter(vAllSheets,LDSP_H) : 0;
+    facadeVariants.ldsp={label:'ЛДСП',facadeCost:vCost,equiv:vEquiv,matTotal:baseWithoutFacade+vCost,total:baseWithoutFacade+vCost+workTotal};
   }
   {
     const vM2=allFacadeParts.reduce((a,p)=>a+p.w*p.h/1e6,0);

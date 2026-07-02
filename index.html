@@ -205,11 +205,10 @@
       <!-- constructor tab -->
       <div id="pane-constructor">
         <div id="global-facade-bar">
-          <span class="gf-label">Сравнить цену фасада:</span>
-          <label class="gf-check"><input type="checkbox" id="gfv-ldsp" checked onchange="toggleFacadeVariant('ldsp',this.checked)"> ЛДСП</label>
-          <label class="gf-check"><input type="checkbox" id="gfv-mdfPlenka" checked onchange="toggleFacadeVariant('mdfPlenka',this.checked)"> МДФ Плёнка</label>
-          <label class="gf-check"><input type="checkbox" id="gfv-mdfKraska" checked onchange="toggleFacadeVariant('mdfKraska',this.checked)"> МДФ Краска</label>
-          <button class="gf-btn" id="gf-none" onclick="setAllFacadeMat('none')">Без фасада (всем)</button>
+          <span class="gf-label">Фасад в расчёт:</span>
+          <label class="gf-check"><input type="checkbox" id="gfv-ldsp" onchange="toggleFacadeSend('ldsp',this.checked)"> ЛДСП</label>
+          <label class="gf-check"><input type="checkbox" id="gfv-mdf" onchange="toggleFacadeSend('mdf',this.checked)"> МДФ</label>
+          <button class="gf-btn" id="gf-none" onclick="setAllFacadeMat('none')">Без фасада</button>
         </div>
         <div id="facade-variants-summary"></div>
         <div id="sections-container"></div>

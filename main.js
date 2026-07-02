@@ -1617,11 +1617,14 @@ function sendConfToCalc() {
   }
   const d = window.calcAllCosts();
   const mc = window._getMatChoice ? window._getMatChoice() : {};
-
+  const fs = window._getFacadeSend ? window._getFacadeSend() : {ldsp:false, mdf:false};
 
   const ldspEquiv    = Math.round((d.ldspEquiv    || 0) * 100) / 100;
   const hdfEquiv     = Math.round((d.hdfEquiv     || 0) * 100) / 100;
-  const facLdspEquiv = Math.round((d.facLdspEquiv || 0) * 100) / 100;
+  const facLdspEquiv = (fs.ldsp && d.facadeVariants && d.facadeVariants.ldsp)
+    ? Math.round(d.facadeVariants.ldsp.equiv * 100) / 100 : 0;
+  const mdfM2Equiv    = (fs.mdf && d.facadeVariants && d.facadeVariants.mdfPlenka)
+    ? Math.round(d.facadeVariants.mdfPlenka.m2 * 100) / 100 : 0;
 
   // Сбрасываем калькулятор
   Object.keys(ST).forEach(k => ST[k] = []);
@@ -1748,6 +1751,38 @@ function sendConfToCalc() {
       imported++;
     }
   }
+
+  // ── МДФ фасад (Плёнка + Краска — одинаковое кол-во м², т.к.
+  //    площадь фасада не зависит от отделки) ────────────────────
+  function addMdfFacadeRow(sec, arr, nameHint, qty) {
+    if (!qty || qty <= 0 || !arr || !arr.length) return;
+    let idx = 0;
+    if (nameHint) {
+      const f = arr.findIndex(function(x){
+        return x.n.toLowerCase().indexOf(nameHint.toLowerCase())>=0 || nameHint.toLowerCase().indexOf(x.n.toLowerCase())>=0;
+      });
+      if (f >= 0) idx = f;
+    }
+    const i = ST[sec].length; ST[sec].push(idx);
+    const c = $(sec+'-list');
+    if (!c) return;
+    if (i === 0) c.innerHTML = '';
+    const d2 = document.createElement('div');
+    d2.id = sec+'r'+i; if (i>0) d2.className='ib'; d2.style.marginTop='8px';
+    const o = arr.map(function(x,j){
+      return '<option value="'+j+'"'+(j===idx?' selected':'')+'>'+x.n+' — '+x.p.toLocaleString('ru')+'₸</option>';
+    }).join('');
+    d2.innerHTML = '<div class="fr"><select id="'+sec+'s'+i+'" onchange="ST[\''+sec+'\']['+i+']=+this.value;recalc()">'+o+
+      '</select><button class="db" onclick="$(\''+sec+'r'+i+'\').style.display=\'none\';ST[\''+sec+'\']['+i+']=null;recalc()">✕</button></div>'+
+      '<div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="'+sec+'q'+i+
+      '" placeholder="0" min="0" step="0.01" onchange="recalc()"><span class="fp">'+arr[idx].p.toLocaleString('ru')+'₸/м²</span></div>';
+    c.appendChild(d2);
+    $(sec+'q'+i).value = qty;
+    const cb = $('cb-'+sec); if (cb && !cb.classList.contains('op')) tog(sec);
+    imported++;
+  }
+  addMdfFacadeRow('fplen', DB.fas_plen, mc.mdfPlenkaName, mdfM2Equiv);
+  addMdfFacadeRow('fkr', DB.fas_kr, mc.mdfKraskaName, mdfM2Equiv);
 
   // ── ХДФ ────────────────────────────────────────────────────
   if (hdfEquiv > 0) {
