@@ -3253,22 +3253,27 @@ function renderMobile3D(){
 
   sections.forEach(s=>{
     const W=s.width,H=s.height,D=s.depth;
+    // Тот же глубинный/высотный бюджет, что и в render3D/calcParts
+    const HDF_THICK=3;
+    const Dc=D-T-HDF_THICK;
+    const Hc=H-2*T;
+    const zFront=T; // z=0 — истинный перед (лицо фасада), корпус начинается за ним
 
-    // корпус
-    addB(ox,0,0,T,H,D); addB(ox+W-T,0,0,T,H,D);
-    addB(ox+T,H-T,0,W-2*T,T,D); addB(ox+T,0,0,W-2*T,T,D,mML2);
-    addB(ox,0,D-8,W,H,8,mMH);
+    // корпус (накладные дно/крыша, полная ширина W)
+    addB(ox,T,zFront,T,Hc,Dc); addB(ox+W-T,T,zFront,T,Hc,Dc);
+    addB(ox,T+Hc,zFront,W,T,Dc); addB(ox,0,zFront,W,T,Dc,mML2);
+    addB(ox,T,zFront+Dc,W,Hc,HDF_THICK,mMH);
 
     // полки — ширина/позиция от ниши (колонки), если есть перегородки
     const mCols=getColumns(s);
     s.shelves.forEach(sh=>{
       const mci=Math.min(sh.col||0, Math.max(0,mCols.length-1));
       const mcol=mCols[mci] || {left:T, width:W-2*T};
-      addB(ox+mcol.left, sh.height, 0, mcol.width, T, D);
+      addB(ox+mcol.left, sh.height, zFront, mcol.width, T, Dc);
     });
 
     // перегородки
-    s.dividers.forEach(dv=>addB(ox+dv.pos,T,0,T,H-2*T,D));
+    s.dividers.forEach(dv=>addB(ox+dv.pos,T,zFront,T,H-2*T,Dc));
 
     // штанга
     if(s.hasRod){
@@ -3276,16 +3281,16 @@ function renderMobile3D(){
       const g2=new THREE.CylinderGeometry(10,10,W-2*T-20,16);
       const rm=new THREE.Mesh(g2,mMR);
       rm.rotation.z=Math.PI/2;
-      rm.position.set(ox+W/2,rh,D/2);
+      rm.position.set(ox+W/2,rh,zFront+Dc/2);
       rm.userData={mw:true}; mobileScene.add(rm);
     }
 
-    // фасад
+    // фасад (толщина T, у истинного переда z=0..T)
     if(s.facade.type!=='none'){
       const fm=s.facade.material==='mdf'?mMFM:mMFL;
       const count=s.facade.type==='doors3'?3:s.facade.type==='doors2'?2:1;
-      const gap=4,thick=18,dw=(W-gap*(count+1))/count;
-      for(let i=0;i<count;i++) addB(ox+gap+(dw+gap)*i,gap,-thick,dw,H-gap*2,thick,fm,true);
+      const gap=4,thick=T,dw=(W-gap*(count+1))/count;
+      for(let i=0;i<count;i++) addB(ox+gap+(dw+gap)*i,gap,0,dw,H-gap*2,thick,fm,true);
     }
 
     // ящики по нишам и колонкам
@@ -3293,6 +3298,7 @@ function renderMobile3D(){
       const MD=new THREE.MeshStandardMaterial({color:0x8d9db6, roughness:0.6, metalness:0.1});
       const niches=getNiches(s);
       const cols=getColumns(s);
+      const dD=Dc-10; // глубина короба — как в calcParts
       s.drawerBlocks.forEach(db=>{
         const niche=niches[db.nicheIdx];
         if(!niche)return;
@@ -3305,23 +3311,25 @@ function renderMobile3D(){
           if(dW<50)return;
           for(let di=0;di<dCount;di++){
             const dy=niche.bottom+gap+(dH+gap)*di;
-            addB(ox+col.left+2, dy, 8, dW, dH-2, D-68, mMD, true);
+            addB(ox+col.left+2, dy, zFront+8, dW, dH-2, dD, mMD, true);
           }
         });
       });
     }
 
-    // антресоль
+    // антресоль (та же накладная схема)
     if(s.antresol&&s.antresol.enabled){
-      const AH=s.antresol.height, ay=H;
-      addB(ox,ay,0,T,AH,D); addB(ox+W-T,ay,0,T,AH,D);
-      addB(ox+T,ay+AH-T,0,W-2*T,T,D); addB(ox+T,ay,0,W-2*T,T,D,mML2);
-      addB(ox,ay,D-8,W,AH,8,mMH);
+      const AH=s.antresol.height, AD=D, ay=H;
+      const ADc=AD-T-HDF_THICK;
+      const AHc=AH-2*T;
+      addB(ox,ay+T,zFront,T,AHc,ADc); addB(ox+W-T,ay+T,zFront,T,AHc,ADc);
+      addB(ox,ay+T+AHc,zFront,W,T,ADc); addB(ox,ay,zFront,W,T,ADc,mML2);
+      addB(ox,ay+T,zFront+ADc,W,AHc,HDF_THICK,mMH);
       if(s.antresol.facade.type!=='none'){
         const fm=s.antresol.facade.material==='mdf'?mMFM:mMFL;
         const cnt=s.antresol.facade.type==='doors3'?3:s.antresol.facade.type==='doors2'?2:1;
-        const gap=4,thick=18,dw=(W-gap*(cnt+1))/cnt;
-        for(let i=0;i<cnt;i++) addB(ox+gap+(dw+gap)*i,ay+gap,-thick,dw,AH-gap*2,thick,fm,true);
+        const gap=4,thick=T,dw=(W-gap*(cnt+1))/cnt;
+        for(let i=0;i<cnt;i++) addB(ox+gap+(dw+gap)*i,ay+gap,0,dw,AH-gap*2,thick,fm,true);
       }
     }
 
