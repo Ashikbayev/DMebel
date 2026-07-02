@@ -979,45 +979,63 @@ window.toggleClientMode = toggleClientMode;
 
 // ── SVG-превью наполнения секции ─────────────────────────────
 function drawSectionSvg(data, W=72, H=100){
-  const {shelves=[], hasRod=false, rodHeight=1320, drawerBlocks=[], height=2200} = data;
-  const T=4;
-  const scaleY = (H - T*2) / height;
+  const {shelves=[], hasRod=false, rodHeight=1320, drawerBlocks=[], height=2200, dividers=[], width=800} = data;
+  const bT=4; // толщина рамки на иконке (пиксели) — не путать с реальной T=16мм
+  const scaleY = (H - bT*2) / height;
+  const cols = getColumns({width, dividers: dividers.map(pos=>({pos}))});
+  function mapX(mm){
+    const usable = Math.max(1, width - T*2);
+    return bT + (mm - T) / usable * (W - bT*2);
+  }
 
   let items = '';
   // Корпус
   items += `<rect x="0" y="0" width="${W}" height="${H}" rx="3" fill="#f8f8f8" stroke="#ccc" stroke-width="1"/>`;
-  items += `<rect x="0" y="0" width="${T}" height="${H}" fill="#d0c8b8"/>`;
-  items += `<rect x="${W-T}" y="0" width="${T}" height="${H}" fill="#d0c8b8"/>`;
-  items += `<rect x="0" y="0" width="${W}" height="${T}" fill="#d0c8b8"/>`;
-  items += `<rect x="0" y="${H-T}" width="${W}" height="${T}" fill="#d0c8b8"/>`;
+  items += `<rect x="0" y="0" width="${bT}" height="${H}" fill="#d0c8b8"/>`;
+  items += `<rect x="${W-bT}" y="0" width="${bT}" height="${H}" fill="#d0c8b8"/>`;
+  items += `<rect x="0" y="0" width="${W}" height="${bT}" fill="#d0c8b8"/>`;
+  items += `<rect x="0" y="${H-bT}" width="${W}" height="${bT}" fill="#d0c8b8"/>`;
 
-  // Полки
+  // Перегородки
+  dividers.forEach(pos=>{
+    const x1=mapX(pos), x2=mapX(pos+T);
+    items += `<rect x="${x1}" y="${bT}" width="${Math.max(1,x2-x1)}" height="${H-bT*2}" fill="#d0c8b8"/>`;
+  });
+
+  // Полки — каждая в своей колонке
   shelves.forEach(sh => {
-    const y = H - T - Math.round(sh.height * scaleY) - 2;
-    items += `<rect x="${T}" y="${y}" width="${W-T*2}" height="3" rx="1" fill="#b8a898"/>`;
+    const y = H - bT - Math.round(sh.height * scaleY) - 2;
+    const ci = Math.min(sh.col||0, Math.max(0,cols.length-1));
+    const col = cols[ci] || {left:T, width:width-2*T};
+    const x1=mapX(col.left), x2=mapX(col.left+col.width);
+    items += `<rect x="${x1}" y="${y}" width="${Math.max(1,x2-x1)}" height="3" rx="1" fill="#b8a898"/>`;
   });
 
-  // Ящики
+  // Ящики — в своей колонке, либо во всех (если col не задан)
   drawerBlocks.forEach(db => {
-    const zoneH = H - T*2;
+    const zoneH = H - bT*2;
     const dh = Math.floor(zoneH / (db.count + 1));
-    for(let i=0; i<db.count; i++){
-      const dy = (H - T) - dh*(i+1);
-      items += `<rect x="${T+2}" y="${dy}" width="${W-T*2-4}" height="${dh-2}" rx="2" fill="#dbe8ff" stroke="#7a9fd4" stroke-width="0.5"/>`;
-      const mw=10, mx=(W-mw)/2;
-      items += `<rect x="${mx}" y="${dy+dh/2-1.5}" width="${mw}" height="3" rx="1.5" fill="#7a9fd4"/>`;
-    }
+    const targetCols = (db.col!=null && cols[db.col]) ? [cols[db.col]] : cols;
+    targetCols.forEach(col=>{
+      const x1=mapX(col.left), x2=mapX(col.left+col.width);
+      for(let i=0; i<db.count; i++){
+        const dy = (H - bT) - dh*(i+1);
+        items += `<rect x="${x1+1}" y="${dy}" width="${Math.max(1,x2-x1-2)}" height="${dh-2}" rx="2" fill="#dbe8ff" stroke="#7a9fd4" stroke-width="0.5"/>`;
+        const mw=Math.min(10,(x2-x1)*0.4), mx=(x1+x2)/2-mw/2;
+        items += `<rect x="${mx}" y="${dy+dh/2-1.5}" width="${mw}" height="3" rx="1.5" fill="#7a9fd4"/>`;
+      }
+    });
   });
 
-  // Штанга
+  // Штанга (на всю секцию — не колонко-зависима)
   if(hasRod){
-    const ry = H - T - Math.round(rodHeight * scaleY) - 1;
-    items += `<line x1="${T+4}" y1="${ry}" x2="${W-T-4}" y2="${ry}" stroke="#88888888" stroke-width="2.5"/>`;
-    items += `<circle cx="${T+6}" cy="${ry}" r="2.5" fill="#999"/>`;
-    items += `<circle cx="${W-T-6}" cy="${ry}" r="2.5" fill="#999"/>`;
+    const ry = H - bT - Math.round(rodHeight * scaleY) - 1;
+    items += `<line x1="${bT+4}" y1="${ry}" x2="${W-bT-4}" y2="${ry}" stroke="#88888888" stroke-width="2.5"/>`;
+    items += `<circle cx="${bT+6}" cy="${ry}" r="2.5" fill="#999"/>`;
+    items += `<circle cx="${W-bT-6}" cy="${ry}" r="2.5" fill="#999"/>`;
     const nH=3;
     for(let i=0;i<nH;i++){
-      const hx = T+8 + i*((W-T*2-16)/(nH-1||1));
+      const hx = bT+8 + i*((W-bT*2-16)/(nH-1||1));
       items += `<path d="M${hx},${ry} Q${hx},${ry+7} ${hx-5},${ry+9} M${hx},${ry} Q${hx},${ry+7} ${hx+5},${ry+9}" stroke="#bbb" stroke-width="1" fill="none"/>`;
     }
   }
@@ -1046,10 +1064,13 @@ function applyTemplate(sid,tplId){
 function applyUserTemplate(sid,tplId){
   const s=sections.find(x=>x.id===sid); if(!s)return;
   const tpl=loadUserTemplates().find(t=>t.id===tplId); if(!tpl||!tpl.data)return;
-  s.shelves=tpl.data.shelves.map(sh=>({id:s.shelfId++,height:sh.height}));
+  // Перегородки — старые шаблоны (сохранённые до этой доработки) их не содержат,
+  // тогда просто ничего не добавляем (секция остаётся без перегородок)
+  s.dividers=(tpl.data.dividers||[]).map(pos=>({id:s.divId++, pos}));
+  s.shelves=tpl.data.shelves.map(sh=>({id:s.shelfId++, height:sh.height, col:sh.col||0}));
   s.hasRod=tpl.data.hasRod;
   s.rodHeight=tpl.data.rodHeight||Math.round(s.height*.6);
-  s.drawerBlocks=tpl.data.drawerBlocks.map(db=>({...db}));
+  s.drawerBlocks=(tpl.data.drawerBlocks||[]).map(db=>({...db}));
   renderPanel(); render3D(); projMarkUnsaved();
 }
 function saveAsTemplate(sid){
@@ -1057,9 +1078,11 @@ function saveAsTemplate(sid){
   const name=prompt('Название шаблона:','Мой шаблон'); if(!name)return;
   const arr=loadUserTemplates();
   arr.push({ id:'utpl_'+Date.now(), name, isUser:true,
-    data:{ shelves:s.shelves.map(sh=>({height:sh.height})),
-           hasRod:s.hasRod, rodHeight:s.rodHeight, height:s.height,
-           drawerBlocks:s.drawerBlocks.map(db=>({nicheIdx:db.nicheIdx,count:db.count,brand:db.brand||'En-7'})) }});
+    data:{ width:s.width, height:s.height,
+           shelves:s.shelves.map(sh=>({height:sh.height, col:sh.col||0})),
+           dividers:s.dividers.map(dv=>dv.pos),
+           hasRod:s.hasRod, rodHeight:s.rodHeight,
+           drawerBlocks:s.drawerBlocks.map(db=>({nicheIdx:db.nicheIdx,count:db.count,brand:db.brand||'En-7',col:(db.col!=null?db.col:null)})) }});
   saveUserTemplates(arr);
   renderPanel();
 }
