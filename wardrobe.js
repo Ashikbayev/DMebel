@@ -541,7 +541,7 @@ function mkSection(){
   return{
     id:secId++, width:800, height:2200, depth:600,
     shelves:[], dividers:[],
-    hasRod:false, rodHeight:1600,
+    hasRod:false, rodHeight:1600, rodCol:null,
     facade:{type:'none', material:'ldsp', hasTexture:false},
     facadeDoors:[],
     antresol:{enabled:false, height:400, facade:{type:'none', material:'ldsp'}},
@@ -654,6 +654,7 @@ function duplicateSection(sid){
   copy.depth = src.depth;
   copy.hasRod = src.hasRod;
   copy.rodHeight = src.rodHeight;
+  copy.rodCol = src.rodCol!=null ? src.rodCol : null;
 
   copy.facade = { type:src.facade.type, material:src.facade.material, hasTexture:src.facade.hasTexture };
   copy.facadeDoors = src.facadeDoors.map(d=>({...d}));
@@ -749,6 +750,22 @@ function updShelf(sid,shid,val){
   const _sh=sections.find(x=>x.id===sid)?.shelves.find(x=>x.id===shid); if(_sh) _sh.height=Math.max(0,parseInt(val)||0);
   render3D(); projMarkUnsaved();
 }
+// Меняет высоту полки ЧЕРЕЗ зазор от соседней полки снизу (в той же колонке),
+// а не через абсолютную высоту от пола. Если снизу нет полки — зазор от дна (T).
+function updShelfGap(sid,shid,val){
+  const s=sections.find(x=>x.id===sid); if(!s) return;
+  const sh=s.shelves.find(x=>x.id===shid); if(!sh) return;
+  const ci=sh.col||0;
+  const gap=Math.max(0,parseInt(val)||0);
+  const below=s.shelves
+    .filter(x=>(x.col||0)===ci && x.id!==shid && x.height<sh.height)
+    .sort((a,b)=>a.height-b.height)
+    .pop();
+  const baseHeight = below ? below.height : T;
+  sh.height = baseHeight + gap;
+  renderPanel(); render3D(); projMarkUnsaved();
+}
+window.updShelfGap = updShelfGap;
 function updDiv(sid,did,val){
   sections.find(x=>x.id===sid).dividers.find(x=>x.id===did).pos=parseInt(val)||0;
   render3D(); projMarkUnsaved();
@@ -777,6 +794,12 @@ function toggleRod(sid){
   const s=sections.find(x=>x.id===sid); s.hasRod=!s.hasRod;
   renderPanel(); render3D(); projMarkUnsaved();
 }
+function updRodCol(sid,val){
+  const s=sections.find(x=>x.id===sid); if(!s) return;
+  s.rodCol = (val===''||val===null||val===undefined) ? null : parseInt(val);
+  renderPanel(); render3D(); updateStats(); projMarkUnsaved();
+}
+window.updRodCol = updRodCol;
 function addDrawerBlock(sid){
   const s=sections.find(x=>x.id===sid); if(!s)return;
   // ниш = полки+1 (дно→полка1, полка1→полка2, ..., полкаN→крыша)
@@ -1200,15 +1223,25 @@ function renderPanel(){
       const nm=ci===0?'Лев':ci===shelfCols.length-1?'Прав':('Н'+(ci+1));
       return '<span style="font-size:9px;color:#1a3a8a;background:#e8eaf6;padding:1px 5px;border-radius:3px;margin-right:4px">'+nm+'</span>';
     };
-    const shelvesHtml=s.shelves.map(sh=>{
-      const ci=Math.min(sh.col||0, Math.max(0,shelfCols.length-1));
-      return `<div class="irow">
-        ${shelfColLabel(ci)}
-        <span class="hint">от пола</span>
-        <input type="number" value="${sh.height}" onchange="updShelf(${s.id},${sh.id},this.value)">
-        <span class="hint">мм</span>
-        <button class="ibtn" onclick="removeShelf(${s.id},${sh.id})"><i class="ti ti-x"></i></button>
-      </div>`;
+    const shelvesByCol=[];
+    for(let ci=0; ci<Math.max(1,shelfCols.length); ci++){
+      const list=s.shelves.filter(sh=>(sh.col||0)===ci).sort(function(a,b){return a.height-b.height;});
+      if(list.length) shelvesByCol.push({ci:ci, list:list});
+    }
+    const shelvesHtml=shelvesByCol.map(function(group){
+      return group.list.map(function(sh,idx){
+        const below = idx>0 ? group.list[idx-1] : null;
+        const gap = sh.height - (below ? below.height : T);
+        return '<div class="irow">' +
+          shelfColLabel(group.ci) +
+          '<span class="hint">от пола</span>' +
+          '<input type="number" value="'+sh.height+'" onchange="updShelf('+s.id+','+sh.id+',this.value)" style="width:60px">' +
+          '<span class="hint">заз.снизу</span>' +
+          '<input type="number" value="'+gap+'" min="0" onchange="updShelfGap('+s.id+','+sh.id+',this.value)" style="width:52px">' +
+          '<span class="hint">мм</span>' +
+          '<button class="ibtn" onclick="removeShelf('+s.id+','+sh.id+')"><i class="ti ti-x"></i></button>' +
+        '</div>';
+      }).join('');
     }).join('');
     const shelfColSelId='shelf-col-sel-'+s.id;
     const shelfColOptions=shelfCols.length>1
@@ -1230,12 +1263,24 @@ function renderPanel(){
         <button class="ibtn" onclick="removeDivider(${s.id},${d.id})"><i class="ti ti-x"></i></button>
       </div>`
     ).join('');
+    const rodColSel=shelfCols.length>1
+      ? '<div class="irow" style="margin-bottom:8px">' +
+          '<span class="hint">ниша</span>' +
+          '<select style="flex:1;font-size:11px;padding:5px 6px;border-radius:6px;border:1px solid #ddd" onchange="updRodCol('+s.id+',this.value)">' +
+            '<option value=""'+(s.rodCol==null?' selected':'')+'>Вся секция</option>' +
+            shelfCols.map(function(c,ci){
+              const nm=ci===0?'Левая':ci===shelfCols.length-1?'Правая':('Ниша '+(ci+1));
+              return '<option value="'+ci+'"'+(s.rodCol===ci?' selected':'')+'>'+nm+'</option>';
+            }).join('') +
+          '</select>' +
+        '</div>'
+      : '';
     const rodHtml=s.hasRod
       ?`<div class="irow" style="margin-bottom:8px">
           <span class="hint">высота</span>
           <input type="number" value="${s.rodHeight}" onchange="upd(${s.id},'rodHeight',this.value)" style="max-width:80px">
           <span class="hint">мм</span>
-        </div>`
+        </div>`+rodColSel
       :'';
     const texHtml=(s.facade.type!=='none'&&showTex)
       ?`<label class="chkrow" style="margin-bottom:4px">
@@ -2063,9 +2108,12 @@ function render3D(){
     s.dividers.forEach(dv=>addBoard(ox+dv.pos,LH+T,zFront,T,Hc,Dc));
     if(s.hasRod){
       const rh=LH+Math.min(s.rodHeight,H-T*3);
-      const g2=new THREE.CylinderGeometry(10,10,W-2*T-20,16);
+      const rcol = (s.rodCol!=null && shelfCols3d[s.rodCol]) ? shelfCols3d[s.rodCol] : null;
+      const rodLen = rcol ? Math.max(20,rcol.width-20) : W-2*T-20;
+      const rodCx  = rcol ? ox+rcol.left+rcol.width/2 : ox+W/2;
+      const g2=new THREE.CylinderGeometry(10,10,rodLen,16);
       const rm=new THREE.Mesh(g2,MR); rm.rotation.z=Math.PI/2;
-      rm.position.set(ox+W/2,rh,zFront+Dc/2); rm.castShadow=true; rm.userData={w:true}; scene.add(rm);
+      rm.position.set(rodCx,rh,zFront+Dc/2); rm.castShadow=true; rm.userData={w:true}; scene.add(rm);
     }
     // ── Ножки (всегда, 4 шт, высота LH=100мм) — по полному внешнему габариту D ──
     {
@@ -3358,10 +3406,13 @@ function renderMobile3D(){
     // штанга
     if(s.hasRod){
       const rh=Math.min(s.rodHeight,H-T*3);
-      const g2=new THREE.CylinderGeometry(10,10,W-2*T-20,16);
+      const rcolM = (s.rodCol!=null && mCols[s.rodCol]) ? mCols[s.rodCol] : null;
+      const rodLenM = rcolM ? Math.max(20,rcolM.width-20) : W-2*T-20;
+      const rodCxM  = rcolM ? ox+rcolM.left+rcolM.width/2 : ox+W/2;
+      const g2=new THREE.CylinderGeometry(10,10,rodLenM,16);
       const rm=new THREE.Mesh(g2,mMR);
       rm.rotation.z=Math.PI/2;
-      rm.position.set(ox+W/2,rh,zFront+Dc/2);
+      rm.position.set(rodCxM,rh,zFront+Dc/2);
       rm.userData={mw:true}; mobileScene.add(rm);
     }
 
@@ -6436,9 +6487,12 @@ function showConfBlueprint(){
     // ── Штанга ─────────────────────────────────────────────
     if(sec.hasRod){
       const rodY = baseY + (sec.rodHeight || H*0.7);
-      svg += l(xOff+BD+4, rodY, xOff+W-BD-4, rodY, C_ROD, 2.5);
+      const rcolB = (sec.rodCol!=null && bpCols[sec.rodCol]) ? bpCols[sec.rodCol] : null;
+      const rodX1 = rcolB ? xOff+rcolB.left+4 : xOff+BD+4;
+      const rodX2 = rcolB ? xOff+rcolB.left+rcolB.width-4 : xOff+W-BD-4;
+      svg += l(rodX1, rodY, rodX2, rodY, C_ROD, 2.5);
       // Крючок-держатель
-      [xOff+BD+20, xOff+W-BD-20].forEach(rx => {
+      [rodX1+16, rodX2-16].forEach(rx => {
         svg += `<circle cx="${sx(rx)}" cy="${sy(rodY)}" r="3" fill="${C_ROD}" stroke="#475569" stroke-width="0.7"/>`;
       });
     }
