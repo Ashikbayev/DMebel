@@ -308,13 +308,24 @@ let catalog={
 let matChoice={
   ldspName:'',      // название декора ЛДСП
   ldspPrice:0,
-  mdfType:'plenka', // 'plenka' | 'kraska'
-  mdfName:'',
-  mdfPrice:0,
+  mdfPlenkaName:'', // МДФ Плёнка — своя марка/цена, независимо от Краски
+  mdfPlenkaPrice:0,
+  mdfKraskaName:'', // МДФ Краска — своя марка/цена, независимо от Плёнки
+  mdfKraskaPrice:0,
   hingeBrand:'En-7',
   slideBrand:'En-7',
   slideType:'Телескоп',
 };
+// Материал фасада секции теперь трёхвариантный: 'ldsp' | 'mdfPlenka' | 'mdfKraska'.
+// 'mdf' — старое значение из проектов, сохранённых до этой доработки; для
+// обратной совместимости трактуется как 'mdfPlenka' (raньше mdfType по
+// умолчанию был 'plenka').
+function normFacadeMat(m){
+  if(m==='mdf') return 'mdfPlenka';
+  if(m==='mdfPlenka'||m==='mdfKraska'||m==='ldsp') return m;
+  return 'ldsp';
+}
+function isMdfMaterial(m){ const n=normFacadeMat(m); return n==='mdfPlenka'||n==='mdfKraska'; }
 
 function saveCatalog(){
   try{ localStorage.setItem('wc_catalog',JSON.stringify({catalog,matChoice})); }catch(e){}
@@ -325,6 +336,14 @@ function loadCatalog(){
     if(s){const d=JSON.parse(s);
       if(d.catalog) Object.assign(catalog,d.catalog);
       if(d.matChoice) Object.assign(matChoice,d.matChoice);
+      // Миграция старого формата (один общий mdfType/mdfName/mdfPrice)
+      if(d.matChoice && d.matChoice.mdfName && !matChoice.mdfPlenkaName && !matChoice.mdfKraskaName){
+        if(d.matChoice.mdfType==='kraska'){
+          matChoice.mdfKraskaName=d.matChoice.mdfName; matChoice.mdfKraskaPrice=d.matChoice.mdfPrice||0;
+        } else {
+          matChoice.mdfPlenkaName=d.matChoice.mdfName; matChoice.mdfPlenkaPrice=d.matChoice.mdfPrice||0;
+        }
+      }
     }
   }catch(e){}
 }
@@ -520,9 +539,13 @@ async function loadFromSheets(){
       matChoice.ldspName=catalog.ldsp[0].name;
       matChoice.ldspPrice=catalog.ldsp[0].price;
     }
-    if(!matChoice.mdfName){
-      const list=matChoice.mdfType==='plenka'?catalog.facadePlenka:catalog.facadeKraska;
-      if(list&&list.length){ matChoice.mdfName=list[0].name; matChoice.mdfPrice=list[0].price; }
+    if(!matChoice.mdfPlenkaName && catalog.facadePlenka && catalog.facadePlenka.length){
+      matChoice.mdfPlenkaName=catalog.facadePlenka[0].name;
+      matChoice.mdfPlenkaPrice=catalog.facadePlenka[0].price;
+    }
+    if(!matChoice.mdfKraskaName && catalog.facadeKraska && catalog.facadeKraska.length){
+      matChoice.mdfKraskaName=catalog.facadeKraska[0].name;
+      matChoice.mdfKraskaPrice=catalog.facadeKraska[0].price;
     }
     saveCatalog(); saveHardware();
     if(st){ st.textContent='✓ Загружено: '+catalog.ldsp.length+' декоров ЛДСП'; st.style.color='#27ae60'; }
@@ -926,17 +949,18 @@ function renderMatCards(){
       mdfCard.innerHTML='<div class="price-card-title"><span style="color:#fff0d4;border:1px solid #ccc">■</span> МДФ фасад</div>' +
         '<div class="cat-not-loaded">⚠ Загрузите каталог из Google Sheets</div>';
     } else {
-      const typeOpts=
-        '<option value="plenka" '+(matChoice.mdfType==='plenka'?'selected':'')+'>Плёнка</option>'+
-        '<option value="kraska" '+(matChoice.mdfType==='kraska'?'selected':'')+'>Краска</option>';
-      const list=matChoice.mdfType==='plenka'?catalog.facadePlenka:catalog.facadeKraska;
-      const mdfOpts=(list||[]).map(d=>
-        '<option value="'+d.name+'" '+(matChoice.mdfName===d.name?'selected':'')+'>'+d.name+' — '+d.price.toLocaleString('ru-RU')+' ₸/м²</option>'
-      ).join('');
+      const plenkaOpts=(catalog.facadePlenka||[]).map(function(d){
+        return '<option value="'+d.name+'" '+(matChoice.mdfPlenkaName===d.name?'selected':'')+'>'+d.name+' — '+d.price.toLocaleString('ru-RU')+' ₸/м²</option>';
+      }).join('');
+      const kraskaOpts=(catalog.facadeKraska||[]).map(function(d){
+        return '<option value="'+d.name+'" '+(matChoice.mdfKraskaName===d.name?'selected':'')+'>'+d.name+' — '+d.price.toLocaleString('ru-RU')+' ₸/м²</option>';
+      }).join('');
       mdfCard.innerHTML='<div class="price-card-title"><span style="color:#fff0d4;border:1px solid #ccc">■</span> МДФ фасад</div>' +
-        '<div class="fl">Тип</div><select class="cat-select" onchange="setMdfType(this.value)">'+typeOpts+'</select>' +
-        '<div class="fl">Марка</div><select class="cat-select" onchange="setMdfName(this.value)">'+mdfOpts+'</select>' +
-        '<div class="cat-price-badge">'+matChoice.mdfPrice.toLocaleString('ru-RU')+' ₸ / м²</div>';
+        '<div class="fl">Плёнка (марка)</div><select class="cat-select" onchange="setMdfPlenkaName(this.value)">'+plenkaOpts+'</select>' +
+        '<div class="cat-price-badge" style="margin-bottom:8px">'+matChoice.mdfPlenkaPrice.toLocaleString('ru-RU')+' ₸ / м²</div>' +
+        '<div class="fl">Краска (марка)</div><select class="cat-select" onchange="setMdfKraskaName(this.value)">'+kraskaOpts+'</select>' +
+        '<div class="cat-price-badge">'+matChoice.mdfKraskaPrice.toLocaleString('ru-RU')+' ₸ / м²</div>' +
+        '<div style="font-size:10px;color:#888;margin-top:6px">Обе марки доступны одновременно — у каждой секции/двери свой выбор Плёнка/Краска/ЛДСП.</div>';
     }
   }
 
@@ -968,16 +992,14 @@ function setLdsp(name){
   if(d){ matChoice.ldspName=d.name; matChoice.ldspPrice=d.price; }
   saveCatalog(); renderMatCards(); updateMaterials(); updateStats(); projMarkUnsaved();
 }
-function setMdfType(type){
-  matChoice.mdfType=type;
-  const list=type==='plenka'?catalog.facadePlenka:catalog.facadeKraska;
-  if(list&&list.length){ matChoice.mdfName=list[0].name; matChoice.mdfPrice=list[0].price; }
-  saveCatalog(); renderMatCards(); updateStats(); projMarkUnsaved();
+function setMdfPlenkaName(name){
+  const d=(catalog.facadePlenka||[]).find(x=>x.name===name);
+  if(d){ matChoice.mdfPlenkaName=d.name; matChoice.mdfPlenkaPrice=d.price; }
+  saveCatalog(); updateStats(); projMarkUnsaved();
 }
-function setMdfName(name){
-  const list=matChoice.mdfType==='plenka'?catalog.facadePlenka:catalog.facadeKraska;
-  const d=(list||[]).find(x=>x.name===name);
-  if(d){ matChoice.mdfName=d.name; matChoice.mdfPrice=d.price; }
+function setMdfKraskaName(name){
+  const d=(catalog.facadeKraska||[]).find(x=>x.name===name);
+  if(d){ matChoice.mdfKraskaName=d.name; matChoice.mdfKraskaPrice=d.price; }
   saveCatalog(); updateStats(); projMarkUnsaved();
 }
 
@@ -1485,8 +1507,9 @@ function renderPanel(){
           `</select></div>` +
           `<div><div class="fl">Материал</div>` +
           `<select onchange="updFacade(${s.id},'material',this.value)">` +
-            `<option value="ldsp" ${s.facade.material==='ldsp'?'selected':''}>ЛДСП</option>` +
-            `<option value="mdf" ${s.facade.material==='mdf'?'selected':''}>МДФ</option>` +
+            `<option value="ldsp" ${normFacadeMat(s.facade.material)==='ldsp'?'selected':''}>ЛДСП</option>` +
+            '<option value="mdfPlenka" '+(normFacadeMat(s.facade.material)==='mdfPlenka'?'selected':'')+'>МДФ Плёнка</option>' +
+            '<option value="mdfKraska" '+(normFacadeMat(s.facade.material)==='mdfKraska'?'selected':'')+'>МДФ Краска</option>' +
           `</select></div>` +
         `</div>` + texHtml,
         true
@@ -1549,8 +1572,9 @@ function renderPanel(){
             `</select></div>` +
           `<div><div class="fl">Материал</div>` +
             `<select onchange="updAntresol(${s.id},'facMat',this.value)">` +
-              `<option value="ldsp" ${antr.facade.material==='ldsp'?'selected':''}>ЛДСП</option>` +
-              `<option value="mdf" ${antr.facade.material==='mdf'?'selected':''}>МДФ</option>` +
+              `<option value="ldsp" ${normFacadeMat(antr.facade.material)==='ldsp'?'selected':''}>ЛДСП</option>` +
+              '<option value="mdfPlenka" '+(normFacadeMat(antr.facade.material)==='mdfPlenka'?'selected':'')+'>МДФ Плёнка</option>' +
+              '<option value="mdfKraska" '+(normFacadeMat(antr.facade.material)==='mdfKraska'?'selected':'')+'>МДФ Краска</option>' +
             `</select></div>` +
         `</div>` +
         `<div class="fl" style="margin-bottom:4px">Полки антресоли</div>` +
@@ -1574,12 +1598,13 @@ function renderPanel(){
     const doorCount=s.facade.type==='doors3'?3:s.facade.type==='doors2'?2:1;
     if(s.facade.type!=='none'){
       const doorRows=Array.from({length:doorCount},(_,di)=>{
-        const curMat=s.facadeDoors[di]?s.facadeDoors[di].material:s.facade.material;
+        const curMat=normFacadeMat(s.facadeDoors[di]?s.facadeDoors[di].material:s.facade.material);
         return `<div class="facade-door-row">
           <span class="dl">Дверь ${di+1}</span>
           <select onchange="updDoorMat(${s.id},${di},this.value)">
             <option value="ldsp" ${curMat==='ldsp'?'selected':''}>ЛДСП</option>
-            <option value="mdf" ${curMat==='mdf'?'selected':''}>МДФ</option>
+            <option value="mdfPlenka" ${curMat==='mdfPlenka'?'selected':''}>МДФ Плёнка</option>
+            <option value="mdfKraska" ${curMat==='mdfKraska'?'selected':''}>МДФ Краска</option>
           </select>
         </div>`;
       }).join('');
@@ -2178,7 +2203,7 @@ function render3D(){
       });
     }
     if(s.facade.type!=='none'){
-      const fm=s.facade.material==='mdf'?MFM:MFL;
+      const fm=isMdfMaterial(s.facade.material)?MFM:MFL;
       const count=s.facade.type==='doors3'?3:s.facade.type==='doors2'?2:1;
       const gap=4,thick=T,dw=(W-gap*(count+1))/count;
       for(let i=0;i<count;i++) addBoard(ox+gap+(dw+gap)*i,LH+gap,0,dw,H-gap*2,thick,fm,true);
@@ -2207,7 +2232,7 @@ function render3D(){
           addBoard(aox+T,ay+sh.height,azFront,AW-2*T,T,ADc,ML);
         });
         if(s.antresol.facade.type!=='none'){
-          const fm=s.antresol.facade.material==='mdf'?MFM:MFL;
+          const fm=isMdfMaterial(s.antresol.facade.material)?MFM:MFL;
           const cnt=s.antresol.facade.type==='doors3'?3:s.antresol.facade.type==='doors2'?2:1;
           const gap=4,thick=T,dw=(AW-gap*(cnt+1))/cnt;
           for(let i=0;i<cnt;i++) addBoard(aox+gap+(dw+gap)*i,ay+gap,0,dw,AH-gap*2,thick,fm,true);
@@ -2334,7 +2359,7 @@ function toggleDimensions(){
    КОНЕЦ РАЗМЕРНЫХ ЛИНИЙ
 ============================================================ */
 function calcParts(){
-  const ldsp=[],hdf=[],facLdsp=[],facMdf=[];
+  const ldsp=[],hdf=[],facLdsp=[],facMdfPlenka=[],facMdfKraska=[];
   const edgeRows=[];
   let partNum=0; // сквозная нумерация деталей
 
@@ -2428,7 +2453,9 @@ function calcParts(){
             drawerNum++;
             const lbl=colsCalc.length>1?`${L} К${ci+1} Яш.${drawerNum}`:`${L} Яш.${drawerNum}`;
             const facPart={name:`${lbl} фас`,w:facW,h:dH,tex:s.facade.hasTexture};
-            if(s.facade.material==='mdf') facMdf.push(facPart);
+            const dmat=normFacadeMat(s.facade.material);
+            if(dmat==='mdfKraska') facMdfKraska.push(facPart);
+            else if(dmat==='mdfPlenka') facMdfPlenka.push(facPart);
             else facLdsp.push(facPart);
             // Дно короба — накладное (подшивается снизу к боковинам), полная ширина короба
             ldsp.push({name:`${lbl} дно`,w:boxW,h:dD,tex:false});
@@ -2452,7 +2479,10 @@ function calcParts(){
       const gap=4,dw=Math.round((W-gap*(count+1))/count),dh=H-gap*2;
       for(let i=0;i<count;i++){
         const p={name:`${L} Фасад ${i+1}`,w:dw,h:dh,tex:s.facade.hasTexture};
-        if(s.facade.material==='mdf') facMdf.push(p); else facLdsp.push(p);
+        const secMat=normFacadeMat(s.facade.material);
+        if(secMat==='mdfKraska') facMdfKraska.push(p);
+        else if(secMat==='mdfPlenka') facMdfPlenka.push(p);
+        else facLdsp.push(p);
         // фасад — весь периметр лицевой кромкой
         if(s.facade.material==='ldsp'){
           addEdge(`${L} Фасад ${i+1}`,dw,dh,'vis','vis','vis','vis');
@@ -2520,9 +2550,12 @@ function calcParts(){
       const gap=4,dw=Math.round((AW-gap*(cnt+1))/cnt),dh=AH-gap*2;
       for(let i=0;i<cnt;i++){
         const p={name:`${L} Фасад ${i+1}`,w:dw,h:dh,tex:false};
-        if(s.antresol.facade.material==='mdf') facMdf.push(p); else facLdsp.push(p);
+        const antrMat=normFacadeMat(s.antresol.facade.material);
+        if(antrMat==='mdfKraska') facMdfKraska.push(p);
+        else if(antrMat==='mdfPlenka') facMdfPlenka.push(p);
+        else facLdsp.push(p);
         // Кромка фасада антресоли — тоже раньше не считалась
-        if(s.antresol.facade.material==='ldsp'){
+        if(antrMat==='ldsp'){
           addAntrEdge(L+' Фасад '+(i+1),dw,dh,'vis','vis','vis','vis');
         }
       }
@@ -2534,8 +2567,9 @@ function calcParts(){
   ldsp.forEach(p=>p.num=n++);
   hdf.forEach(p=>p.num=n++);
   facLdsp.forEach(p=>p.num=n++);
-  facMdf.forEach(p=>p.num=n++);
-  return{ldsp,hdf,facLdsp,facMdf,edgeRows,totalPm04,totalPm2};
+  facMdfPlenka.forEach(p=>p.num=n++);
+  facMdfKraska.forEach(p=>p.num=n++);
+  return{ldsp,hdf,facLdsp,facMdfPlenka,facMdfKraska,edgeRows,totalPm04,totalPm2};
 }
 
 /* ============================================================
@@ -2623,7 +2657,7 @@ function countSheetsQuarter(sheets, SH){
 }
 
 function calcAllCosts(){
-  const{ldsp,hdf,facLdsp,facMdf,totalPm04,totalPm2,edgeRows}=calcParts();
+  const{ldsp,hdf,facLdsp,facMdfPlenka,facMdfKraska,totalPm04,totalPm2,edgeRows}=calcParts();
 
   const ldspSheets=packSheets(ldsp,LDSP_W,LDSP_H,'',true);
   const hdfSheets=packSheets(hdf,HDF_W,HDF_H,'',false,true); // ХДФ: без поворота, длинная сторона по X
@@ -2638,10 +2672,18 @@ function calcAllCosts(){
   const hdfCost=calcSheetsCost(hdfSheets,HDF_W,HDF_H,hdfPricePerSheet);
   const facLdspCost=calcSheetsCost([...facTexSheets,...facNoTexSheets],LDSP_W,LDSP_H,ldspPricePerSheet);
 
-  const mdfM2=facMdf.reduce((a,p)=>a+p.w*p.h/1e6,0);
-  const mdfM2Total=mdfM2*(1+(prices.mdfWaste||0)/100);
-  const mdfPricePerM2=matChoice.mdfPrice||0;
-  const mdfCost=mdfM2Total*mdfPricePerM2;
+  // МДФ Плёнка и МДФ Краска — независимо, у каждой своя площадь/цена/стоимость
+  const mdfPlenkaM2=facMdfPlenka.reduce((a,p)=>a+p.w*p.h/1e6,0);
+  const mdfPlenkaM2Total=mdfPlenkaM2*(1+(prices.mdfWaste||0)/100);
+  const mdfPlenkaPricePerM2=matChoice.mdfPlenkaPrice||0;
+  const mdfPlenkaCost=mdfPlenkaM2Total*mdfPlenkaPricePerM2;
+
+  const mdfKraskaM2=facMdfKraska.reduce((a,p)=>a+p.w*p.h/1e6,0);
+  const mdfKraskaM2Total=mdfKraskaM2*(1+(prices.mdfWaste||0)/100);
+  const mdfKraskaPricePerM2=matChoice.mdfKraskaPrice||0;
+  const mdfKraskaCost=mdfKraskaM2Total*mdfKraskaPricePerM2;
+
+  const mdfCost=mdfPlenkaCost+mdfKraskaCost; // суммарно — для общих итогов
 
   const edgeCost04=totalPm04*(catalog.edgeThin||0);
   const edgeCost2=totalPm2*prices.edgeThick;
@@ -2733,9 +2775,12 @@ function calcAllCosts(){
   const rodCost   = totalRods * rodPrice;
 
   return{
-    ldspSheets,hdfSheets,facTexSheets,facNoTexSheets,facMdf,
-    ldspCost,hdfCost,facLdspCost,mdfM2,mdfM2Total,mdfCost,
-    ldspPricePerSheet,hdfPricePerSheet,mdfPricePerM2,
+    ldspSheets,hdfSheets,facTexSheets,facNoTexSheets,facMdfPlenka,facMdfKraska,
+    ldspCost,hdfCost,facLdspCost,
+    mdfPlenkaM2,mdfPlenkaM2Total,mdfPlenkaCost,mdfPlenkaPricePerM2,
+    mdfKraskaM2,mdfKraskaM2Total,mdfKraskaCost,mdfKraskaPricePerM2,
+    mdfM2:mdfPlenkaM2+mdfKraskaM2, mdfM2Total:mdfPlenkaM2Total+mdfKraskaM2Total, mdfCost,
+    ldspPricePerSheet,hdfPricePerSheet,
     edgeRows,totalPm04,totalPm2,edgeCost04,edgeCost2,edgeCost,
     totalDrawerPairs,drawerCost,
     totalHinges,hingeCost,totalHandles,handleCost,slideDetails,slideCost,hardwareCost,
@@ -2807,16 +2852,27 @@ function showSpec(){
     </tr>`;
   }
 
-  // МДФ
-  if(d.mdfM2>0){
-    html+=`<tr>
-      <td><span class="color-dot" style="background:#fff0d4;border:1px solid #ccc;margin-right:6px"></span>${matChoice.mdfName||'МДФ'} фасад<br>
-        <span style="font-size:10px;color:#888">+${prices.mdfWaste}% отход → итого ${d.mdfM2Total.toFixed(3)} м²</span></td>
-      <td class="num">${d.mdfM2Total.toFixed(3)}</td>
-      <td class="num">м²</td>
-      <td class="num">${fmt(d.mdfPricePerM2)}</td>
-      <td class="num"><b>${fmt(d.mdfCost)}</b></td>
-    </tr>`;
+  // МДФ Плёнка
+  if(d.mdfPlenkaM2>0){
+    html+='<tr>'+
+      '<td><span class="color-dot" style="background:#fff0d4;border:1px solid #ccc;margin-right:6px"></span>'+(matChoice.mdfPlenkaName||'МДФ')+' Плёнка фасад<br>'+
+        '<span style="font-size:10px;color:#888">+'+prices.mdfWaste+'% отход → итого '+d.mdfPlenkaM2Total.toFixed(3)+' м²</span></td>'+
+      '<td class="num">'+d.mdfPlenkaM2Total.toFixed(3)+'</td>'+
+      '<td class="num">м²</td>'+
+      '<td class="num">'+fmt(d.mdfPlenkaPricePerM2)+'</td>'+
+      '<td class="num"><b>'+fmt(d.mdfPlenkaCost)+'</b></td>'+
+    '</tr>';
+  }
+  // МДФ Краска
+  if(d.mdfKraskaM2>0){
+    html+='<tr>'+
+      '<td><span class="color-dot" style="background:#e8dcc8;border:1px solid #ccc;margin-right:6px"></span>'+(matChoice.mdfKraskaName||'МДФ')+' Краска фасад<br>'+
+        '<span style="font-size:10px;color:#888">+'+prices.mdfWaste+'% отход → итого '+d.mdfKraskaM2Total.toFixed(3)+' м²</span></td>'+
+      '<td class="num">'+d.mdfKraskaM2Total.toFixed(3)+'</td>'+
+      '<td class="num">м²</td>'+
+      '<td class="num">'+fmt(d.mdfKraskaPricePerM2)+'</td>'+
+      '<td class="num"><b>'+fmt(d.mdfKraskaCost)+'</b></td>'+
+    '</tr>';
   }
 
   // Кромка
@@ -2967,8 +3023,11 @@ function confShowKP(){
     const equiv=+(totalMaxY/LDSP_H).toFixed(2);
     matRows+=kpRow('ЛДСП фасад'+(matChoice.ldspName?' ('+matChoice.ldspName+')':''),equiv,'л',fmt(d.ldspPricePerSheet),fmt(d.facLdspCost));
   }
-  if(d.mdfM2>0){
-    matRows+=kpRow('МДФ фасад'+(matChoice.mdfName?' ('+matChoice.mdfName+')':''),d.mdfM2Total.toFixed(3),'м²',fmt(d.mdfPricePerM2),fmt(d.mdfCost));
+  if(d.mdfPlenkaM2>0){
+    matRows+=kpRow('МДФ Плёнка фасад'+(matChoice.mdfPlenkaName?' ('+matChoice.mdfPlenkaName+')':''),d.mdfPlenkaM2Total.toFixed(3),'м²',fmt(d.mdfPlenkaPricePerM2),fmt(d.mdfPlenkaCost));
+  }
+  if(d.mdfKraskaM2>0){
+    matRows+=kpRow('МДФ Краска фасад'+(matChoice.mdfKraskaName?' ('+matChoice.mdfKraskaName+')':''),d.mdfKraskaM2Total.toFixed(3),'м²',fmt(d.mdfKraskaPricePerM2),fmt(d.mdfKraskaCost));
   }
   if(d.totalPm04>0) matRows+=kpRow('Кромка ПВХ 0.4 мм',d.totalPm04.toFixed(2),'пм',fmt(catalog.edgeThin||0),fmt(d.edgeCost04));
   if(d.totalPm2>0)  matRows+=kpRow('Кромка ПВХ 1 мм',d.totalPm2.toFixed(2),'пм',fmt(prices.edgeThick),fmt(d.edgeCost2));
@@ -3238,15 +3297,30 @@ function buildDetailTable(parts, matName, color){
   </div>`;
 }
 
+function mdfSheetsBlockHtml(list, mTot, label, dotColor){
+  if(!list.length) return '';
+  return '<div class="cut-mat-block">' +
+    '<div class="cut-mat-title"><span class="color-dot" style="background:'+dotColor+';border:1px solid #ccc"></span>'+label+' — расчёт по площади</div>' +
+    '<div class="mdf-block">' +
+      list.map(function(p){
+        return '<div class="mdf-row"><span>'+(p.num?'#'+p.num+' ':'')+' '+p.name+'</span><span>'+p.w+'×'+p.h+' мм = <b>'+(p.w*p.h/1e6).toFixed(3)+' м²</b></span></div>';
+      }).join('') +
+      '<div class="mdf-row"><span>Чистая площадь</span><span><b>'+mTot.toFixed(3)+' м²</b></span></div>' +
+      '<div class="mdf-row"><span>С учётом отхода +'+prices.mdfWaste+'%</span><span><b>'+(mTot*(1+prices.mdfWaste/100)).toFixed(3)+' м²</b></span></div>' +
+    '</div>' +
+  '</div>';
+}
+
 function showCut(){
-  const{ldsp,hdf,facLdsp,facMdf,totalPm04,totalPm2,edgeRows}=calcParts();
+  const{ldsp,hdf,facLdsp,facMdfPlenka,facMdfKraska,totalPm04,totalPm2,edgeRows}=calcParts();
   const ldspSheets=packSheets(ldsp,LDSP_W,LDSP_H,'ЛДСП корпус',true);
   const hdfSheets=packSheets(hdf,HDF_W,HDF_H,'ХДФ',false,true);
   const facTex=facLdsp.filter(p=>p.tex);
   const facNoTex=facLdsp.filter(p=>!p.tex);
   const facTexSheets=packSheets(facTex,LDSP_W,LDSP_H,'ЛДСП фасад (текстура)',false);
   const facNoTexSheets=packSheets(facNoTex,LDSP_W,LDSP_H,'ЛДСП фасад',true);
-  const mdfM2=facMdf.reduce((a,p)=>a+p.w*p.h/1e6,0);
+  const mdfPlenkaM2=facMdfPlenka.reduce((a,p)=>a+p.w*p.h/1e6,0);
+  const mdfKraskaM2=facMdfKraska.reduce((a,p)=>a+p.w*p.h/1e6,0);
   const sc=Math.min(0.115,320/Math.max(LDSP_W,HDF_W));
 
   // ── Вкладка Раскрой ──────────────────────────────────────────
@@ -3267,14 +3341,8 @@ function showCut(){
     <div class="cut-mat-title"><span class="color-dot" style="background:#b8c8e8"></span>🟦 ЛДСП фасад — ~${countSheetsQuarter(facNoTexSheets,LDSP_H)} листов <span class="badge-tex badge-notex">↔ с поворотом</span></div>
     <div class="cut-sheets-wrap">${facNoTexSheets.map(s=>drawSheet(s,LDSP_W,LDSP_H,sc,true,'#b8c8e8')).join('')}</div>
   </div>`;
-  if(facMdf.length) sheetsHtml+=`<div class="cut-mat-block">
-    <div class="cut-mat-title"><span class="color-dot" style="background:#fff0d4;border:1px solid #ccc"></span>МДФ фасады — расчёт по площади</div>
-    <div class="mdf-block">
-      ${facMdf.map(p=>`<div class="mdf-row"><span>${p.num?'#'+p.num+' ':''} ${p.name}</span><span>${p.w}×${p.h} мм = <b>${(p.w*p.h/1e6).toFixed(3)} м²</b></span></div>`).join('')}
-      <div class="mdf-row"><span>Чистая площадь</span><span><b>${mdfM2.toFixed(3)} м²</b></span></div>
-      <div class="mdf-row"><span>С учётом отхода +${prices.mdfWaste}%</span><span><b>${(mdfM2*(1+prices.mdfWaste/100)).toFixed(3)} м²</b></span></div>
-    </div>
-  </div>`;
+  sheetsHtml+=mdfSheetsBlockHtml(facMdfPlenka, mdfPlenkaM2, 'МДФ Плёнка фасады', '#fff0d4');
+  sheetsHtml+=mdfSheetsBlockHtml(facMdfKraska, mdfKraskaM2, 'МДФ Краска фасады', '#e8dcc8');
   if(!sheetsHtml) sheetsHtml='<p style="color:#888;text-align:center;padding:30px">Нет деталей для раскроя</p>';
 
   // ── Вкладка Список деталей ────────────────────────────────────
@@ -3282,7 +3350,8 @@ function showCut(){
   listHtml+=buildDetailTable(ldsp,'ЛДСП корпус','#c8a96e');
   listHtml+=buildDetailTable(hdf,'ХДФ задние стенки','#d4c49a');
   listHtml+=buildDetailTable([...facTex,...facNoTex],'ЛДСП фасад','#e2c484');
-  if(facMdf.length) listHtml+=buildDetailTable(facMdf,'МДФ фасад','#fff0d4');
+  if(facMdfPlenka.length) listHtml+=buildDetailTable(facMdfPlenka,'МДФ Плёнка фасад','#fff0d4');
+  if(facMdfKraska.length) listHtml+=buildDetailTable(facMdfKraska,'МДФ Краска фасад','#e8dcc8');
 
   const html=`
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;padding:8px 10px;background:#f7f7f7;border-radius:6px;border:1px solid #e5e5e5">
@@ -3479,7 +3548,7 @@ function renderMobile3D(){
 
     // фасад (толщина T, у истинного переда z=0..T)
     if(s.facade.type!=='none'){
-      const fm=s.facade.material==='mdf'?mMFM:mMFL;
+      const fm=isMdfMaterial(s.facade.material)?mMFM:mMFL;
       const count=s.facade.type==='doors3'?3:s.facade.type==='doors2'?2:1;
       const gap=4,thick=T,dw=(W-gap*(count+1))/count;
       for(let i=0;i<count;i++) addB(ox+gap+(dw+gap)*i,gap,0,dw,H-gap*2,thick,fm,true);
@@ -3523,7 +3592,7 @@ function renderMobile3D(){
         addB(ox+T,ay+sh.height,zFront,W-2*T,T,ADc);
       });
       if(s.antresol.facade.type!=='none'){
-        const fm=s.antresol.facade.material==='mdf'?mMFM:mMFL;
+        const fm=isMdfMaterial(s.antresol.facade.material)?mMFM:mMFL;
         const cnt=s.antresol.facade.type==='doors3'?3:s.antresol.facade.type==='doors2'?2:1;
         const gap=4,thick=T,dw=(W-gap*(cnt+1))/cnt;
         for(let i=0;i<cnt;i++) addB(ox+gap+(dw+gap)*i,ay+gap,0,dw,AH-gap*2,thick,fm,true);
@@ -3539,7 +3608,7 @@ function renderMobile3D(){
 ============================================================ */
 window.setAllFacadeMat=setAllFacadeMat;
 window.addSection=addSection; window.removeSection=removeSection;
-window.setLdsp=setLdsp; window.setMdfType=setMdfType; window.setMdfName=setMdfName;
+window.setLdsp=setLdsp; window.setMdfPlenkaName=setMdfPlenkaName; window.setMdfKraskaName=setMdfKraskaName;
 window.loadFromSheets=loadFromSheets; window.syncFromSheets=syncFromSheets;
 window.updAntresol=updAntresol; window.updDoorMat=updDoorMat;
 window.addHinge=addHinge; window.removeHinge=removeHinge; window.setActivehingeBrand=setActivehingeBrand;
