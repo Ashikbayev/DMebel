@@ -640,6 +640,46 @@ function setAllFacadeMat(mat){
 }
 function addSection(){ sections.push(mkSection()); renderPanel(); render3D(); projMarkUnsaved(); }
 function removeSection(id){ sections=sections.filter(s=>s.id!==id); renderPanel(); render3D(); projMarkUnsaved(); }
+
+// Дублирует секцию целиком (габариты, фасад, антресоль, кромка, перегородки,
+// полки по своим нишам, блоки ящиков) и вставляет копию сразу после оригинала.
+function duplicateSection(sid){
+  const idx = sections.findIndex(x=>x.id===sid);
+  if(idx<0) return;
+  const src = sections[idx];
+  const copy = mkSection(); // новый id + чистые счётчики shelfId/divId
+
+  copy.width = src.width;
+  copy.height = src.height;
+  copy.depth = src.depth;
+  copy.hasRod = src.hasRod;
+  copy.rodHeight = src.rodHeight;
+
+  copy.facade = { type:src.facade.type, material:src.facade.material, hasTexture:src.facade.hasTexture };
+  copy.facadeDoors = src.facadeDoors.map(d=>({...d}));
+  copy.antresol = {
+    enabled: src.antresol.enabled,
+    height: src.antresol.height,
+    facade: { type: src.antresol.facade.type, material: src.antresol.facade.material }
+  };
+
+  copy.edgeFront = src.edgeFront;
+  copy.edgeBack = src.edgeBack;
+  copy.edgeTop = src.edgeTop;
+  copy.edgeBottom = src.edgeBottom;
+  copy.edgeLeft = src.edgeLeft;
+  copy.edgeRight = src.edgeRight;
+
+  // Перегородки и полки — с новыми id (из своих счётчиков), но теми же
+  // позициями/высотами/привязкой к колонке
+  copy.dividers = src.dividers.map(dv=>({id:copy.divId++, pos:dv.pos}));
+  copy.shelves = src.shelves.map(sh=>({id:copy.shelfId++, height:sh.height, col:sh.col||0}));
+  copy.drawerBlocks = src.drawerBlocks.map(db=>({...db}));
+
+  sections.splice(idx+1, 0, copy); // сразу после оригинала, не в конец списка
+  renderPanel(); render3D(); projMarkUnsaved();
+}
+window.duplicateSection = duplicateSection;
 function addShelf(sid, colIdx){
   const s=sections.find(x=>x.id===sid);
   colIdx=parseInt(colIdx)||0;
@@ -1303,6 +1343,7 @@ function renderPanel(){
           (shBadge?`<span style="font-size:10px;color:#1a5252;background:#e8f5f0;padding:1px 6px;border-radius:4px">▤ ${shBadge}</span>`:'') +
           (drBadge?`<span style="font-size:10px;color:#1a3a8a;background:#e8eaf6;padding:1px 6px;border-radius:4px">▦ ${drBadge}</span>`:'') +
           (rodBadge?`<span style="font-size:10px;color:#7a5c2e;background:#f8f4ec;padding:1px 6px;border-radius:4px">⊢</span>`:'') +
+          `<button class="delbtn" title="Дублировать секцию" onclick="event.stopPropagation();duplicateSection(${s.id})"><i class="ti ti-copy"></i></button>` +
           (sections.length>1?`<button class="delbtn" onclick="event.stopPropagation();removeSection(${s.id})"><i class="ti ti-trash"></i></button>`:'') +
         `</span>` +
       `</div>` +
