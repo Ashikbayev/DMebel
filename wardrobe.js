@@ -757,6 +757,7 @@ function updDrawerBlock(sid,bi,field,val){
   if(field==='nicheIdx') s.drawerBlocks[bi].nicheIdx=parseInt(val);
   if(field==='count') s.drawerBlocks[bi].count=Math.max(1,parseInt(val)||1);
   if(field==='brand') s.drawerBlocks[bi].brand=val;
+  if(field==='col') s.drawerBlocks[bi].col=(val===''||val===null||val===undefined)?null:parseInt(val);
   renderPanel(); render3D(); updateStats(); projMarkUnsaved();
 }
 // возвращает массив ниш: [{bottom, top, label}]
@@ -1187,14 +1188,25 @@ function renderPanel(){
     const drawerBlocksHtml=s.drawerBlocks.map((db,bi)=>{
       const nicheH=niches[db.nicheIdx]?niches[db.nicheIdx].top-niches[db.nicheIdx].bottom:0;
       const drawerH=db.count>0?Math.floor((nicheH-(db.count+1)*4)/db.count):0;
-      const totalDrawers=db.count*colCount;
+      const targetCols = (db.col!=null && db.col>=0) ? 1 : colCount;
+      const totalDrawers=db.count*targetCols;
       const brand=db.brand||'En-7';
       const nicheOpts=niches.map((n,ni)=>
         `<option value="${ni}" ${db.nicheIdx===ni?'selected':''}>${n.label} (${Math.round(n.top-n.bottom)} мм)</option>`
       ).join('');
+      const colOpts=colCount>1
+        ? '<div class="fl">Колонка</div>' +
+          '<select style="width:100%;margin-bottom:6px;font-size:11px" onchange="updDrawerBlock('+s.id+','+bi+',\'col\',this.value)">' +
+            '<option value=""'+(db.col==null?' selected':'')+'>Все колонки</option>' +
+            cols.map(function(c,ci){
+              const nm=ci===0?'Левая':ci===colCount-1?'Правая':('Колонка '+(ci+1));
+              return '<option value="'+ci+'"'+(db.col===ci?' selected':'')+'>'+nm+'</option>';
+            }).join('') +
+          '</select>'
+        : '';
       const colInfo=colCount>1
         ?`<div style="font-size:10px;color:#1a5252;background:#e8f5e9;border-radius:4px;padding:3px 6px;margin-bottom:6px">` +
-          `<i class="ti ti-layout-columns"></i> ${colCount} колонки × ${db.count} ящ. = <b>${totalDrawers} ящиков</b></div>`
+          `<i class="ti ti-layout-columns"></i> ${targetCols===1?'1 колонка':(colCount+' колонки')} × ${db.count} ящ. = <b>${totalDrawers} ящиков</b></div>`
         :'';
       const firmOpts=['En-7','GTV','DTC'].map(f=>
         `<option value="${f}" ${brand===f?'selected':''}>${f}</option>`
@@ -1207,6 +1219,7 @@ function renderPanel(){
         colInfo +
         `<div class="fl">Ниша</div>` +
         `<select style="width:100%;margin-bottom:6px;font-size:11px" onchange="updDrawerBlock(${s.id},${bi},'nicheIdx',this.value)">${nicheOpts}</select>` +
+        colOpts +
         `<div class="g2" style="margin-bottom:6px">` +
           `<div><div class="fl">Ящиков в колонке</div><input type="number" value="${db.count}" min="1" max="10" onchange="updDrawerBlock(${s.id},${bi},'count',this.value)"></div>` +
           `<div><div class="fl">Высота ящика</div><div style="font-size:12px;padding:5px 6px;background:#e8f0fe;border-radius:6px;color:#1a3a8a;font-weight:600">${drawerH} мм</div></div>` +
@@ -1967,7 +1980,8 @@ function render3D(){
         const dH=Math.floor((nicheH-(dCount+1)*gap)/dCount);
         if(dH<20)return;
         const dD=Dc-10; // глубина короба — как в calcParts
-        cols.forEach(col=>{
+        cols.forEach((col,ci)=>{
+          if(db.col!=null && db.col!==ci) return; // ящики только в выбранной колонке
           const dW=col.width-4;
           if(dW<50)return;
           for(let di=0;di<dCount;di++){
@@ -2240,6 +2254,7 @@ function calcParts(){
         const dH=Math.floor((nicheH-(dCount+1)*gap)/dCount);
         const dD=Dc-10; // глубина короба (телескоп): рабочая глубина корпуса минус 10мм
         colsCalc.forEach((col,ci)=>{
+          if(db.col!=null && db.col!==ci) return; // ящики только в выбранной колонке
           const facW=col.width-4;   // ширина фасада — зазор 2мм с каждой стороны проёма
           const boxW=col.width-25;  // ширина короба — зазор под телескопы (12.5мм на сторону)
           if(facW<50||boxW<50)return;
@@ -2474,15 +2489,16 @@ function calcAllCosts(){
       totalHinges+=doorCount*(doorH>1500?3:2);
       totalHandles+=doorCount;
     }
-    if(s.drawerBlocks) totalHandles+=s.drawerBlocks.reduce((b,db)=>b+db.count,0);
-    // телескопы — по фирме каждого блока ящиков
+    // ручки и телескопы — по фирме каждого блока ящиков, с учётом привязки к колонке
     if(s.drawerBlocks&&s.drawerBlocks.length>0){
       const colCount=getColumns(s).length;
       s.drawerBlocks.forEach(db=>{
+        const drawerCols = (db.col!=null && db.col>=0) ? 1 : colCount;
+        const totalDrawers = db.count * drawerCols;
+        totalHandles += totalDrawers;
         const brand = db.brand || activeSlide.brand;
         const sl = pickSlideByBrand(s.depth||600, brand);
         if(sl){
-          const totalDrawers = db.count * colCount;
           const existing=slideDetails.find(x=>x.brand===sl.brand&&x.length===sl.length&&x.type===sl.type);
           if(existing) existing.count+=totalDrawers;
           else slideDetails.push({...sl, count:totalDrawers});
@@ -3306,7 +3322,8 @@ function renderMobile3D(){
         const nicheH=niche.top-niche.bottom;
         const dH=Math.floor((nicheH-(dCount+1)*gap)/dCount);
         if(dH<20)return;
-        cols.forEach(col=>{
+        cols.forEach((col,ci)=>{
+          if(db.col!=null && db.col!==ci) return; // ящики только в выбранной колонке
           const dW=col.width-4;
           if(dW<50)return;
           for(let di=0;di<dCount;di++){
