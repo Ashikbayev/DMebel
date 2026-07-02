@@ -648,20 +648,33 @@ function addSlide(){
 function removeSlide(i){ slideCatalog.splice(i,1); saveHardware(); renderPricesPane(); updateStats(); }
 function setActiveSlide(brand,type){ activeSlide={brand,type}; saveHardware(); renderPricesPane(); updateStats(); }
 
+// Какие гипотетические варианты фасада показывать в сравнении цены
+// (не влияет на реальные материалы секций — см. calcAllCosts().facadeVariants)
+let selectedFacadeVariants={ldsp:true, mdfPlenka:true, mdfKraska:true};
+function toggleFacadeVariant(key,val){
+  selectedFacadeVariants[key]=val;
+  updateStats();
+}
+window.toggleFacadeVariant=toggleFacadeVariant;
+
+function renderFacadeVariantsSummary(facadeVariants){
+  const box=document.getElementById('facade-variants-summary');
+  if(!box) return;
+  const keys=['ldsp','mdfPlenka','mdfKraska'];
+  const active=keys.filter(function(k){ return selectedFacadeVariants[k] && facadeVariants[k]; });
+  if(!active.length){ box.innerHTML=''; return; }
+  box.innerHTML=active.map(function(k){
+    const v=facadeVariants[k];
+    return '<div class="fv-card"><span class="fv-label">'+v.label+'</span><span class="fv-price">'+fmt(v.total)+' ₸</span></div>';
+  }).join('');
+}
+
 function updateGlobalFacadeBar(){
   if(!sections.length) return;
-  const types=sections.map(s=>s.facade.type);
-  const mats=sections.map(s=>s.facade.material);
-  const allNone=types.every(t=>t==='none');
-  const allLdsp=!allNone&&mats.every(m=>m==='ldsp');
-  const allMdf=!allNone&&mats.every(m=>m==='mdf');
-  const lb=document.getElementById('gf-ldsp');
-  const mb=document.getElementById('gf-mdf');
   const nb=document.getElementById('gf-none');
-  if(!lb) return;
-  lb.className='gf-btn'+(allLdsp?' active-ldsp':'');
-  mb.className='gf-btn'+(allMdf?' active-mdf':'');
-  nb.className='gf-btn'+(allNone?' active-none':'');
+  const types=sections.map(s=>s.facade.type);
+  const allNone=types.every(t=>t==='none');
+  if(nb) nb.className='gf-btn'+(allNone?' active-none':'');
 }
 
 function setAllFacadeMat(mat){
@@ -2774,6 +2787,35 @@ function calcAllCosts(){
   const rodPrice  = prices.rod || 2000;
   const rodCost   = totalRods * rodPrice;
 
+  // ── Гипотетические варианты фасада (для сравнения цены) ──────
+  // НЕ меняют секции — считают, сколько бы стоил ТОТ ЖЕ шкаф, если бы
+  // ВСЕ фасады (независимо от реально выбранного материала) были одним
+  // конкретным материалом. Остальное (корпус, кромка, фурнитура, работы)
+  // одинаково для всех трёх вариантов.
+  const allFacadeParts = facLdsp.concat(facMdfPlenka, facMdfKraska);
+  const baseWithoutFacade = ldspCost+hdfCost+edgeCost+drawerCost+hardwareCost+rodCost+legCost;
+  const facadeVariants = {};
+  {
+    const vTex=allFacadeParts.filter(p=>p.tex);
+    const vNoTex=allFacadeParts.filter(p=>!p.tex);
+    const vTexSheets=packSheets(vTex,LDSP_W,LDSP_H,'',false);
+    const vNoTexSheets=packSheets(vNoTex,LDSP_W,LDSP_H,'',true);
+    const vCost=calcSheetsCost([...vTexSheets,...vNoTexSheets],LDSP_W,LDSP_H,ldspPricePerSheet);
+    facadeVariants.ldsp={label:'ЛДСП',facadeCost:vCost,matTotal:baseWithoutFacade+vCost,total:baseWithoutFacade+vCost+workTotal};
+  }
+  {
+    const vM2=allFacadeParts.reduce((a,p)=>a+p.w*p.h/1e6,0);
+    const vM2Total=vM2*(1+(prices.mdfWaste||0)/100);
+    const vCost=vM2Total*(matChoice.mdfPlenkaPrice||0);
+    facadeVariants.mdfPlenka={label:'МДФ Плёнка',facadeCost:vCost,m2:vM2Total,matTotal:baseWithoutFacade+vCost,total:baseWithoutFacade+vCost+workTotal};
+  }
+  {
+    const vM2=allFacadeParts.reduce((a,p)=>a+p.w*p.h/1e6,0);
+    const vM2Total=vM2*(1+(prices.mdfWaste||0)/100);
+    const vCost=vM2Total*(matChoice.mdfKraskaPrice||0);
+    facadeVariants.mdfKraska={label:'МДФ Краска',facadeCost:vCost,m2:vM2Total,matTotal:baseWithoutFacade+vCost,total:baseWithoutFacade+vCost+workTotal};
+  }
+
   return{
     ldspSheets,hdfSheets,facTexSheets,facNoTexSheets,facMdfPlenka,facMdfKraska,
     ldspCost,hdfCost,facLdspCost,
@@ -2791,7 +2833,8 @@ function calcAllCosts(){
     ldspEquiv, hdfEquiv, facLdspEquiv,
     totalLdspSheets,totalEdgePm,totalSections,totalDoors,totalDrawerUnits,
     workCutCost,workEdgeCost,workAssemblyCost,workInstallCost,workFacadeCost,workDrawerCost,workTotal,
-    matTotal: matTotal + rodCost + legCost, total: matTotal + rodCost + legCost + workTotal
+    matTotal: matTotal + rodCost + legCost, total: matTotal + rodCost + legCost + workTotal,
+    facadeVariants
   };
 }
 
@@ -3388,6 +3431,7 @@ function updateStats(){
   if(d.workTotal>0) t+=` &nbsp;+&nbsp; Работы: <b>${fmt(d.workTotal)} ₸</b> &nbsp;=&nbsp; <b style="color:#1a5252">${fmt(d.total)} ₸</b>`;
   else t+=` &nbsp; <b style="color:#1a5252">Итого: ${fmt(d.total)} ₸</b>`;
   document.getElementById('stats-badge').innerHTML=t;
+  renderFacadeVariantsSummary(d.facadeVariants);
 }
 
 /* ============================================================

@@ -205,11 +205,13 @@
       <!-- constructor tab -->
       <div id="pane-constructor">
         <div id="global-facade-bar">
-          <span class="gf-label">Фасад:</span>
-          <button class="gf-btn" id="gf-ldsp" onclick="setAllFacadeMat('ldsp')">ЛДСП</button>
-          <button class="gf-btn" id="gf-mdf" onclick="setAllFacadeMat('mdf')">МДФ</button>
-          <button class="gf-btn" id="gf-none" onclick="setAllFacadeMat('none')">Без фас.</button>
+          <span class="gf-label">Сравнить цену фасада:</span>
+          <label class="gf-check"><input type="checkbox" id="gfv-ldsp" checked onchange="toggleFacadeVariant('ldsp',this.checked)"> ЛДСП</label>
+          <label class="gf-check"><input type="checkbox" id="gfv-mdfPlenka" checked onchange="toggleFacadeVariant('mdfPlenka',this.checked)"> МДФ Плёнка</label>
+          <label class="gf-check"><input type="checkbox" id="gfv-mdfKraska" checked onchange="toggleFacadeVariant('mdfKraska',this.checked)"> МДФ Краска</label>
+          <button class="gf-btn" id="gf-none" onclick="setAllFacadeMat('none')">Без фасада (всем)</button>
         </div>
+        <div id="facade-variants-summary"></div>
         <div id="sections-container"></div>
         <button id="add-section-btn" onclick="addSection()">
           <i class="ti ti-plus"></i> Добавить секцию

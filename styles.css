@@ -461,6 +461,12 @@ select{width:100%;font-size:12px;padding:5px 6px;border:1px solid #ddd;border-ra
 .gf-btn.active-ldsp{border-color:#c8a96e;background:#fff8ee;color:#7a5c2e}
 .gf-btn.active-mdf{border-color:#5c6bc0;background:#e8eaf6;color:#3949ab}
 .gf-btn.active-none{border-color:#999;background:#f0f0f0;color:#444}
+.gf-check{display:flex;align-items:center;gap:4px;padding:6px 8px;font-size:11px;font-weight:600;color:#555;border:1.5px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;white-space:nowrap}
+.gf-check input{margin:0;cursor:pointer}
+#facade-variants-summary{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.fv-card{flex:1;min-width:90px;padding:6px 8px;background:#f0f4ff;border:1px solid #c5d3f5;border-radius:6px;display:flex;flex-direction:column;gap:2px}
+.fv-label{font-size:10px;color:#3949ab;font-weight:700}
+.fv-price{font-size:12px;color:#1a2a5e;font-weight:700}
 
 /* ── PROJECTS BAR ─────────────────────────────────────────── */
 #pg-conf #projects-bar{background:#1a1a2e;color:#fff;display:flex;align-items:center;gap:0;flex-shrink:0;border-bottom:1px solid #0d0d1a;min-height:38px;position:relative;z-index:10}
