@@ -17,6 +17,7 @@
 
 <!-- КАЛЬКУЛЯТОР -->
 <div class="pg on" id="pg-calc">
+  <div class="calc-left" id="calc-left">
   <div class="tabs">
     <button class="tb on" onclick="tab('calc')">Расчёт</button>
     <button class="tb" onclick="tab('coef')">Коэф.</button>
@@ -102,7 +103,9 @@
       <div class="cb" id="cb-vitp"><div id="vit-list"></div><button class="ab" onclick="addVit()">+ Добавить витрину</button></div></div>
   </div>
 
-  <div class="scr" id="scr-itog">
+  </div>
+
+  <div class="scr calc-right" id="scr-itog">
     <div class="tv">
       <div class="vc"><div style="display:flex;align-items:center;gap:4px;margin-bottom:3px"><span class="dot" style="background:#534AB7"></span><span style="font-size:9px;color:var(--t2);font-weight:500">ЛДСП</span></div><div class="vp" id="tl-p">0₸</div><div class="vcr">кредит <span id="tl-c">0₸</span></div><div class="vi">доход <span id="tl-i">0₸</span></div></div>
       <div class="vc b"><div style="display:flex;align-items:center;gap:4px;margin-bottom:3px"><span class="dot" style="background:#0F6E56"></span><span style="font-size:9px;color:var(--t2);font-weight:500">Плёнка</span></div><div class="vp" id="tp-p">0₸</div><div class="vcr">кредит <span id="tp-c">0₸</span></div><div class="vi">доход <span id="tp-i">0₸</span></div></div>

@@ -42,6 +42,15 @@ input.qt{font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:6px
 .dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
 /* ИТОГ */
 .tv{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
+/* РАСЧЁТ — сплит на широких экранах: слева калькулятор, справа живой Итог */
+@media(min-width:960px){
+  #pg-calc.on{display:flex;align-items:flex-start;gap:0}
+  #pg-calc .calc-left{flex:1;min-width:0}
+  #pg-calc .calc-right{display:block;width:380px;flex-shrink:0;box-sizing:border-box;border-left:1px solid var(--bd);background:#fafafa;padding:10px 12px;position:sticky;top:48px;max-height:calc(100vh - 58px);overflow-y:auto}
+  body.itog-active #pg-calc.on{display:block}
+  body.itog-active #pg-calc .calc-left{display:none}
+  body.itog-active #pg-calc .calc-right{width:100%;position:static;max-height:none;border-left:none;background:transparent;overflow-y:visible}
+}
 .vc{border:1px solid var(--bd);border-radius:10px;padding:10px 8px;background:#fff}
 .vc.b{background:linear-gradient(160deg,#eef7f7,#fdf9e8)}
 .vp{font-size:13px;font-weight:700;margin-bottom:2px;color:var(--d)}

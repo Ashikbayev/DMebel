@@ -75,7 +75,7 @@ const gn=id=>{const e=$(id);return e?(parseFloat(e.value)||0):0;};
 const st=(id,v)=>{const e=$(id);if(e)e.textContent=fm(v);};
 const sx=(id,v)=>{const e=$(id);if(e)e.textContent=v;};
 function page(p){["calc","kp","hist","conf","kitchen"].forEach(n=>{$("pg-"+n)?.classList.toggle("on",n===p);const b=$("bbt-"+n);if(b)b.classList.toggle("on",n===p);});if(p==="hist")renderHist();if(p==="conf"){initConf();}if(p==="kitchen"){initKitchen();}}
-function tab(t){["calc","coef","extra","vit","itog"].forEach(s=>$("scr-"+s).classList.toggle("on",s===t));document.querySelectorAll(".tb").forEach((b,i)=>b.classList.toggle("on",["calc","coef","extra","vit","itog"][i]===t));if(t==="itog")recalc();window.scrollTo(0,0);}
+function tab(t){["calc","coef","extra","vit","itog"].forEach(s=>$("scr-"+s).classList.toggle("on",s===t));document.querySelectorAll(".tb").forEach((b,i)=>b.classList.toggle("on",["calc","coef","extra","vit","itog"][i]===t));document.body.classList.toggle("itog-active",t==="itog");recalc();window.scrollTo(0,0);}
 function tog(id){const b=$("cb-"+id),a=$("ar-"+id);if(!b)return;const op=b.classList.toggle("op");if(a)a.classList.toggle("op",op);}
 function addLdsp(){
   const i=ST.ldsp.length;ST.ldsp.push(0);
