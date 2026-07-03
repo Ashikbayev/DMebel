@@ -78,8 +78,8 @@ const DB={
   vit:{steklo:{"Бронза":12000,"Графит":12000,"Матовый":14000,"Зеркало":12000,"Простое":6000,"Риф-Бронза":40000,"Риф-Графит":40000,"Риф-Простой":40000},profil_uzkiy:2000,profil_shirokiy:3000,ugolok_uzkiy:1500,ugolok_shirokiy:2000,navesh:1000,prisadka:1500,uplotnitel:400},
   works:[{n:"Установка мойки",p:0},{n:"Установка смесителя",p:0},{n:"Установка печки/духовки",p:0},{n:"Установка вытяжки",p:0},{n:"Установка посудомойки",p:0},{n:"Установка холодильника",p:0},{n:"Подключение электрики",p:0},{n:"Сборка мебели",p:0},{n:"Установка карго/сушилки",p:0},{n:"Установка витрины",p:0},{n:"Установка подсветки",p:0},{n:"Замер",p:0},{n:"Дизайн проект",p:0}],
   moika:[{tip:"Врезная",razmer:"500мм",cvet:"Нержавейка",base:18000,work:5000,des:2000,our:5000,disc:3000},{tip:"Врезная",razmer:"600мм",cvet:"Нержавейка",base:20000,work:5000,des:2000,our:5000,disc:3000},{tip:"Накладная",razmer:"500мм",cvet:"Черная",base:25000,work:5000,des:3000,our:6000,disc:4000}],
-  kStol:[{tip:"38мм",cvet:"Белый",razmer:"3000мм",base:15000,work:3000,des:1500,our:3000,disc:2000},{tip:"38мм",cvet:"Сонома",razmer:"3000мм",base:16000,work:3000,des:1500,our:3000,disc:2000},{tip:"Камень",cvet:"Grandex",razmer:"3000мм",base:90000,work:8000,des:5000,our:12000,disc:10000}],
-  kSushilka:[{tip:"Одинарный",tip2:"Обычный",cvet:"Хром",base:5300,work:1500,des:500,our:1200,disc:1000},{tip:"Одинарный",tip2:"Нержавейка",cvet:"Хром",base:6500,work:1500,des:500,our:1200,disc:1000},{tip:"Двойной",tip2:"Нержавейка",cvet:"Хром",base:9100,work:2000,des:800,our:1800,disc:1500}],
+  kStol:[{tip:"38мм",cvet:"Белый",base:15000,work:3000,des:1500,our:3000,disc:2000},{tip:"38мм",cvet:"Сонома",base:16000,work:3000,des:1500,our:3000,disc:2000},{tip:"Камень",cvet:"Grandex",base:90000,work:8000,des:5000,our:12000,disc:10000}],
+  kSushilka:[{tip:"Одинарный",tip2:"Обычный",firma:"En-7",cvet:"Хром",base:5300,work:1500,des:500,our:1200,disc:1000},{tip:"Одинарный",tip2:"Нержавейка",firma:"GTV",cvet:"Хром",base:6500,work:1500,des:500,our:1200,disc:1000},{tip:"Двойной",tip2:"Нержавейка",firma:"Boyard",cvet:"Хром",base:9100,work:2000,des:800,our:1800,disc:1500}],
   kTelesk:[{tip:"Скрытый",firma:"Blum",razmer:"500мм",base:12000,work:1500,des:1000,our:2000,disc:2000},{tip:"Простой",firma:"En-7",razmer:"450мм",base:2400,work:800,des:300,our:700,disc:500},{tip:"Типон",firma:"GTV",razmer:"500мм",base:5950,work:1000,des:500,our:1200,disc:800}],
   kPetlya:[{tip:"Накладная",firma:"Blum",base:2200,work:500,des:200,our:600,disc:500},{tip:"Вкладная",firma:"Hefele",base:800,work:400,des:150,our:400,disc:300}],
   kRuchka:[{tip:"Скрытая",firma:"—",cvet:"Черный",razmer:"128мм",base:500,work:200,des:100,our:300,disc:200},{tip:"Профильная",firma:"—",cvet:"Хром",razmer:"1000мм",base:1000,work:300,des:150,our:400,disc:300}],
@@ -260,9 +260,9 @@ function mIt(){
 }
 // ── Доп. позиции → Кухня: универсальный движок каталога с N атрибутами и 4-компонентной ценой ──
 const ACC_CFG={
-  kStol:{dbKey:"kStol",attrs:["tip","cvet","razmer"],listId:"kStol-list",brkId:"kStol-breakdown",label:"Столешница"},
-  kSusNiz:{dbKey:"kSushilka",attrs:["tip","tip2","cvet"],listId:"kSusNiz-list",brkId:"kSusNiz-breakdown",label:"Сушилка низ"},
-  kSusVerh:{dbKey:"kSushilka",attrs:["tip","tip2","cvet"],listId:"kSusVerh-list",brkId:"kSusVerh-breakdown",label:"Сушилка верх"},
+  kStol:{dbKey:"kStol",attrs:["tip","cvet"],listId:"kStol-list",brkId:"kStol-breakdown",label:"Столешница"},
+  kSusNiz:{dbKey:"kSushilka",attrs:["tip","tip2","firma","cvet"],listId:"kSusNiz-list",brkId:"kSusNiz-breakdown",label:"Сушилка низ"},
+  kSusVerh:{dbKey:"kSushilka",attrs:["tip","tip2","firma","cvet"],listId:"kSusVerh-list",brkId:"kSusVerh-breakdown",label:"Сушилка верх"},
   kTelesk:{dbKey:"kTelesk",attrs:["tip","firma","razmer"],listId:"kTelesk-list",brkId:"kTelesk-breakdown",label:"Телескоп"},
   kPetlya:{dbKey:"kPetlya",attrs:["tip","firma"],listId:"kPetlya-list",brkId:"kPetlya-breakdown",label:"Петля"},
   kRuchka:{dbKey:"kRuchka",attrs:["tip","firma","cvet","razmer"],listId:"kRuchka-list",brkId:"kRuchka-breakdown",label:"Ручка"},
