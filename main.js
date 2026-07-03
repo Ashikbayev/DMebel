@@ -121,11 +121,11 @@ function sC(sec,arr){return ST[sec].reduce((s,x,i)=>{if(x===null||x===undefined)
 function sIt(sec,arr){return ST[sec].map((x,i)=>{if(x===null||x===undefined)return null;const q=gn(sec+"q"+i);if(!q)return null;return{n:arr[x]?.n,q};}).filter(Boolean);}
 function gA(sec){return sec==="furn"?DB.furn:sec==="kuh"?DB.kuh:sec==="shk"?DB.shk:DB.svet;}
 function addCat(sec,arr,lid){
-  const a=ST[sec];const i=a.length;a.push({p:0});
+  const a=ST[sec];const i=a.length;a.push({p:0,cmpOn:false,cmpFirm:null});
   const c=$(lid);if(i===0)c.innerHTML="";
   const d=document.createElement("div");d.id=sec+"r"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
   const cats=[...new Set(arr.map(x=>x.cat))];
-  d.innerHTML=`<div class="fr"><select id="${sec}c${i}" onchange="uC('${sec}',${i})">${cats.map(c=>`<option value="${c}">${c}</option>`).join("")}</select><button class="db" onclick="$('${sec}r${i}').style.display='none';ST['${sec}'][${i}]=null;recalc()">✕</button></div><div class="fr" id="${sec}vf${i}"></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="${sec}q${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="${sec}pp${i}">0₸</span></div>`;
+  d.innerHTML=`<div class="fr"><select id="${sec}c${i}" onchange="uC('${sec}',${i})">${cats.map(c=>`<option value="${c}">${c}</option>`).join("")}</select><button class="db" title="Сравнить с другой фирмой" onclick="toggleCmp('${sec}',${i})">⚖</button><button class="db" onclick="$('${sec}r${i}').style.display='none';ST['${sec}'][${i}]=null;recalc()">✕</button></div><div class="fr" id="${sec}vf${i}"></div><div id="${sec}cmp${i}"></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="${sec}q${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="${sec}pp${i}">0₸</span></div>`;
   c.appendChild(d);uC(sec,i);
 }
 function uC(sec,i){
@@ -142,8 +142,56 @@ function uCP(sec,i){
   const arr=gA(sec);const a=ST[sec];
   const cat=$(sec+"c"+i)?.value,vid=$(sec+"v"+i)?.value||"—",firm=$(sec+"f"+i)?.value||"—";
   const row=arr.find(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")&&(x.firm===firm||x.firm==="—"||!x.firm));
-  const p=row?.p||0;if(a[i])a[i]={p};
-  const pr=$(sec+"pp"+i);if(pr)pr.textContent=p.toLocaleString("ru")+"₸";recalc();
+  const p=row?.p||0;if(a[i])a[i]=Object.assign({},a[i],{p});
+  const pr=$(sec+"pp"+i);if(pr)pr.textContent=p.toLocaleString("ru")+"₸";
+  renderCmpRow(sec,i);
+  recalc();
+}
+// ── Сравнение фурнитуры («⚖» на строке — выбор второй фирмы для сравнения) ──
+function toggleCmp(sec,i){
+  const a=ST[sec][i];if(!a)return;
+  a.cmpOn=!a.cmpOn;
+  renderCmpRow(sec,i);
+  recalc();
+}
+function setCmpFirm(sec,i){
+  const a=ST[sec][i];if(!a)return;
+  a.cmpFirm=$(sec+"cf"+i)?.value||null;
+  recalc();
+}
+function renderCmpRow(sec,i){
+  const a=ST[sec][i];const host=$(sec+"cmp"+i);
+  if(!a||!host)return;
+  if(!a.cmpOn){host.innerHTML="";return;}
+  const arr=gA(sec);
+  const cat=$(sec+"c"+i)?.value,vid=$(sec+"v"+i)?.value||"—",curFirm=$(sec+"f"+i)?.value||"—";
+  const firms=[...new Set(arr.filter(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")).map(x=>x.firm).filter(f=>f&&f!=="—"&&f!==curFirm))];
+  if(firms.length===0){host.innerHTML="<div class='fr' style='margin-top:4px'><span class='lb' style='color:#888'>⚖ Сравнить</span><span style='font-size:11px;color:#aaa'>нет другой фирмы в этой категории</span></div>";return;}
+  if(!a.cmpFirm||firms.indexOf(a.cmpFirm)<0)a.cmpFirm=firms[0];
+  let opts="";firms.forEach(f=>{opts+="<option value='"+f+"'"+(f===a.cmpFirm?" selected":"")+">"+f+"</option>";});
+  host.innerHTML="<div class='fr' style='margin-top:4px'><span class='lb' style='color:#888'>⚖ Сравнить с</span><select id='"+sec+"cf"+i+"' onchange='setCmpFirm(\""+sec+"\","+i+")'>"+opts+"</select></div>";
+}
+function cCmp(sec){
+  const arr=gA(sec);
+  return ST[sec].reduce((s,item,i)=>{
+    if(!item)return s;
+    const cat=$(sec+"c"+i)?.value,vid=$(sec+"v"+i)?.value||"—";
+    const firm=(item.cmpOn&&item.cmpFirm)?item.cmpFirm:($(sec+"f"+i)?.value||"—");
+    const row=arr.find(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")&&(x.firm===firm||x.firm==="—"||!x.firm));
+    return s+(row?.p||0)*(gn(sec+"q"+i));
+  },0);
+}
+function cItCmp(sec){
+  const arr=gA(sec);
+  return ST[sec].map((item,i)=>{
+    if(!item)return null;
+    const cat=$(sec+"c"+i)?.value||"",vid=$(sec+"v"+i)?.value||"—";
+    const firm=(item.cmpOn&&item.cmpFirm)?item.cmpFirm:($(sec+"f"+i)?.value||"—");
+    const row=arr.find(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")&&(x.firm===firm||x.firm==="—"||!x.firm));
+    const q=gn(sec+"q"+i);if(!q)return null;
+    const parts=[cat];if(vid&&vid!=="—")parts.push(vid);if(firm&&firm!=="—")parts.push(firm);
+    return{n:parts.join(" "),q};
+  }).filter(Boolean);
 }
 function cC(sec){
   const arr=gA(sec);
@@ -426,13 +474,20 @@ function recalc(){
   const kAcc=kitchenAccTotals();
   const dfi=$("del-fi");if(dfi)dfi.textContent=fm(vFu+vKu+vSh);
   const shared=vFu+vKu+vSh+vDel,extras=(vSM+vSI)+vVit.tot+vWk+vDp+vMoika+kAcc.total,eInc=vSI+vVit.inc+vWk+mBrk.des+mBrk.our+kAcc.income;
+  // ── Сравнение фурнитуры: те же позиции/количества, но у отмеченных ⚖ строк — цена альтернативной фирмы ──
+  const vFuCmp=cCmp("furn"),vKuCmp=cCmp("kuh"),vShCmp=cCmp("shk"),vSMCmp=cCmp("svet");
+  const sharedCmp=vFuCmp+vKuCmp+vShCmp+vDel,extrasCmp=(vSMCmp+vSI)+vVit.tot+vWk+vDp+vMoika+kAcc.total;
   const kl=gn("c-kl")||1.8,rml=gn("c-rl")/100,skl=parseFloat($("c-sl")?.value)||0,taxl=gn("c-taxl")/100,crl=gn("c-crl")/100;
   const kp=gn("c-kp")||1.8,rmp=gn("c-rp")/100,skp=parseFloat($("c-sp")?.value)||0,taxp=gn("c-taxp")/100,crp=gn("c-crp")/100;
   const kk=gn("c-kk")||1.8,rmk=gn("c-rk")/100,skk=parseFloat($("c-sk")?.value)||0,taxk=gn("c-taxk")/100,crk=gn("c-crk")/100;
   const BL=blk(vFL,kl,rml,skl,taxl,crl,vK,shared,extras,eInc);
   const BP=blk(vFP,kp,rmp,skp,taxp,crp,vK,shared,extras,eInc);
   const BK=blk(vFK,kk,rmk,skk,taxk,crk,vK,shared,extras,eInc);
-  C={BL,BP,BK,vK,vFL,vFP,vFK,vFu,vKu,vSh,vDel,vSM,vSI,vVit,vDp,vWk,
+  const BLc=blk(vFL,kl,rml,skl,taxl,crl,vK,sharedCmp,extrasCmp,eInc);
+  const BPc=blk(vFP,kp,rmp,skp,taxp,crp,vK,sharedCmp,extrasCmp,eInc);
+  const BKc=blk(vFK,kk,rmk,skk,taxk,crk,vK,sharedCmp,extrasCmp,eInc);
+  C={BL,BP,BK,BLc,BPc,BKc,vK,vFL,vFP,vFK,vFu,vKu,vSh,vDel,vSM,vSI,vVit,vDp,vWk,
+    fuItCmp:cItCmp("furn"),kuItCmp:cItCmp("kuh"),shItCmp:cItCmp("shk"),svItCmp:cItCmp("svet"),
     ldspIt:ST.ldsp.map((x,i)=>{if(x===null||x===undefined)return null;const q=gn("lq"+i);if(!q)return null;return{n:DB.ldsp[x]?.n,q};}).filter(Boolean),
     hdfQ:gn("hdf-qty"),kromQ:gn("krom-qty"),
     fldspIt:sIt("fldsp",DB.ldsp),fplenIt:sIt("fplen",DB.fas_plen),fkrIt:sIt("fkr",DB.fas_kr),
@@ -441,6 +496,7 @@ function recalc(){
   sx("tl-p",fm(BL.tot));sx("tl-c",fm(BL.credit));sx("tl-i",fm(BL.inc));
   sx("tp-p",fm(BP.tot));sx("tp-c",fm(BP.credit));sx("tp-i",fm(BP.inc));
   sx("tk-p",fm(BK.tot));sx("tk-c",fm(BK.credit));sx("tk-i",fm(BK.inc));
+  sx("tl-p-cmp",fm(BLc.tot));sx("tp-p-cmp",fm(BPc.tot));sx("tk-p-cmp",fm(BKc.tot));
   [["s-korp",vK],["s-fldsp",vFL],["s-fplen",vFP],["s-fkr",vFK],["s-furn",vFu],["s-kuh",vKu],["s-shk",vSh],["s-del",vDel],["s-svet",vSM+vSI],["s-dop",vDp],["s-works",vWk],["s-moika",vMoika]].forEach(([id,v])=>st(id,v));
   st("s-kitchenAcc",vMoika+kAcc.total);
   Object.keys(ACC_CFG).forEach(k=>{
