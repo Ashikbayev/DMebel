@@ -39,6 +39,7 @@ async function loadFromSheets() {
       DB.svet = data.svet;
       DB.works = data.works;
       DB.vit = data.vit;
+      if (data.moika && data.moika.length > 0) DB.moika = data.moika;
       renderWorks();
       recalc();
       kpManagerLoadList();
@@ -65,9 +66,10 @@ const DB={
   acc:[{cat:"Мойка",vid:"500мм",p:25000},{cat:"Мойка",vid:"600мм",p:30000},{cat:"Сушилка_двойная",vid:"600мм",p:40000},{cat:"Бутылочница",vid:"150мм",p:10000},{cat:"Бутылочница",vid:"200мм",p:13000},{cat:"Бутылочница",vid:"250мм",p:15000},{cat:"Бутылочница",vid:"300мм",p:25000},{cat:"Карго",vid:"400мм",p:15000},{cat:"Карго",vid:"500мм",p:20000},{cat:"Карго",vid:"600мм",p:30000}],
   svet:[{cat:"БлокП 12в",vid:"60вт",p:2200},{cat:"БлокП 12в",vid:"100вт",p:2430},{cat:"БлокП 12в",vid:"150вт",p:2970},{cat:"Вилка",vid:"—",p:200},{cat:"Вкл Круглый",vid:"—",p:250},{cat:"Вкл Кнопка",vid:"—",p:220},{cat:"Вкл Врезной",vid:"—",p:250},{cat:"Датчик 12в",vid:"ЛДСП",p:2800},{cat:"Датчик 12в",vid:"Касание",p:1500},{cat:"Датчик 12в",vid:"Махание",p:1760},{cat:"Датчик 12в",vid:"Откр-1-дверь",p:1960},{cat:"Датчик 12в",vid:"Откр-2-дверь",p:1960},{cat:"Датчик 12в",vid:"ДисУпр",p:4500},{cat:"Датчик 12в",vid:"ГолосУпр",p:4500},{cat:"Датчик 12в",vid:"ДляЗеркало",p:2500},{cat:"Датчик 220в",vid:"Касание",p:3400},{cat:"Датчик 220в",vid:"Махание",p:3400},{cat:"Датчик 220в",vid:"ЛДСП",p:4200},{cat:"Датчик 220в",vid:"ДисУпр",p:4500},{cat:"Лента 12в",vid:"Холодный",p:1760},{cat:"Лента 12в",vid:"Теплый",p:1760},{cat:"Лента 12в",vid:"Нейтральный",p:1760},{cat:"Лента 220в 1м",vid:"Холодный",p:410},{cat:"Лента 220в 5м",vid:"Холодный",p:1760},{cat:"Лента 220в 5м",vid:"Теплый",p:1760},{cat:"Лента 220в 5м",vid:"Нейтральный",p:1760},{cat:"Лента 220в 10м",vid:"Нейтральный",p:2700},{cat:"Лента Гибкий 12в",vid:"—",p:880},{cat:"Профиль.угл",vid:"алюминий",p:1620},{cat:"Профиль.угл",vid:"черный",p:1890},{cat:"Профиль.врез",vid:"черный",p:1890},{cat:"Профиль.врез",vid:"алюминий",p:1620},{cat:"Профиль.наклад",vid:"алюминий",p:1620},{cat:"Профиль.наклад",vid:"черный",p:1890},{cat:"Розетка",vid:"—",p:800},{cat:"Переходник",vid:"—",p:250},{cat:"Соед.лента",vid:"—",p:380}],
   vit:{steklo:{"Бронза":12000,"Графит":12000,"Матовый":14000,"Зеркало":12000,"Простое":6000,"Риф-Бронза":40000,"Риф-Графит":40000,"Риф-Простой":40000},profil_uzkiy:2000,profil_shirokiy:3000,ugolok_uzkiy:1500,ugolok_shirokiy:2000,navesh:1000,prisadka:1500,uplotnitel:400},
-  works:[{n:"Установка мойки",p:0},{n:"Установка смесителя",p:0},{n:"Установка печки/духовки",p:0},{n:"Установка вытяжки",p:0},{n:"Установка посудомойки",p:0},{n:"Установка холодильника",p:0},{n:"Подключение электрики",p:0},{n:"Сборка мебели",p:0},{n:"Установка карго/сушилки",p:0},{n:"Установка витрины",p:0},{n:"Установка подсветки",p:0},{n:"Замер",p:0},{n:"Дизайн проект",p:0}]
+  works:[{n:"Установка мойки",p:0},{n:"Установка смесителя",p:0},{n:"Установка печки/духовки",p:0},{n:"Установка вытяжки",p:0},{n:"Установка посудомойки",p:0},{n:"Установка холодильника",p:0},{n:"Подключение электрики",p:0},{n:"Сборка мебели",p:0},{n:"Установка карго/сушилки",p:0},{n:"Установка витрины",p:0},{n:"Установка подсветки",p:0},{n:"Замер",p:0},{n:"Дизайн проект",p:0}],
+  moika:[{tip:"Врезная",razmer:"500мм",cvet:"Нержавейка",base:18000,work:5000,des:2000,our:5000,disc:3000},{tip:"Врезная",razmer:"600мм",cvet:"Нержавейка",base:20000,work:5000,des:2000,our:5000,disc:3000},{tip:"Накладная",razmer:"500мм",cvet:"Черная",base:25000,work:5000,des:3000,our:6000,disc:4000}]
 };
-const ST={ldsp:[],fldsp:[],fplen:[],fkr:[],furn:[],kuh:[],shk:[],svet:[],dop:[],vit:[]};
+const ST={ldsp:[],fldsp:[],fplen:[],fkr:[],furn:[],kuh:[],shk:[],svet:[],dop:[],vit:[],moika:[]};
 let C={};
 const $=id=>document.getElementById(id);
 const fm=n=>Math.round(n).toLocaleString("ru")+"₸";
@@ -189,6 +191,53 @@ function gVD(i){
 function cV(i){const d=gVD(i);const er=$("vres"+i);if(er)er.textContent=fm(d.tot);recalc();}
 function vTot(){let mat=0,inc=0,tot=0;ST.vit.forEach((x,i)=>{if(x===null)return;const d=gVD(i);mat+=d.mat;inc+=d.inc;tot+=d.tot;});return{mat,inc,tot};}
 function vIt(){return ST.vit.map((x,i)=>{if(x===null)return null;const d=gVD(i);if(!d.tot)return null;return{n:`Витрина стекло ${d.stName}`,q:d.n};}).filter(Boolean);}
+// ── Доп. позиции → Кухня → Мойка (пилот новой 4-компонентной схемы цены) ──
+function moikaTips(){const o=[];DB.moika.forEach(x=>{if(o.indexOf(x.tip)<0)o.push(x.tip);});return o;}
+function moikaSizes(tip){const o=[];DB.moika.forEach(x=>{if(x.tip===tip&&o.indexOf(x.razmer)<0)o.push(x.razmer);});return o;}
+function moikaColors(tip,razmer){const o=[];DB.moika.forEach(x=>{if(x.tip===tip&&x.razmer===razmer&&o.indexOf(x.cvet)<0)o.push(x.cvet);});return o;}
+function mRow(i){const tip=$("moikaTip"+i)?.value,razmer=$("moikaSize"+i)?.value,cvet=$("moikaColor"+i)?.value;return DB.moika.find(x=>x.tip===tip&&x.razmer===razmer&&x.cvet===cvet);}
+function mRemoveRow(i){const el=$("moikaRow"+i);if(el)el.style.display="none";ST.moika[i]=null;recalc();}
+function mPriceChange(i){
+  const row=mRow(i);const q=gn("moikaQ"+i)||0;
+  const price=row?(row.base+row.work+row.des+row.our)*q:0;
+  const pr=$("moikaPrice"+i);if(pr)pr.textContent=fm(price);
+  recalc();
+}
+function mSizeChange(i){
+  const tip=$("moikaTip"+i)?.value,razmer=$("moikaSize"+i)?.value;
+  let colOpts="";moikaColors(tip,razmer).forEach(c=>{colOpts+="<option value='"+c+"'>"+c+"</option>";});
+  const cs=$("moikaColor"+i);if(cs)cs.innerHTML=colOpts;
+  mPriceChange(i);
+}
+function mTipChange(i){
+  const tip=$("moikaTip"+i)?.value;
+  let sizeOpts="";moikaSizes(tip).forEach(r=>{sizeOpts+="<option value='"+r+"'>"+r+"</option>";});
+  const rf=$("moikaRF"+i);if(rf)rf.innerHTML="<select id='moikaSize"+i+"' onchange='mSizeChange("+i+")'>"+sizeOpts+"</select><select id='moikaColor"+i+"' onchange='mPriceChange("+i+")'></select>";
+  mSizeChange(i);
+}
+function addMoika(){
+  const a=ST.moika;const i=a.length;a.push({});
+  const c=$("moika-list");if(i===0)c.innerHTML="";
+  const d=document.createElement("div");d.id="moikaRow"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
+  let tipOpts="";moikaTips().forEach(t=>{tipOpts+="<option value='"+t+"'>"+t+"</option>";});
+  d.innerHTML="<div class='fr'><select id='moikaTip"+i+"' onchange='mTipChange("+i+")'>"+tipOpts+"</select><button class='db' onclick='mRemoveRow("+i+")'>✕</button></div><div class='fr' id='moikaRF"+i+"'></div><div class='fr'><span class='lb'>Кол-во</span><input class='qi' type='number' inputmode='decimal' id='moikaQ"+i+"' placeholder='1' min='0' onchange='mPriceChange("+i+")'><span class='fp'>шт</span></div><div class='fr' style='margin-top:4px'><span class='lb'>Стоимость</span><span class='fp' id='moikaPrice"+i+"' style='font-weight:600;color:#1a1a1a'>0₸</span></div>";
+  c.appendChild(d);mTipChange(i);
+}
+function mC(){let s=0;ST.moika.forEach((x,i)=>{if(x===null||x===undefined)return;const row=mRow(i);const q=gn("moikaQ"+i)||0;if(row)s+=(row.base+row.work+row.des+row.our)*q;});return s;}
+function mBreak(){
+  let base=0,work=0,des=0,our=0,disc=0;
+  ST.moika.forEach((x,i)=>{if(x===null||x===undefined)return;const row=mRow(i);const q=gn("moikaQ"+i)||0;if(row){base+=row.base*q;work+=row.work*q;des+=row.des*q;our+=row.our*q;disc+=row.disc*q;}});
+  return{base,work,des,our,disc};
+}
+function mIt(){
+  return ST.moika.map((x,i)=>{
+    if(x===null||x===undefined)return null;
+    const row=mRow(i);const q=gn("moikaQ"+i)||0;
+    if(!row||!q)return null;
+    const price=(row.base+row.work+row.des+row.our)*q;
+    return{n:"Мойка "+row.tip+" "+row.razmer+" "+row.cvet,q,p:price};
+  }).filter(Boolean);
+}
 function blk(fas,k,rm,sk,tax,cr,vK,shared,extras,eInc){
   const base=vK+fas+shared,aK=base*k,rabM=aK*rm,aSk=aK+sk,taxA=aSk*tax,tot=aSk+taxA+extras,credit=tot*(1+cr);
   return{base,aK,rabM,sk,taxA,aSk,tot,credit,inc:aSk-base-rabM+eInc};
@@ -197,8 +246,9 @@ function recalc(){
   const vK=kC(),vFL=sC("fldsp",DB.ldsp),vFP=sC("fplen",DB.fas_plen),vFK=sC("fkr",DB.fas_kr);
   const vFu=cC("furn"),vKu=cC("kuh"),vSh=cC("shk"),vDel=gn("d-sat")+gn("d-pdm");
   const vSM=cC("svet"),vSI=gn("svet-inc"),vDp=dC(),vWk=wC(),vVit=vTot();
+  const vMoika=mC(),mBrk=mBreak();
   const dfi=$("del-fi");if(dfi)dfi.textContent=fm(vFu+vKu+vSh);
-  const shared=vFu+vKu+vSh+vDel,extras=(vSM+vSI)+vVit.tot+vWk+vDp,eInc=vSI+vVit.inc+vWk;
+  const shared=vFu+vKu+vSh+vDel,extras=(vSM+vSI)+vVit.tot+vWk+vDp+vMoika,eInc=vSI+vVit.inc+vWk+mBrk.des+mBrk.our;
   const kl=gn("c-kl")||1.8,rml=gn("c-rl")/100,skl=parseFloat($("c-sl")?.value)||0,taxl=gn("c-taxl")/100,crl=gn("c-crl")/100;
   const kp=gn("c-kp")||1.8,rmp=gn("c-rp")/100,skp=parseFloat($("c-sp")?.value)||0,taxp=gn("c-taxp")/100,crp=gn("c-crp")/100;
   const kk=gn("c-kk")||1.8,rmk=gn("c-rk")/100,skk=parseFloat($("c-sk")?.value)||0,taxk=gn("c-taxk")/100,crk=gn("c-crk")/100;
@@ -210,12 +260,14 @@ function recalc(){
     hdfQ:gn("hdf-qty"),kromQ:gn("krom-qty"),
     fldspIt:sIt("fldsp",DB.ldsp),fplenIt:sIt("fplen",DB.fas_plen),fkrIt:sIt("fkr",DB.fas_kr),
     fuIt:cIt("furn"),kuIt:cIt("kuh"),shIt:cIt("shk"),
-    svIt:cIt("svet"),dpIt:dIt(),wkIt:wIt(),vitIt:vIt()};
+    svIt:cIt("svet"),dpIt:dIt(),wkIt:wIt(),vitIt:vIt(),moikaIt:mIt()};
   sx("tl-p",fm(BL.tot));sx("tl-c",fm(BL.credit));sx("tl-i",fm(BL.inc));
   sx("tp-p",fm(BP.tot));sx("tp-c",fm(BP.credit));sx("tp-i",fm(BP.inc));
   sx("tk-p",fm(BK.tot));sx("tk-c",fm(BK.credit));sx("tk-i",fm(BK.inc));
-  [["s-korp",vK],["s-fldsp",vFL],["s-fplen",vFP],["s-fkr",vFK],["s-furn",vFu],["s-kuh",vKu],["s-shk",vSh],["s-del",vDel],["s-svet",vSM+vSI],["s-dop",vDp],["s-works",vWk]].forEach(([id,v])=>st(id,v));
+  [["s-korp",vK],["s-fldsp",vFL],["s-fplen",vFP],["s-fkr",vFK],["s-furn",vFu],["s-kuh",vKu],["s-shk",vSh],["s-del",vDel],["s-svet",vSM+vSI],["s-dop",vDp],["s-works",vWk],["s-moika",vMoika],["s-kitchenAcc",vMoika]].forEach(([id,v])=>st(id,v));
   const sv=$("s-vit");if(sv)sv.textContent=fm(vVit.tot);
+  const mb=$("moika-breakdown");
+  if(mb)mb.textContent="Себестоимость "+fm(mBrk.base)+" · работа мастера "+fm(mBrk.work)+" · доход дизайнера "+fm(mBrk.des)+" · наш доход "+fm(mBrk.our)+" · допустимая скидка до "+fm(mBrk.disc);
   function fB(pfx,B){
     st(pfx+"-b",B.base);st(pfx+"-a",B.aK);st(pfx+"-r",B.rabM);
     const se=$(pfx+"-s");if(se){const s=B.sk;se.textContent=(s===0?"0₸":(s>0?"+":"")+Math.round(s).toLocaleString("ru")+"₸");se.style.color=s<0?"#E24B4A":s>0?"#1D9E75":"#aaa";}
@@ -377,6 +429,10 @@ function generateDogovor() {
     dopRows += '<tr><td>' + it.n + '</td><td>\u0440\u0430\u0431\u043e\u0442\u044b</td><td>&nbsp;</td></tr>';
   });
   (C.vitIt||[]).forEach(function(it){
+    dopRows += '<tr><td>' + it.n + '</td><td>' + it.q + ' \u0448\u0442.</td><td>&nbsp;</td></tr>';
+  });
+  var moikaDop = C.moikaIt||[];
+  moikaDop.forEach(function(it){
     dopRows += '<tr><td>' + it.n + '</td><td>' + it.q + ' \u0448\u0442.</td><td>&nbsp;</td></tr>';
   });
   if (!dopRows) dopRows = '<tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>';
@@ -679,6 +735,9 @@ function showKP(showL=true, showP=true, showK=false){
   // Витрины
   var vitKpArr = C.vitIt||[];
   vitKpArr.forEach(function(it){ addRow(it.n,"\u0414\u043e\u043f. \u043f\u043e\u0437\u0438\u0446\u0438\u044f",it.q+" \u0448\u0442.",0,0,0); });
+  // Кухня — Мойка
+  var moikaArr = C.moikaIt||[];
+  moikaArr.forEach(function(it){ addRow(it.n,"\u041a\u0443\u0445\u043d\u044f",it.q+" \u0448\u0442.",it.p||0,it.p||0,it.p||0); });
 
   // Заголовки колонок цен
   var thPrices = "";

@@ -86,6 +86,17 @@
   </div>
 
   <div class="scr" id="scr-extra">
+    <div class="card"><div class="ch" onclick="tog('kitchenAcc')"><div class="ct"><span style="color:#185FA5">◆</span>1. Кухня</div><div style="display:flex;align-items:center;gap:4px;flex-shrink:0"><span class="cs" id="s-kitchenAcc">0₸</span><span class="ar" id="ar-kitchenAcc">▼</span></div></div>
+      <div class="cb" id="cb-kitchenAcc">
+        <div class="card"><div class="ch" onclick="tog('moika')"><div class="ct"><span style="color:#185FA5">◆</span>Мойка</div><div style="display:flex;align-items:center;gap:4px;flex-shrink:0"><span class="cs" id="s-moika">0₸</span><span class="ar" id="ar-moika">▼</span></div></div>
+          <div class="cb" id="cb-moika">
+            <div id="moika-list"><p class="hint">Нет позиций</p></div>
+            <button class="ab" onclick="addMoika()">+ Добавить</button>
+            <div class="hs" id="moika-breakdown">Себестоимость 0₸ · работа мастера 0₸ · доход дизайнера 0₸ · наш доход 0₸ · допустимая скидка до 0₸</div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="card"><div class="ch" onclick="tog('svet')"><div class="ct"><span style="color:#3B6D11">◆</span>Подсветка<span class="tag tn">без наценки</span></div><div style="display:flex;align-items:center;gap:4px;flex-shrink:0"><span class="cs" id="s-svet">0₸</span><span class="ar" id="ar-svet">▼</span></div></div>
       <div class="cb" id="cb-svet"><div id="svet-list"><p class="hint">Нет позиций</p></div><button class="ab" onclick="addCat('svet',DB.svet,'svet-list')">+ Добавить</button>
       <div class="ss"><div class="stl">Доход с подсветки</div><div class="fr"><span class="lb">Доход</span><input class="ql" type="number" inputmode="decimal" id="svet-inc" placeholder="0" onchange="recalc()"><span class="fp">₸</span></div></div></div></div>
