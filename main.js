@@ -884,7 +884,9 @@ function generateDogovor() {
 
 
 // ── Модальное окно выбора вариантов КП ───────────────────────
-function openKpVarModal(){
+let kpCmpMode=false;
+function openKpVarModal(cmp){
+  kpCmpMode=!!cmp;
   if(!C.BL){ alert('Сначала заполните калькулятор'); return; }
   document.getElementById('kp-var-modal').style.display='flex';
 }
@@ -902,7 +904,7 @@ function kpVarConfirm(){
   const showP = $('kpv-plen').checked;
   const showK = $('kpv-kr').checked;
   kpVarClose();
-  showKP(showL, showP, showK);
+  showKP(showL, showP, showK, kpCmpMode);
 }
 
 let kpStyleModern = true; // текущий стиль
@@ -914,7 +916,14 @@ function kpToggleStyle(){
   if(btn){ btn.textContent = kpStyleModern ? '⬡ Modern' : '◈ Classic'; }
 }
 
-function showKP(showL=true, showP=true, showK=false){
+function showKP(showL=true, showP=true, showK=false, cmpMode=false){
+  var BLu = cmpMode ? C.BLc : C.BL;
+  var BPu = cmpMode ? C.BPc : C.BP;
+  var BKu = cmpMode ? C.BKc : C.BK;
+  var fuItU = cmpMode ? C.fuItCmp : C.fuIt;
+  var kuItU = cmpMode ? C.kuItCmp : C.kuIt;
+  var shItU = cmpMode ? C.shItCmp : C.shIt;
+  var svItU = cmpMode ? C.svItCmp : C.svIt;
   var client  = ($("kp-client")  ||{}).value||"—";
   var obj     = ($("kp-object")  ||{}).value||"—";
   var num     = ($("kp-num")     ||{}).value||"001";
@@ -931,7 +940,7 @@ function showKP(showL=true, showP=true, showK=false){
   if(showP) vars.push({key:"P", name:"МДФ Плёнка"});
   if(showK) vars.push({key:"K", name:"МДФ Краска"});
   var nV = vars.length;
-  var totals = {L: C.BL.tot, P: C.BP.tot, K: C.BK.tot};
+  var totals = {L: BLu.tot, P: BPu.tot, K: BKu.tot};
 
   // Собираем строки таблицы
   var tableRows = "";
@@ -965,7 +974,7 @@ function showKP(showL=true, showP=true, showK=false){
   var fkrArr = C.fkrIt||[];
   fkrArr.forEach(function(it){ addRow("Фасад МДФ Краска", it.n, "", 0,0,0); });
   // Фурнитура
-  var fuArr = (C.fuIt||[]).concat(C.kuIt||[]).concat(C.shIt||[]);
+  var fuArr = (fuItU||[]).concat(kuItU||[]).concat(shItU||[]);
   fuArr.forEach(function(it){
     var nm = it.n.toLowerCase();
     if(nm.indexOf("петл")>=0) addRow("Петли", it.n, "", 0,0,0);
@@ -975,7 +984,7 @@ function showKP(showL=true, showP=true, showK=false){
     else addRow(it.n, "", it.q>1?it.q+" шт":"", 0,0,0);
   });
   // Освещение
-  var svArr = C.svIt||[];
+  var svArr = svItU||[];
   svArr.forEach(function(it){ addRow(it.n,"",it.q+" шт",0,0,0); });
   // Доп. позиции
   var dpArr = C.dpIt||[];
@@ -1004,7 +1013,7 @@ function showKP(showL=true, showP=true, showK=false){
   }
 
   // Заголовки вариантов над итоговыми строками + итоговые строки
-  var credits = {L: C.BL.credit, P: C.BP.credit, K: C.BK.credit};
+  var credits = {L: BLu.credit, P: BPu.credit, K: BKu.credit};
   var showCredit = vars.some(function(v){ return credits[v.key] > totals[v.key] + 1; });
   var varColors = {L: "#534AB7", P: "#1a5252", K: "#8B4513"};
   var headerRow = "";
