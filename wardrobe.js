@@ -443,7 +443,7 @@ let prices={
   handle: 800,     // 1 ручка
   rod: 2000,       // 1 штанга
   leg: 500,        // 1 ножка
-  gsUrl: 'https://script.google.com/macros/s/AKfycbxONvblIcQPE-SaLhTqS-uWjtQXZY4pRvDMsCAfbBeXy7EC6ITXJdKzEVvL7ryR2wHo8g/exec',
+  gsUrl: 'https://script.google.com/macros/s/AKfycbxDa66S-OSeSR1B6B2EoS0h5R6X2jW22zccdJP8HtbiGwEh-IGzqf5BsmXNRTeTWN78/exec',
   // Работы
   workCut:      0,  // раскрой — за лист ЛДСП
   workEdge:     0,  // кромкование — за пм
@@ -469,7 +469,8 @@ function loadPrices(){
   const pl=document.getElementById('p-leg');
   if(pl) pl.value=prices.leg||500;
   const gu=document.getElementById('gs-url');
-  if(!prices.gsUrl) prices.gsUrl='https://script.google.com/macros/s/AKfycbxONvblIcQPE-SaLhTqS-uWjtQXZY4pRvDMsCAfbBeXy7EC6ITXJdKzEVvL7ryR2wHo8g/exec';
+  const OLD_GS_URL='https://script.google.com/macros/s/AKfycbxONvblIcQPE-SaLhTqS-uWjtQXZY4pRvDMsCAfbBeXy7EC6ITXJdKzEVvL7ryR2wHo8g/exec';
+  if(!prices.gsUrl || prices.gsUrl===OLD_GS_URL) prices.gsUrl='https://script.google.com/macros/s/AKfycbxDa66S-OSeSR1B6B2EoS0h5R6X2jW22zccdJP8HtbiGwEh-IGzqf5BsmXNRTeTWN78/exec';
   if(gu) gu.value=prices.gsUrl;
   // Работы
   const wf={workCut:'p-work-cut',workEdge:'p-work-edge',workAssembly:'p-work-assembly',
@@ -527,7 +528,7 @@ async function loadFromSheets(){
 
   // Обрабатываем данные
   try{
-    if(d.ldsp) catalog.ldsp=d.ldsp;
+    if(d.ldspW) catalog.ldsp=d.ldspW;
     if(d.hdf)  catalog.hdf=d.hdf;
     if(d.edgeThin) catalog.edgeThin=d.edgeThin;
     if(d.facadePlenka) catalog.facadePlenka=d.facadePlenka;

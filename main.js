@@ -2049,7 +2049,7 @@ function sendConfToCalc() {
   if ((d.totalHinges || 0) > 0) {
     const arr = DB.furn;
     const catName = 'Петля';
-    const hingeBrand = mc.hingeBrand || 'En-7';
+    const hingeBrand = 'En-7';
     const fi = ST.furn.length;
     ST.furn.push({ p: 0 });
     const fc = $('furn-list');
@@ -2082,9 +2082,9 @@ function sendConfToCalc() {
   if (d.slideDetails && d.slideDetails.length > 0) {
     d.slideDetails.forEach(function(sl) {
       if (!sl.count) return;
-      var catName = sl.type || 'Телескоп';
+      var catName = 'Телескоп';
       var vidName = sl.length + 'мм';
-      var brandName = sl.brand || '—';
+      var brandName = 'En-7';
       var arr = DB.furn;
 
       // Все категории для первого селекта
