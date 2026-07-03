@@ -453,6 +453,12 @@ function recalc(){
   const sv=$("s-vit");if(sv)sv.textContent=fm(vVit.tot);
   const mb=$("moika-breakdown");
   if(mb)mb.textContent="Себестоимость "+fm(mBrk.base)+" · работа мастера "+fm(mBrk.work)+" · доход дизайнера "+fm(mBrk.des)+" · наш доход "+fm(mBrk.our)+" · допустимая скидка до "+fm(mBrk.disc);
+  // Итог → сводка по всем Доп.позициям Кухни разом (Мойка + остальные разделы)
+  st("kacc-cost", mBrk.base+kAcc.cost);
+  st("kacc-work", mBrk.work+kAcc.work);
+  st("kacc-des", mBrk.des+kAcc.des);
+  st("kacc-our", mBrk.our+kAcc.our);
+  st("kacc-tot", vMoika+kAcc.total);
   function fB(pfx,B){
     st(pfx+"-b",B.base);st(pfx+"-a",B.aK);st(pfx+"-r",B.rabM);
     const se=$(pfx+"-s");if(se){const s=B.sk;se.textContent=(s===0?"0₸":(s>0?"+":"")+Math.round(s).toLocaleString("ru")+"₸");se.style.color=s<0?"#E24B4A":s>0?"#1D9E75":"#aaa";}
