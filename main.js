@@ -415,8 +415,8 @@ function allKitchenAccItems(){
   return items;
 }
 function blk(fas,k,rm,sk,tax,cr,vK,shared,extras,eInc){
-  const base=vK+fas+shared,aK=base*k,rabM=aK*rm,aSk=aK+sk,taxA=aSk*tax,tot=aSk+taxA+extras,credit=tot*(1+cr);
-  return{base,aK,rabM,sk,taxA,aSk,tot,credit,inc:aSk-base-rabM+eInc};
+  const base=vK+fas+shared,aK=base*k,rabM=aK*rm,preTax=aK+extras,taxA=preTax*tax,afterTax=preTax+taxA,tot=afterTax+sk,credit=tot*(1+cr);
+  return{base,aK,rabM,sk,taxA,tot,credit,inc:aK-base-rabM+sk+eInc};
 }
 function recalc(){
   const vK=kC(),vFL=sC("fldsp",DB.ldsp),vFP=sC("fplen",DB.fas_plen),vFK=sC("fkr",DB.fas_kr);
