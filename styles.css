@@ -44,10 +44,9 @@ input.qt{font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:6px
 .tv{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
 /* РАСЧЁТ — сплит на широких экранах: слева калькулятор, справа живой Итог */
 @media(min-width:960px){
-  #pg-calc.on{display:flex;align-items:flex-start;gap:0}
+  #calc-body{display:flex;align-items:flex-start;gap:0}
   #pg-calc .calc-left{flex:1;min-width:0}
-  #pg-calc .calc-right{display:block;width:380px;flex-shrink:0;box-sizing:border-box;border-left:1px solid var(--bd);background:#fafafa;padding:10px 12px;position:sticky;top:48px;max-height:calc(100vh - 58px);overflow-y:auto}
-  body.itog-active #pg-calc.on{display:block}
+  #pg-calc .calc-right{display:block;width:380px;flex-shrink:0;box-sizing:border-box;border-left:1px solid var(--bd);background:#fafafa;padding:10px 12px;position:sticky;top:96px;max-height:calc(100vh - 106px);overflow-y:auto}
   body.itog-active #pg-calc .calc-left{display:none}
   body.itog-active #pg-calc .calc-right{width:100%;position:static;max-height:none;border-left:none;background:transparent;overflow-y:visible}
 }

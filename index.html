@@ -17,7 +17,6 @@
 
 <!-- КАЛЬКУЛЯТОР -->
 <div class="pg on" id="pg-calc">
-  <div class="calc-left" id="calc-left">
   <div class="tabs">
     <button class="tb on" onclick="tab('calc')">Расчёт</button>
     <button class="tb" onclick="tab('coef')">Коэф.</button>
@@ -26,6 +25,8 @@
     <button class="tb" onclick="tab('itog')">Итог</button>
   </div>
 
+  <div class="calc-body" id="calc-body">
+  <div class="calc-left" id="calc-left">
   <div class="scr on" id="scr-calc">
     <div class="card"><div class="ch" onclick="tog('korp')"><div class="ct"><span style="color:#534AB7">◆</span>Корпус<span class="tag tm">×коэф.</span></div><div style="display:flex;align-items:center;gap:4px;flex-shrink:0"><span class="cs" id="s-korp">0₸</span><span class="ar" id="ar-korp">▼</span></div></div>
       <div class="cb" id="cb-korp">
@@ -142,6 +143,7 @@
     <button class="actn" onclick="openDogovor()" style="background:linear-gradient(135deg,#7B5E2A,#C9A96E);color:#fff;border:none;margin-top:6px">📋 Договор →</button>
     <button class="actn" onclick="saveCalc()" style="background:linear-gradient(135deg,#1D9E75,#148060);color:#fff;border:none;margin-top:6px">💾 Сохранить расчёт</button>
     <button class="actn as" style="margin-top:6px" onclick="fullReset()">🔄 Новый расчёт</button>
+  </div>
   </div>
 </div>
 
