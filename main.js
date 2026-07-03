@@ -40,6 +40,16 @@ async function loadFromSheets() {
       DB.works = data.works;
       DB.vit = data.vit;
       if (data.moika && data.moika.length > 0) DB.moika = data.moika;
+      if (data.kStol && data.kStol.length > 0) DB.kStol = data.kStol;
+      if (data.kSushilka && data.kSushilka.length > 0) DB.kSushilka = data.kSushilka;
+      if (data.kTelesk && data.kTelesk.length > 0) DB.kTelesk = data.kTelesk;
+      if (data.kPetlya && data.kPetlya.length > 0) DB.kPetlya = data.kPetlya;
+      if (data.kRuchka && data.kRuchka.length > 0) DB.kRuchka = data.kRuchka;
+      if (data.kNozhki && data.kNozhki.length > 0) DB.kNozhki = data.kNozhki;
+      if (data.kPodsvetka && data.kPodsvetka.length > 0) DB.kPodsvetka = data.kPodsvetka;
+      if (data.kKargo && data.kKargo.length > 0) DB.kKargo = data.kKargo;
+      if (data.kPlintus && data.kPlintus.length > 0) DB.kPlintus = data.kPlintus;
+      if (data.kVytyazhka && data.kVytyazhka.length > 0) DB.kVytyazhka = data.kVytyazhka;
       renderWorks();
       recalc();
       kpManagerLoadList();
@@ -67,7 +77,17 @@ const DB={
   svet:[{cat:"БлокП 12в",vid:"60вт",p:2200},{cat:"БлокП 12в",vid:"100вт",p:2430},{cat:"БлокП 12в",vid:"150вт",p:2970},{cat:"Вилка",vid:"—",p:200},{cat:"Вкл Круглый",vid:"—",p:250},{cat:"Вкл Кнопка",vid:"—",p:220},{cat:"Вкл Врезной",vid:"—",p:250},{cat:"Датчик 12в",vid:"ЛДСП",p:2800},{cat:"Датчик 12в",vid:"Касание",p:1500},{cat:"Датчик 12в",vid:"Махание",p:1760},{cat:"Датчик 12в",vid:"Откр-1-дверь",p:1960},{cat:"Датчик 12в",vid:"Откр-2-дверь",p:1960},{cat:"Датчик 12в",vid:"ДисУпр",p:4500},{cat:"Датчик 12в",vid:"ГолосУпр",p:4500},{cat:"Датчик 12в",vid:"ДляЗеркало",p:2500},{cat:"Датчик 220в",vid:"Касание",p:3400},{cat:"Датчик 220в",vid:"Махание",p:3400},{cat:"Датчик 220в",vid:"ЛДСП",p:4200},{cat:"Датчик 220в",vid:"ДисУпр",p:4500},{cat:"Лента 12в",vid:"Холодный",p:1760},{cat:"Лента 12в",vid:"Теплый",p:1760},{cat:"Лента 12в",vid:"Нейтральный",p:1760},{cat:"Лента 220в 1м",vid:"Холодный",p:410},{cat:"Лента 220в 5м",vid:"Холодный",p:1760},{cat:"Лента 220в 5м",vid:"Теплый",p:1760},{cat:"Лента 220в 5м",vid:"Нейтральный",p:1760},{cat:"Лента 220в 10м",vid:"Нейтральный",p:2700},{cat:"Лента Гибкий 12в",vid:"—",p:880},{cat:"Профиль.угл",vid:"алюминий",p:1620},{cat:"Профиль.угл",vid:"черный",p:1890},{cat:"Профиль.врез",vid:"черный",p:1890},{cat:"Профиль.врез",vid:"алюминий",p:1620},{cat:"Профиль.наклад",vid:"алюминий",p:1620},{cat:"Профиль.наклад",vid:"черный",p:1890},{cat:"Розетка",vid:"—",p:800},{cat:"Переходник",vid:"—",p:250},{cat:"Соед.лента",vid:"—",p:380}],
   vit:{steklo:{"Бронза":12000,"Графит":12000,"Матовый":14000,"Зеркало":12000,"Простое":6000,"Риф-Бронза":40000,"Риф-Графит":40000,"Риф-Простой":40000},profil_uzkiy:2000,profil_shirokiy:3000,ugolok_uzkiy:1500,ugolok_shirokiy:2000,navesh:1000,prisadka:1500,uplotnitel:400},
   works:[{n:"Установка мойки",p:0},{n:"Установка смесителя",p:0},{n:"Установка печки/духовки",p:0},{n:"Установка вытяжки",p:0},{n:"Установка посудомойки",p:0},{n:"Установка холодильника",p:0},{n:"Подключение электрики",p:0},{n:"Сборка мебели",p:0},{n:"Установка карго/сушилки",p:0},{n:"Установка витрины",p:0},{n:"Установка подсветки",p:0},{n:"Замер",p:0},{n:"Дизайн проект",p:0}],
-  moika:[{tip:"Врезная",razmer:"500мм",cvet:"Нержавейка",base:18000,work:5000,des:2000,our:5000,disc:3000},{tip:"Врезная",razmer:"600мм",cvet:"Нержавейка",base:20000,work:5000,des:2000,our:5000,disc:3000},{tip:"Накладная",razmer:"500мм",cvet:"Черная",base:25000,work:5000,des:3000,our:6000,disc:4000}]
+  moika:[{tip:"Врезная",razmer:"500мм",cvet:"Нержавейка",base:18000,work:5000,des:2000,our:5000,disc:3000},{tip:"Врезная",razmer:"600мм",cvet:"Нержавейка",base:20000,work:5000,des:2000,our:5000,disc:3000},{tip:"Накладная",razmer:"500мм",cvet:"Черная",base:25000,work:5000,des:3000,our:6000,disc:4000}],
+  kStol:[{tip:"38мм",cvet:"Белый",razmer:"3000мм",base:15000,work:3000,des:1500,our:3000,disc:2000},{tip:"38мм",cvet:"Сонома",razmer:"3000мм",base:16000,work:3000,des:1500,our:3000,disc:2000},{tip:"Камень",cvet:"Grandex",razmer:"3000мм",base:90000,work:8000,des:5000,our:12000,disc:10000}],
+  kSushilka:[{tip:"Одинарный",tip2:"Обычный",cvet:"Хром",base:5300,work:1500,des:500,our:1200,disc:1000},{tip:"Одинарный",tip2:"Нержавейка",cvet:"Хром",base:6500,work:1500,des:500,our:1200,disc:1000},{tip:"Двойной",tip2:"Нержавейка",cvet:"Хром",base:9100,work:2000,des:800,our:1800,disc:1500}],
+  kTelesk:[{tip:"Скрытый",firma:"Blum",razmer:"500мм",base:12000,work:1500,des:1000,our:2000,disc:2000},{tip:"Простой",firma:"En-7",razmer:"450мм",base:2400,work:800,des:300,our:700,disc:500},{tip:"Типон",firma:"GTV",razmer:"500мм",base:5950,work:1000,des:500,our:1200,disc:800}],
+  kPetlya:[{tip:"Накладная",firma:"Blum",base:2200,work:500,des:200,our:600,disc:500},{tip:"Вкладная",firma:"Hefele",base:800,work:400,des:150,our:400,disc:300}],
+  kRuchka:[{tip:"Скрытая",firma:"—",cvet:"Черный",razmer:"128мм",base:500,work:200,des:100,our:300,disc:200},{tip:"Профильная",firma:"—",cvet:"Хром",razmer:"1000мм",base:1000,work:300,des:150,our:400,disc:300}],
+  kNozhki:[{tip:"Стандарт",firma:"—",cvet:"Хром",razmer:"100мм",base:100,work:50,des:30,our:100,disc:50},{tip:"Регулируемая",firma:"—",cvet:"Черный",razmer:"150мм",base:500,work:100,des:80,our:200,disc:150}],
+  kPodsvetka:[{tip:"Рабочая зона",tip2:"Врезной",cvet:"Теплый",razmer:"1м",base:1760,work:1000,des:500,our:1200,disc:1000},{tip:"Шкаф",tip2:"Накладной",cvet:"Нейтральный",razmer:"1м",base:1760,work:800,des:400,our:1000,disc:800}],
+  kKargo:[{tip:"Стандарт",firma:"—",razmer:"400мм",base:15000,work:2000,des:1000,our:2500,disc:2000},{tip:"Стандарт",firma:"—",razmer:"600мм",base:30000,work:2500,des:1500,our:3500,disc:3000}],
+  kPlintus:[{tip:"Узкий",p:2000},{tip:"Широкий",p:2500},{tip:"Силикон",p:1800}],
+  kVytyazhka:[{tip:"Стандарт",p:3500}]
 };
 const ST={ldsp:[],fldsp:[],fplen:[],fkr:[],furn:[],kuh:[],shk:[],svet:[],dop:[],vit:[],moika:[]};
 let C={};
@@ -238,6 +258,162 @@ function mIt(){
     return{n:"Мойка "+row.tip+" "+row.razmer+" "+row.cvet,q,p:price};
   }).filter(Boolean);
 }
+// ── Доп. позиции → Кухня: универсальный движок каталога с N атрибутами и 4-компонентной ценой ──
+const ACC_CFG={
+  kStol:{dbKey:"kStol",attrs:["tip","cvet","razmer"],listId:"kStol-list",brkId:"kStol-breakdown",label:"Столешница"},
+  kSusNiz:{dbKey:"kSushilka",attrs:["tip","tip2","cvet"],listId:"kSusNiz-list",brkId:"kSusNiz-breakdown",label:"Сушилка низ"},
+  kSusVerh:{dbKey:"kSushilka",attrs:["tip","tip2","cvet"],listId:"kSusVerh-list",brkId:"kSusVerh-breakdown",label:"Сушилка верх"},
+  kTelesk:{dbKey:"kTelesk",attrs:["tip","firma","razmer"],listId:"kTelesk-list",brkId:"kTelesk-breakdown",label:"Телескоп"},
+  kPetlya:{dbKey:"kPetlya",attrs:["tip","firma"],listId:"kPetlya-list",brkId:"kPetlya-breakdown",label:"Петля"},
+  kRuchka:{dbKey:"kRuchka",attrs:["tip","firma","cvet","razmer"],listId:"kRuchka-list",brkId:"kRuchka-breakdown",label:"Ручка"},
+  kNozhki:{dbKey:"kNozhki",attrs:["tip","firma","cvet","razmer"],listId:"kNozhki-list",brkId:"kNozhki-breakdown",label:"Ножки"},
+  kPodsvetka:{dbKey:"kPodsvetka",attrs:["tip","tip2","cvet","razmer"],listId:"kPodsvetka-list",brkId:"kPodsvetka-breakdown",label:"Подсветка"},
+  kKargo:{dbKey:"kKargo",attrs:["tip","firma","razmer"],listId:"kKargo-list",brkId:"kKargo-breakdown",label:"Карго"}
+};
+Object.keys(ACC_CFG).forEach(k=>{ST[k]=[];});
+function accOptions(key,filterObj,attrName){
+  const cfg=ACC_CFG[key];const arr=DB[cfg.dbKey]||[];const out=[];
+  arr.forEach(row=>{
+    let ok=true;
+    Object.keys(filterObj).forEach(fk=>{if(row[fk]!==filterObj[fk])ok=false;});
+    if(ok&&out.indexOf(row[attrName])<0)out.push(row[attrName]);
+  });
+  return out;
+}
+function accRow(key,idx){
+  const cfg=ACC_CFG[key];const arr=DB[cfg.dbKey]||[];const sel={};
+  cfg.attrs.forEach(a=>{sel[a]=$(key+"_"+a+idx)?.value;});
+  return arr.find(row=>cfg.attrs.every(a=>row[a]===sel[a]));
+}
+function accRecalcRow(key,idx){
+  const row=accRow(key,idx);const q=gn(key+"Q"+idx)||0;
+  const price=row?(row.base+row.work+row.des+row.our)*q:0;
+  const pr=$(key+"Price"+idx);if(pr)pr.textContent=fm(price);
+  recalc();
+}
+function accRefreshLevel(key,idx,level){
+  const cfg=ACC_CFG[key];
+  if(level>=cfg.attrs.length){accRecalcRow(key,idx);return;}
+  const filterObj={};
+  for(let L=0;L<level;L++){const aName=cfg.attrs[L];filterObj[aName]=$(key+"_"+aName+idx)?.value;}
+  const attrName=cfg.attrs[level];
+  let optsHtml="";accOptions(key,filterObj,attrName).forEach(v=>{optsHtml+="<option value='"+v+"'>"+v+"</option>";});
+  const sel=$(key+"_"+attrName+idx);if(sel)sel.innerHTML=optsHtml;
+  accRefreshLevel(key,idx,level+1);
+}
+function accLevelChanged(el,level){
+  const rowEl=el.closest("[data-acc-row]");if(!rowEl)return;
+  accRefreshLevel(rowEl.dataset.key,parseInt(rowEl.dataset.idx,10),level+1);
+}
+function accPriceChange(el){
+  const rowEl=el.closest("[data-acc-row]");if(!rowEl)return;
+  accRecalcRow(rowEl.dataset.key,parseInt(rowEl.dataset.idx,10));
+}
+function accRemove(el){
+  const rowEl=el.closest("[data-acc-row]");if(!rowEl)return;
+  const key=rowEl.dataset.key,idx=parseInt(rowEl.dataset.idx,10);
+  rowEl.style.display="none";ST[key][idx]=null;recalc();
+}
+function addAcc(key){
+  const cfg=ACC_CFG[key];const a=ST[key];const idx=a.length;a.push({});
+  const c=$(cfg.listId);if(idx===0)c.innerHTML="";
+  const d=document.createElement("div");d.id=key+"Row"+idx;
+  d.setAttribute("data-acc-row","1");d.setAttribute("data-key",key);d.setAttribute("data-idx",idx);
+  if(idx>0)d.className="ib";d.style.marginTop="8px";
+  let selHtml="<div class='fr'>";
+  cfg.attrs.forEach((a2,level)=>{
+    let opts="";
+    if(level===0){accOptions(key,{},a2).forEach(v=>{opts+="<option value='"+v+"'>"+v+"</option>";});}
+    selHtml+="<select id='"+key+"_"+a2+idx+"' onchange='accLevelChanged(this,"+level+")'>"+opts+"</select>";
+  });
+  selHtml+="<button class='db' onclick='accRemove(this)'>✕</button></div>";
+  d.innerHTML=selHtml+"<div class='fr'><span class='lb'>Кол-во</span><input class='qi' type='number' inputmode='decimal' id='"+key+"Q"+idx+"' placeholder='1' min='0' onchange='accPriceChange(this)'><span class='fp'>шт</span></div><div class='fr' style='margin-top:4px'><span class='lb'>Стоимость</span><span class='fp' id='"+key+"Price"+idx+"' style='font-weight:600;color:#1a1a1a'>0₸</span></div>";
+  c.appendChild(d);
+  accRefreshLevel(key,idx,1);
+}
+function accTotal(key){
+  let s=0;
+  ST[key].forEach((x,i)=>{if(x===null||x===undefined)return;const row=accRow(key,i);const q=gn(key+"Q"+i)||0;if(row)s+=(row.base+row.work+row.des+row.our)*q;});
+  return s;
+}
+function accBreak(key){
+  let base=0,work=0,des=0,our=0,disc=0;
+  ST[key].forEach((x,i)=>{if(x===null||x===undefined)return;const row=accRow(key,i);const q=gn(key+"Q"+i)||0;if(row){base+=row.base*q;work+=row.work*q;des+=row.des*q;our+=row.our*q;disc+=row.disc*q;}});
+  return{base,work,des,our,disc};
+}
+function accItems(key){
+  const cfg=ACC_CFG[key];
+  return ST[key].map((x,i)=>{
+    if(x===null||x===undefined)return null;
+    const row=accRow(key,i);const q=gn(key+"Q"+i)||0;
+    if(!row||!q)return null;
+    const price=(row.base+row.work+row.des+row.our)*q;
+    const parts=[cfg.label];cfg.attrs.forEach(a=>{if(row[a]&&row[a]!=="—")parts.push(row[a]);});
+    return{n:parts.join(" "),q,p:price};
+  }).filter(Boolean);
+}
+// ── Доп. позиции → Кухня: упрощённый движок (Плинтус, Вытяжка) — одна цена, без разбивки ──
+const SIMPLE_CFG={
+  kPlintus:{dbKey:"kPlintus",listId:"kPlintus-list",unit:"м",label:"Плинтус"},
+  kVytyazhka:{dbKey:"kVytyazhka",listId:"kVytyazhka-list",unit:"м",label:"Вытяжка-отвод"}
+};
+Object.keys(SIMPLE_CFG).forEach(k=>{ST[k]=[];});
+function simpleRow(key,idx){const cfg=SIMPLE_CFG[key];const arr=DB[cfg.dbKey]||[];const tip=$(key+"_tip"+idx)?.value;return arr.find(r=>r.tip===tip);}
+function simpleRecalcRow(key,idx){
+  const row=simpleRow(key,idx);const q=gn(key+"Q"+idx)||0;
+  const price=row?row.p*q:0;
+  const pr=$(key+"Price"+idx);if(pr)pr.textContent=fm(price);
+  recalc();
+}
+function simplePriceChange(el){
+  const rowEl=el.closest("[data-simple-row]");if(!rowEl)return;
+  simpleRecalcRow(rowEl.dataset.key,parseInt(rowEl.dataset.idx,10));
+}
+function simpleRemove(el){
+  const rowEl=el.closest("[data-simple-row]");if(!rowEl)return;
+  const key=rowEl.dataset.key,idx=parseInt(rowEl.dataset.idx,10);
+  rowEl.style.display="none";ST[key][idx]=null;recalc();
+}
+function addSimpleAcc(key){
+  const cfg=SIMPLE_CFG[key];const a=ST[key];const idx=a.length;a.push({});
+  const c=$(cfg.listId);if(idx===0)c.innerHTML="";
+  const d=document.createElement("div");d.id=key+"Row"+idx;
+  d.setAttribute("data-simple-row","1");d.setAttribute("data-key",key);d.setAttribute("data-idx",idx);
+  if(idx>0)d.className="ib";d.style.marginTop="8px";
+  const arr=DB[cfg.dbKey]||[];
+  let opts="";arr.forEach(r=>{opts+="<option value='"+r.tip+"'>"+r.tip+"</option>";});
+  d.innerHTML="<div class='fr'><select id='"+key+"_tip"+idx+"' onchange='simplePriceChange(this)'>"+opts+"</select><button class='db' onclick='simpleRemove(this)'>✕</button></div><div class='fr'><span class='lb'>Кол-во</span><input class='qi' type='number' inputmode='decimal' id='"+key+"Q"+idx+"' placeholder='1' min='0' onchange='simplePriceChange(this)'><span class='fp'>"+cfg.unit+"</span></div><div class='fr' style='margin-top:4px'><span class='lb'>Стоимость</span><span class='fp' id='"+key+"Price"+idx+"' style='font-weight:600;color:#1a1a1a'>0₸</span></div>";
+  c.appendChild(d);simpleRecalcRow(key,idx);
+}
+function simpleTotal(key){
+  let s=0;
+  ST[key].forEach((x,i)=>{if(x===null||x===undefined)return;const row=simpleRow(key,i);const q=gn(key+"Q"+i)||0;if(row)s+=row.p*q;});
+  return s;
+}
+function simpleItems(key){
+  const cfg=SIMPLE_CFG[key];
+  return ST[key].map((x,i)=>{
+    if(x===null||x===undefined)return null;
+    const row=simpleRow(key,i);const q=gn(key+"Q"+i)||0;
+    if(!row||!q)return null;
+    return{n:cfg.label+" "+row.tip,q,p:row.p*q};
+  }).filter(Boolean);
+}
+function kitchenAccTotals(){
+  let cost=0,work=0,des=0,our=0,disc=0,total=0;
+  Object.keys(ACC_CFG).forEach(k=>{
+    const b=accBreak(k);cost+=b.base;work+=b.work;des+=b.des;our+=b.our;disc+=b.disc;
+    total+=accTotal(k);
+  });
+  Object.keys(SIMPLE_CFG).forEach(k=>{total+=simpleTotal(k);});
+  return{cost,work,des,our,disc,total,income:des+our};
+}
+function allKitchenAccItems(){
+  let items=[];
+  Object.keys(ACC_CFG).forEach(k=>{items=items.concat(accItems(k));});
+  Object.keys(SIMPLE_CFG).forEach(k=>{items=items.concat(simpleItems(k));});
+  return items;
+}
 function blk(fas,k,rm,sk,tax,cr,vK,shared,extras,eInc){
   const base=vK+fas+shared,aK=base*k,rabM=aK*rm,aSk=aK+sk,taxA=aSk*tax,tot=aSk+taxA+extras,credit=tot*(1+cr);
   return{base,aK,rabM,sk,taxA,aSk,tot,credit,inc:aSk-base-rabM+eInc};
@@ -247,8 +423,9 @@ function recalc(){
   const vFu=cC("furn"),vKu=cC("kuh"),vSh=cC("shk"),vDel=gn("d-sat")+gn("d-pdm");
   const vSM=cC("svet"),vSI=gn("svet-inc"),vDp=dC(),vWk=wC(),vVit=vTot();
   const vMoika=mC(),mBrk=mBreak();
+  const kAcc=kitchenAccTotals();
   const dfi=$("del-fi");if(dfi)dfi.textContent=fm(vFu+vKu+vSh);
-  const shared=vFu+vKu+vSh+vDel,extras=(vSM+vSI)+vVit.tot+vWk+vDp+vMoika,eInc=vSI+vVit.inc+vWk+mBrk.des+mBrk.our;
+  const shared=vFu+vKu+vSh+vDel,extras=(vSM+vSI)+vVit.tot+vWk+vDp+vMoika+kAcc.total,eInc=vSI+vVit.inc+vWk+mBrk.des+mBrk.our+kAcc.income;
   const kl=gn("c-kl")||1.8,rml=gn("c-rl")/100,skl=parseFloat($("c-sl")?.value)||0,taxl=gn("c-taxl")/100,crl=gn("c-crl")/100;
   const kp=gn("c-kp")||1.8,rmp=gn("c-rp")/100,skp=parseFloat($("c-sp")?.value)||0,taxp=gn("c-taxp")/100,crp=gn("c-crp")/100;
   const kk=gn("c-kk")||1.8,rmk=gn("c-rk")/100,skk=parseFloat($("c-sk")?.value)||0,taxk=gn("c-taxk")/100,crk=gn("c-crk")/100;
@@ -260,11 +437,19 @@ function recalc(){
     hdfQ:gn("hdf-qty"),kromQ:gn("krom-qty"),
     fldspIt:sIt("fldsp",DB.ldsp),fplenIt:sIt("fplen",DB.fas_plen),fkrIt:sIt("fkr",DB.fas_kr),
     fuIt:cIt("furn"),kuIt:cIt("kuh"),shIt:cIt("shk"),
-    svIt:cIt("svet"),dpIt:dIt(),wkIt:wIt(),vitIt:vIt(),moikaIt:mIt()};
+    svIt:cIt("svet"),dpIt:dIt(),wkIt:wIt(),vitIt:vIt(),moikaIt:mIt(),kitchenAccIt:allKitchenAccItems()};
   sx("tl-p",fm(BL.tot));sx("tl-c",fm(BL.credit));sx("tl-i",fm(BL.inc));
   sx("tp-p",fm(BP.tot));sx("tp-c",fm(BP.credit));sx("tp-i",fm(BP.inc));
   sx("tk-p",fm(BK.tot));sx("tk-c",fm(BK.credit));sx("tk-i",fm(BK.inc));
-  [["s-korp",vK],["s-fldsp",vFL],["s-fplen",vFP],["s-fkr",vFK],["s-furn",vFu],["s-kuh",vKu],["s-shk",vSh],["s-del",vDel],["s-svet",vSM+vSI],["s-dop",vDp],["s-works",vWk],["s-moika",vMoika],["s-kitchenAcc",vMoika]].forEach(([id,v])=>st(id,v));
+  [["s-korp",vK],["s-fldsp",vFL],["s-fplen",vFP],["s-fkr",vFK],["s-furn",vFu],["s-kuh",vKu],["s-shk",vSh],["s-del",vDel],["s-svet",vSM+vSI],["s-dop",vDp],["s-works",vWk],["s-moika",vMoika]].forEach(([id,v])=>st(id,v));
+  st("s-kitchenAcc",vMoika+kAcc.total);
+  Object.keys(ACC_CFG).forEach(k=>{
+    st("s-"+k,accTotal(k));
+    const b=accBreak(k);
+    const be=$(ACC_CFG[k].brkId);
+    if(be)be.textContent="Себестоимость "+fm(b.base)+" · работа мастера "+fm(b.work)+" · доход дизайнера "+fm(b.des)+" · наш доход "+fm(b.our)+" · допустимая скидка до "+fm(b.disc);
+  });
+  Object.keys(SIMPLE_CFG).forEach(k=>{st("s-"+k,simpleTotal(k));});
   const sv=$("s-vit");if(sv)sv.textContent=fm(vVit.tot);
   const mb=$("moika-breakdown");
   if(mb)mb.textContent="Себестоимость "+fm(mBrk.base)+" · работа мастера "+fm(mBrk.work)+" · доход дизайнера "+fm(mBrk.des)+" · наш доход "+fm(mBrk.our)+" · допустимая скидка до "+fm(mBrk.disc);
@@ -433,6 +618,10 @@ function generateDogovor() {
   });
   var moikaDop = C.moikaIt||[];
   moikaDop.forEach(function(it){
+    dopRows += '<tr><td>' + it.n + '</td><td>' + it.q + ' \u0448\u0442.</td><td>&nbsp;</td></tr>';
+  });
+  var kAccDop = C.kitchenAccIt||[];
+  kAccDop.forEach(function(it){
     dopRows += '<tr><td>' + it.n + '</td><td>' + it.q + ' \u0448\u0442.</td><td>&nbsp;</td></tr>';
   });
   if (!dopRows) dopRows = '<tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>';
@@ -738,6 +927,8 @@ function showKP(showL=true, showP=true, showK=false){
   // Кухня — Мойка
   var moikaArr = C.moikaIt||[];
   moikaArr.forEach(function(it){ addRow(it.n,"\u041a\u0443\u0445\u043d\u044f",it.q+" \u0448\u0442.",it.p||0,it.p||0,it.p||0); });
+  var kAccArr = C.kitchenAccIt||[];
+  kAccArr.forEach(function(it){ addRow(it.n,"\u041a\u0443\u0445\u043d\u044f",it.q+" \u0448\u0442.",it.p||0,it.p||0,it.p||0); });
 
   // Заголовки колонок цен
   var thPrices = "";
