@@ -515,8 +515,9 @@ function recalc(){
   st("kacc-des", mBrk.des+kAcc.des);
   st("kacc-our", mBrk.our+kAcc.our);
   st("kacc-tot", vMoika+kAcc.total);
+  const kWork=mBrk.work+kAcc.work, kDes=mBrk.des+kAcc.des;
   function fB(pfx,B){
-    st(pfx+"-b",B.base);st(pfx+"-a",B.aK);st(pfx+"-r",B.rabM);
+    st(pfx+"-b",B.base);st(pfx+"-a",B.aK);st(pfx+"-r",B.rabM+kWork);st(pfx+"-des",kDes);
     const se=$(pfx+"-s");if(se){const s=B.sk;se.textContent=(s===0?"0₸":(s>0?"+":"")+Math.round(s).toLocaleString("ru")+"₸");se.style.color=s<0?"#E24B4A":s>0?"#1D9E75":"#aaa";}
     st(pfx+"-t",B.taxA);st(pfx+"-tot",B.tot);st(pfx+"-cr",B.credit);st(pfx+"-inc",B.inc);
   }
