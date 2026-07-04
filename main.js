@@ -91,6 +91,7 @@ const DB={
 };
 const ST={ldsp:[],fldsp:[],fplen:[],fkr:[],furn:[],kuh:[],shk:[],svet:[],dop:[],vit:[],moika:[]};
 let C={};
+let appReady=false;
 const $=id=>document.getElementById(id);
 const fm=n=>Math.round(n).toLocaleString("ru")+"₸";
 const gn=id=>{const e=$(id);return e?(parseFloat(e.value)||0):0;};
@@ -2531,6 +2532,7 @@ function getSnap(){
 }
 // ── Черновик (защита от обновления страницы) — автосохранение текущего состояния ──
 function saveDraft(){
+  if(!appReady)return;
   try{
     if(!C||!C.BL)return;
     const draft={ST:JSON.parse(JSON.stringify(ST)),snap:getSnap(),savedAt:Date.now()};
@@ -2540,14 +2542,19 @@ function saveDraft(){
 function clearDraft(){
   try{ localStorage.removeItem("mebeloff_draft"); }catch(e){}
 }
-function restoreDraftOnLoad(){
-  let draft=null;
-  try{ draft=JSON.parse(localStorage.getItem("mebeloff_draft")||"null"); }catch(e){ console.error("Черновик: ошибка чтения —",e); }
-  if(!draft||!draft.ST)return;
-  const hasData=Object.keys(draft.ST).some(k=>draft.ST[k].some(x=>x!==null&&x!==undefined));
-  if(!hasData)return;
-  applySnap(draft);
-  showStatus("OK Черновик восстановлен","#1a5252");setTimeout(hideStatus,2500);
+function restoreDraftOnLoad(preReadDraft){
+  let draft=preReadDraft!==undefined?preReadDraft:null;
+  if(draft===null){
+    try{ draft=JSON.parse(localStorage.getItem("mebeloff_draft")||"null"); }catch(e){ console.error("Черновик: ошибка чтения —",e); }
+  }
+  if(draft&&draft.ST){
+    const hasData=Object.keys(draft.ST).some(k=>draft.ST[k].some(x=>x!==null&&x!==undefined));
+    if(hasData){
+      applySnap(draft);
+      showStatus("OK Черновик восстановлен","#1a5252");setTimeout(hideStatus,2500);
+    }
+  }
+  appReady=true;
 }
 function checkStorageAvailable(){
   try{
@@ -2755,5 +2762,7 @@ async function loadAndKP(id){
 }
 // ===== КОНЕЦ ИСТОРИИ =====
 
+let _preReadDraft=null;
+try{ _preReadDraft=JSON.parse(localStorage.getItem("mebeloff_draft")||"null"); }catch(e){}
 checkStorageAvailable();
-loadFromSheets().then(restoreDraftOnLoad).catch(restoreDraftOnLoad);
+loadFromSheets().then(()=>restoreDraftOnLoad(_preReadDraft)).catch(()=>restoreDraftOnLoad(_preReadDraft));
