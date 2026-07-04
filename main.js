@@ -2667,6 +2667,7 @@ function applySnap(rec){
   const cwl0=$("cworks-list");if(cwl0)cwl0.innerHTML="";
   // Восстановить снэп полей (коэффициенты, клиент, и т.д.)
   const snap=rec.snap;
+  function preClear(lid,arr){if(arr&&arr.some(x=>x!==null&&x!==undefined)){const e=$(lid);if(e)e.innerHTML="";}}
   // Простые инпуты
   ["c-kl","c-rl","c-sl","c-taxl","c-crl","c-kp","c-rp","c-sp","c-taxp","c-crp","c-kk","c-rk","c-sk","c-taxk","c-crk",
    "hdf-qty","krom-qty","d-sat","d-pdm","svet-inc","kp-client","kp-object","kp-num","kp-manager"].forEach(fid=>{
@@ -2675,14 +2676,16 @@ function applySnap(rec){
   // Работы восстанавливаются В КОНЦЕ, после renderWorks() — иначе значения затираются
   // Восстановить ЛДСП
   const ldspST=rec.ST.ldsp;
-  for(let i=0;i<ldspST.length;i++){if(ldspST[i]===null||ldspST[i]===undefined)continue;ST.ldsp.push(ldspST[i]);const c=$("ldsp-list");if(i===0)c.innerHTML="";const d=document.createElement("div");d.id="lr"+i;if(i>0)d.className="ib";d.style.marginTop="8px";const o=DB.ldsp.map((x,j)=>`<option value="${j}">${x.n} — ${x.p.toLocaleString("ru")}₸</option>`).join("");d.innerHTML=`<div class="fr"><select id="ls${i}" onchange="ST.ldsp[${i}]=+this.value;$('lp${i}').textContent=DB.ldsp[+this.value].p.toLocaleString('ru')+'₸/л';recalc()">${o}</select><button class="db" onclick="$('lr${i}').style.display='none';ST.ldsp[${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="lq${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="lp${i}">${DB.ldsp[0].p.toLocaleString("ru")}₸/л</span></div>`;c.appendChild(d);if(snap["ls"+i]!==undefined){const s=$("ls"+i);if(s){s.value=snap["ls"+i];ST.ldsp[i]=+snap["ls"+i];}}if(snap["lq"+i]!==undefined){const q=$("lq"+i);if(q)q.value=snap["lq"+i];}}
+  preClear("ldsp-list",ldspST);
+  for(let i=0;i<ldspST.length;i++){if(ldspST[i]===null||ldspST[i]===undefined){ST.ldsp.push(null);continue;}ST.ldsp.push(ldspST[i]);const c=$("ldsp-list");if(i===0)c.innerHTML="";const d=document.createElement("div");d.id="lr"+i;if(i>0)d.className="ib";d.style.marginTop="8px";const o=DB.ldsp.map((x,j)=>`<option value="${j}">${x.n} — ${x.p.toLocaleString("ru")}₸</option>`).join("");d.innerHTML=`<div class="fr"><select id="ls${i}" onchange="ST.ldsp[${i}]=+this.value;$('lp${i}').textContent=DB.ldsp[+this.value].p.toLocaleString('ru')+'₸/л';recalc()">${o}</select><button class="db" onclick="$('lr${i}').style.display='none';ST.ldsp[${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="lq${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="lp${i}">${DB.ldsp[0].p.toLocaleString("ru")}₸/л</span></div>`;c.appendChild(d);if(snap["ls"+i]!==undefined){const s=$("ls"+i);if(s){s.value=snap["ls"+i];ST.ldsp[i]=+snap["ls"+i];}}if(snap["lq"+i]!==undefined){const q=$("lq"+i);if(q)q.value=snap["lq"+i];}}
   // Восстановить простые секции (фасады)
   ["fldsp","fplen","fkr"].forEach(sec=>{
     const arr=sec==="fldsp"?DB.ldsp:sec==="fplen"?DB.fas_plen:DB.fas_kr;
     const lid=sec+"-list";
     const secST=rec.ST[sec];
+    preClear(lid,secST);
     for(let i=0;i<secST.length;i++){
-      if(secST[i]===null||secST[i]===undefined)continue;
+      if(secST[i]===null||secST[i]===undefined){ST[sec].push(null);continue;}
       ST[sec].push(secST[i]);
       const c=$(lid);if(i===0)c.innerHTML="";
       const d=document.createElement("div");d.id=sec+"r"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
@@ -2697,13 +2700,15 @@ function applySnap(rec){
   ["furn","kuh","shk","svet"].forEach(sec=>{
     const arr=gA(sec);const lid=sec+"-list";
     const secST=rec.ST[sec];
+    preClear(lid,secST);
     for(let i=0;i<secST.length;i++){
-      if(!secST[i])continue;
-      ST[sec].push({p:0});
+      if(!secST[i]){ST[sec].push(null);continue;}
+      const old=secST[i];
+      ST[sec].push({p:0,cmpOn:!!old.cmpOn,cmpFirm:old.cmpFirm||null});
       const c=$(lid);if(i===0)c.innerHTML="";
       const d=document.createElement("div");d.id=sec+"r"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
       const cats=[...new Set(arr.map(x=>x.cat))];
-      d.innerHTML=`<div class="fr"><select id="${sec}c${i}" onchange="uC('${sec}',${i})">${cats.map(cat=>`<option value="${cat}">${cat}</option>`).join("")}</select><button class="db" onclick="$('${sec}r${i}').style.display='none';ST['${sec}'][${i}]=null;recalc()">✕</button></div><div class="fr" id="${sec}vf${i}"></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="${sec}q${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="${sec}pp${i}">0₸</span></div>`;
+      d.innerHTML=`<div class="fr"><select id="${sec}c${i}" onchange="uC('${sec}',${i})">${cats.map(cat=>`<option value="${cat}">${cat}</option>`).join("")}</select><button class="db" title="Сравнить с другой фирмой" onclick="toggleCmp('${sec}',${i})">⚖</button><button class="db" onclick="$('${sec}r${i}').style.display='none';ST['${sec}'][${i}]=null;recalc()">✕</button></div><div class="fr" id="${sec}vf${i}"></div><div id="${sec}cmp${i}"></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="${sec}q${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="${sec}pp${i}">0₸</span></div>`;
       c.appendChild(d);
       if(snap[sec+"c"+i]!==undefined){const s=$(sec+"c"+i);if(s)s.value=snap[sec+"c"+i];}
       uC(sec,i);
@@ -2715,8 +2720,9 @@ function applySnap(rec){
   });
   // Доп позиции
   const dopST=rec.ST.dop;
+  preClear("dop-list",dopST);
   for(let i=0;i<dopST.length;i++){
-    if(dopST[i]===null)continue;
+    if(dopST[i]===null||dopST[i]===undefined){ST.dop.push(null);continue;}
     ST.dop.push(1);
     const c=$("dop-list");if(i===0)c.innerHTML="";
     const d=document.createElement("div");d.id="dr"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
@@ -2726,8 +2732,9 @@ function applySnap(rec){
   }
   // Витрины
   const vitST=rec.ST.vit;
+  preClear("vit-list",vitST);
   for(let i=0;i<vitST.length;i++){
-    if(vitST[i]===null)continue;
+    if(vitST[i]===null||vitST[i]===undefined){ST.vit.push(null);continue;}
     addVit();
     ["vw","vh","vn","vdel","vinc"].forEach(p=>{if(snap[p+i]!==undefined){const e=$(p+i);if(e)e.value=snap[p+i];}});
     if(snap["vst"+i]!==undefined){const s=$("vst"+i);if(s)s.value=snap["vst"+i];}
@@ -2736,8 +2743,9 @@ function applySnap(rec){
   }
   // Мойка
   const moikaST=rec.ST.moika||[];
+  preClear("moika-list",moikaST);
   for(let i=0;i<moikaST.length;i++){
-    if(moikaST[i]===null||moikaST[i]===undefined)continue;
+    if(moikaST[i]===null||moikaST[i]===undefined){ST.moika.push(null);continue;}
     addMoika();
     if(snap["moikaTip"+i]!==undefined){const s=$("moikaTip"+i);if(s)s.value=snap["moikaTip"+i];}
     mTipChange(i);
@@ -2750,8 +2758,9 @@ function applySnap(rec){
   // Кухня-допы (универсальный движок)
   Object.keys(ACC_CFG).forEach(key=>{
     const cfg=ACC_CFG[key];const secST=rec.ST[key]||[];
+    preClear(cfg.listId,secST);
     for(let i=0;i<secST.length;i++){
-      if(secST[i]===null||secST[i]===undefined)continue;
+      if(secST[i]===null||secST[i]===undefined){ST[key].push(null);continue;}
       addAcc(key);
       cfg.attrs.forEach((a,level)=>{
         if(level===0){
@@ -2768,8 +2777,9 @@ function applySnap(rec){
   // Кухня-допы (простые, без разбивки)
   Object.keys(SIMPLE_CFG).forEach(key=>{
     const secST=rec.ST[key]||[];
+    preClear(SIMPLE_CFG[key].listId,secST);
     for(let i=0;i<secST.length;i++){
-      if(secST[i]===null||secST[i]===undefined)continue;
+      if(secST[i]===null||secST[i]===undefined){ST[key].push(null);continue;}
       addSimpleAcc(key);
       if(snap[key+"_tip"+i]!==undefined){const s=$(key+"_tip"+i);if(s)s.value=snap[key+"_tip"+i];}
       if(snap[key+"Q"+i]!==undefined){const q=$(key+"Q"+i);if(q)q.value=snap[key+"Q"+i];}
