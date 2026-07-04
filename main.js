@@ -703,11 +703,12 @@ function masterVarConfirm(){
 function generateMasterList(material){
   var B = material==='P'?C.BP:(material==='K'?C.BK:C.BL);
   var matName = material==='P'?'МДФ Плёнка':(material==='K'?'МДФ Краска':'ЛДСП');
+  var rmPct = material==='P'?gn("c-rp"):(material==='K'?gn("c-rk"):gn("c-rl"));
   var objName = ($('kp-object')||{}).value || '';
   var today = ruDateFmt(new Date());
   var kitchenItems = allMasterKitchenItems();
   var services = masterWorkServices();
-  var rows='<tr><td>Монтаж корпуса и фасада ('+matName+')</td><td class="b">'+fm(B.rabM)+'</td></tr>';
+  var rows='<tr><td>Оплата труда мастера — '+rmPct+'% от суммы заказа ('+matName+')</td><td class="b">'+fm(B.rabM)+'</td></tr>';
   kitchenItems.forEach(function(it){ rows+='<tr><td>'+it.n+'</td><td class="b">'+fm(it.amount)+'</td></tr>'; });
   services.forEach(function(it){ rows+='<tr><td>'+it.n+'</td><td class="b">'+fm(it.amount)+'</td></tr>'; });
   var total = B.rabM;
