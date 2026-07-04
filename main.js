@@ -2535,20 +2535,32 @@ function saveDraft(){
     if(!C||!C.BL)return;
     const draft={ST:JSON.parse(JSON.stringify(ST)),snap:getSnap(),savedAt:Date.now()};
     localStorage.setItem("mebeloff_draft",JSON.stringify(draft));
-  }catch(e){}
+  }catch(e){ console.error("Черновик: ошибка сохранения —",e); }
 }
 function clearDraft(){
   try{ localStorage.removeItem("mebeloff_draft"); }catch(e){}
 }
 function restoreDraftOnLoad(){
   let draft=null;
-  try{ draft=JSON.parse(localStorage.getItem("mebeloff_draft")||"null"); }catch(e){}
+  try{ draft=JSON.parse(localStorage.getItem("mebeloff_draft")||"null"); }catch(e){ console.error("Черновик: ошибка чтения —",e); }
   if(!draft||!draft.ST)return;
   const hasData=Object.keys(draft.ST).some(k=>draft.ST[k].some(x=>x!==null&&x!==undefined));
   if(!hasData)return;
   applySnap(draft);
   showStatus("OK Черновик восстановлен","#1a5252");setTimeout(hideStatus,2500);
 }
+function checkStorageAvailable(){
+  try{
+    localStorage.setItem("mebeloff_storage_test","1");
+    localStorage.removeItem("mebeloff_storage_test");
+    return true;
+  }catch(e){
+    console.error("localStorage недоступен —",e);
+    showStatus("Внимание: браузер блокирует сохранение (localStorage). Черновик и История работать не будут.","#E24B4A");
+    return false;
+  }
+}
+window.addEventListener("beforeunload",saveDraft);
 function saveCalc(){
   if(!C.BL){alert("Сначала добавьте позиции в расчёт");return;}
   const client=$("kp-client")?.value||"Клиент";
@@ -2743,4 +2755,5 @@ async function loadAndKP(id){
 }
 // ===== КОНЕЦ ИСТОРИИ =====
 
+checkStorageAvailable();
 loadFromSheets().then(restoreDraftOnLoad).catch(restoreDraftOnLoad);
