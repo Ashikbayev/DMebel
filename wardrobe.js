@@ -508,7 +508,7 @@ async function loadFromSheets(){
     d=await new Promise((resolve,reject)=>{
       const cbName='_wc_cb_'+Date.now();
       const script=document.createElement('script');
-      const t=setTimeout(()=>{ cleanup(); reject(new Error('timeout')); },10000);
+      const t=setTimeout(()=>{ cleanup(); reject(new Error('timeout')); },30000);
       function cleanup(){
         clearTimeout(t);
         delete window[cbName];
@@ -4880,7 +4880,7 @@ async function kLoadFromSheets(){
     const d = await new Promise((resolve, reject)=>{
       const cbName = '_k_cb_' + Date.now();
       const script = document.createElement('script');
-      const t = setTimeout(()=>{ cleanup(); reject(new Error('timeout')); }, 10000);
+      const t = setTimeout(()=>{ cleanup(); reject(new Error('timeout')); }, 30000);
       function cleanup(){
         clearTimeout(t);
         delete window[cbName];
