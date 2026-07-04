@@ -400,6 +400,60 @@ function accItems(key){
     return{n:parts.join(" "),q,p:price};
   }).filter(Boolean);
 }
+// ── Списки заработка для мастера и дизайнера (только свои позиции, без себестоимости/маржи) ──
+function moikaWorkItems(){
+  return ST.moika.map((x,i)=>{
+    if(x===null||x===undefined)return null;
+    const row=mRow(i);const q=gn("moikaQ"+i)||0;
+    if(!row||!q||!row.work)return null;
+    return{n:"Мойка "+row.tip+" "+row.razmer+" "+row.cvet,amount:row.work*q};
+  }).filter(Boolean);
+}
+function moikaDesItems(){
+  return ST.moika.map((x,i)=>{
+    if(x===null||x===undefined)return null;
+    const row=mRow(i);const q=gn("moikaQ"+i)||0;
+    if(!row||!q||!row.des)return null;
+    return{n:"Мойка "+row.tip+" "+row.razmer+" "+row.cvet,amount:row.des*q};
+  }).filter(Boolean);
+}
+function accWorkItems(key){
+  const cfg=ACC_CFG[key];
+  return ST[key].map((x,i)=>{
+    if(x===null||x===undefined)return null;
+    const row=accRow(key,i);const q=gn(key+"Q"+i)||0;
+    if(!row||!q||!row.work)return null;
+    const parts=[cfg.label];cfg.attrs.forEach(a=>{if(row[a]&&row[a]!=="—")parts.push(row[a]);});
+    return{n:parts.join(" "),amount:row.work*q};
+  }).filter(Boolean);
+}
+function accDesItems(key){
+  const cfg=ACC_CFG[key];
+  return ST[key].map((x,i)=>{
+    if(x===null||x===undefined)return null;
+    const row=accRow(key,i);const q=gn(key+"Q"+i)||0;
+    if(!row||!q||!row.des)return null;
+    const parts=[cfg.label];cfg.attrs.forEach(a=>{if(row[a]&&row[a]!=="—")parts.push(row[a]);});
+    return{n:parts.join(" "),amount:row.des*q};
+  }).filter(Boolean);
+}
+function masterWorkServices(){
+  return DB.works.map((w,i)=>{
+    const q=gn("wq"+i);
+    if(!q||!w.p)return null;
+    return{n:w.n,amount:w.p*q};
+  }).filter(Boolean);
+}
+function allMasterKitchenItems(){
+  let items=moikaWorkItems();
+  Object.keys(ACC_CFG).forEach(k=>{items=items.concat(accWorkItems(k));});
+  return items;
+}
+function allDesignerItems(){
+  let items=moikaDesItems();
+  Object.keys(ACC_CFG).forEach(k=>{items=items.concat(accDesItems(k));});
+  return items;
+}
 // ── Доп. позиции → Кухня: упрощённый движок (Плинтус, Вытяжка) — одна цена, без разбивки ──
 const SIMPLE_CFG={
   kPlintus:{dbKey:"kPlintus",listId:"kPlintus-list",unit:"м",label:"Плинтус"},
@@ -605,6 +659,85 @@ function dogCalcPayments() {
 }
 
 function closeDogovor() { $('dogovor-modal').style.display = 'none'; }
+
+// ── Список для мастера / для дизайнера (печатный документ, только свои позиции) ──
+function earningsDocHead(title){
+  var H='';
+  H+='<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8">';
+  H+='<title>'+title+' — MebelOFF.kz</title>';
+  H+='<style>';
+  H+='body{font-family:"Times New Roman",Times,serif;font-size:12pt;color:#000;background:#fff;margin:0;line-height:1.5}';
+  H+='.pg{max-width:210mm;margin:0 auto;padding:18mm 22mm 18mm 28mm;box-sizing:border-box}';
+  H+='h1{text-align:center;font-size:14pt;font-weight:bold;margin:0 0 2px;letter-spacing:1px}';
+  H+='h2{text-align:center;font-size:12pt;font-weight:normal;margin:0 0 10pt}';
+  H+='.c{text-align:center}';
+  H+='table{width:100%;border-collapse:collapse;margin:5pt 0;font-size:11pt}';
+  H+='th,td{border:1px solid #000;padding:6px 9px;vertical-align:top}';
+  H+='th{background:#f0f0f0;font-weight:bold;text-align:center}';
+  H+='.b{font-weight:bold;text-align:right;white-space:nowrap}';
+  H+='.tot td{font-weight:bold;font-size:13pt;background:#f7f7f7}';
+  H+='.hr{border:none;border-top:2px solid #C9A96E;margin:10pt 0}';
+  H+='.btn{position:fixed;top:14px;right:14px;background:#C9A96E;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-size:13px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);z-index:999}';
+  H+='@media print{.btn{display:none!important}.pg{padding:14mm 20mm 14mm 24mm}}';
+  H+='</style></head><body>';
+  H+='<button class="btn" onclick="window.print()">🖨 Печать / PDF</button>';
+  H+='<div class="pg">';
+  return H;
+}
+function earningsDocOpen(H){
+  var w=window.open('','_blank');
+  if(w){ w.document.write(H); w.document.close(); }
+  else{ alert('Браузер заблокировал окно. Разрешите всплывающие окна для этого сайта.'); }
+}
+function openMasterListModal(){
+  if(!C||!C.BL){ alert('Сначала заполните калькулятор'); return; }
+  $('master-var-modal').style.display='flex';
+}
+function masterVarClose(){ $('master-var-modal').style.display='none'; }
+function masterVarConfirm(){
+  var sel=document.querySelector('input[name="master-mat"]:checked');
+  var mat=sel?sel.value:'L';
+  masterVarClose();
+  generateMasterList(mat);
+}
+function generateMasterList(material){
+  var B = material==='P'?C.BP:(material==='K'?C.BK:C.BL);
+  var matName = material==='P'?'МДФ Плёнка':(material==='K'?'МДФ Краска':'ЛДСП');
+  var objName = ($('kp-object')||{}).value || '';
+  var today = ruDateFmt(new Date());
+  var kitchenItems = allMasterKitchenItems();
+  var services = masterWorkServices();
+  var rows='<tr><td>Монтаж корпуса и фасада ('+matName+')</td><td class="b">'+fm(B.rabM)+'</td></tr>';
+  kitchenItems.forEach(function(it){ rows+='<tr><td>'+it.n+'</td><td class="b">'+fm(it.amount)+'</td></tr>'; });
+  services.forEach(function(it){ rows+='<tr><td>'+it.n+'</td><td class="b">'+fm(it.amount)+'</td></tr>'; });
+  var total = B.rabM;
+  kitchenItems.forEach(function(it){ total+=it.amount; });
+  services.forEach(function(it){ total+=it.amount; });
+  var H = earningsDocHead('Список для мастера');
+  H += '<h1>СПИСОК ДЛЯ МАСТЕРА</h1>';
+  H += '<h2>'+(objName?('Объект: '+objName+' · '):'')+today+' · вариант '+matName+'</h2>';
+  H += '<table><thead><tr><th>За что</th><th style="width:26%">Сумма</th></tr></thead><tbody>'+rows+'</tbody>';
+  H += '<tbody><tr class="tot"><td>ИТОГО МАСТЕРУ</td><td class="b">'+fm(total)+'</td></tr></tbody></table>';
+  H += '</div></body></html>';
+  earningsDocOpen(H);
+}
+function generateDesignerList(){
+  if(!C||!C.BL){ alert('Сначала заполните калькулятор'); return; }
+  var objName = ($('kp-object')||{}).value || '';
+  var today = ruDateFmt(new Date());
+  var items = allDesignerItems();
+  var rows='';
+  items.forEach(function(it){ rows+='<tr><td>'+it.n+'</td><td class="b">'+fm(it.amount)+'</td></tr>'; });
+  if(!rows) rows='<tr><td colspan="2" style="text-align:center;color:#888">Нет позиций с долей дизайнера</td></tr>';
+  var total=0; items.forEach(function(it){ total+=it.amount; });
+  var H = earningsDocHead('Список для дизайнера');
+  H += '<h1>СПИСОК ДЛЯ ДИЗАЙНЕРА</h1>';
+  H += '<h2>'+(objName?('Объект: '+objName+' · '):'')+today+'</h2>';
+  H += '<table><thead><tr><th>За что</th><th style="width:26%">Сумма</th></tr></thead><tbody>'+rows+'</tbody>';
+  H += '<tbody><tr class="tot"><td>ИТОГО ДИЗАЙНЕРУ</td><td class="b">'+fm(total)+'</td></tr></tbody></table>';
+  H += '</div></body></html>';
+  earningsDocOpen(H);
+}
 
 function generateDogovor() {
   var client  = ($('dog-client')    ||{}).value || '___________________________________';

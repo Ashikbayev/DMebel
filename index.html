@@ -240,6 +240,8 @@
     </div>
     <button class="actn ad" onclick="openKpVarModal()">📄 Сформировать КП →</button>
     <button class="actn" style="background:#185FA5;color:#fff;border:none;margin-top:6px" onclick="openKpVarModal(true)">⚖ КП со сравнением фурнитуры →</button>
+    <button class="actn" style="background:#3B6D11;color:#fff;border:none;margin-top:6px" onclick="openMasterListModal()">👷 Список для мастера →</button>
+    <button class="actn" style="background:#7B5E2A;color:#fff;border:none;margin-top:6px" onclick="generateDesignerList()">🎨 Список для дизайнера →</button>
     <button class="actn" onclick="openDogovor()" style="background:linear-gradient(135deg,#7B5E2A,#C9A96E);color:#fff;border:none;margin-top:6px">📋 Договор →</button>
     <button class="actn" onclick="saveCalc()" style="background:linear-gradient(135deg,#1D9E75,#148060);color:#fff;border:none;margin-top:6px">💾 Сохранить расчёт</button>
     <button class="actn as" style="margin-top:6px" onclick="fullReset()">🔄 Новый расчёт</button>
@@ -932,6 +934,32 @@
     <div style="display:flex;gap:8px">
       <button onclick="kpVarClose()" style="flex:1;padding:10px;border:1.5px solid #ddd;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:#555">Отмена</button>
       <button id="kpv-ok-btn" onclick="kpVarConfirm()" style="flex:2;padding:10px;border:none;border-radius:8px;background:#0a2e2e;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Сформировать КП →</button>
+    </div>
+  </div>
+</div>
+
+<div id="master-var-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+    <div style="font-size:16px;font-weight:700;color:#0a2e2e;margin-bottom:6px">Какой материал реально ставим?</div>
+    <div style="font-size:12px;color:#888;margin-bottom:20px">Работа по корпусу зависит от материала — выберите, что действительно заказано</div>
+    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid #e0e0e0;border-radius:10px;cursor:pointer;margin-bottom:8px">
+      <input type="radio" name="master-mat" value="L" checked style="width:18px;height:18px;accent-color:#534AB7">
+      <div style="width:10px;height:10px;border-radius:50%;background:#534AB7;flex-shrink:0"></div>
+      <div style="font-weight:600;color:#534AB7">ЛДСП</div>
+    </label>
+    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid #e0e0e0;border-radius:10px;cursor:pointer;margin-bottom:8px">
+      <input type="radio" name="master-mat" value="P" style="width:18px;height:18px;accent-color:#1a5252">
+      <div style="width:10px;height:10px;border-radius:50%;background:#1a5252;flex-shrink:0"></div>
+      <div style="font-weight:600;color:#1a5252">МДФ Плёнка</div>
+    </label>
+    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid #e0e0e0;border-radius:10px;cursor:pointer;margin-bottom:20px">
+      <input type="radio" name="master-mat" value="K" style="width:18px;height:18px;accent-color:#8B4513">
+      <div style="width:10px;height:10px;border-radius:50%;background:#8B4513;flex-shrink:0"></div>
+      <div style="font-weight:600;color:#8B4513">МДФ Краска</div>
+    </label>
+    <div style="display:flex;gap:8px">
+      <button onclick="masterVarClose()" style="flex:1;padding:10px;border:1.5px solid #ddd;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:#555">Отмена</button>
+      <button onclick="masterVarConfirm()" style="flex:2;padding:10px;border:none;border-radius:8px;background:#3B6D11;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Сформировать список →</button>
     </div>
   </div>
 </div>
