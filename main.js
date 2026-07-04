@@ -576,6 +576,7 @@ function recalc(){
     st(pfx+"-t",B.taxA);st(pfx+"-tot",B.tot);st(pfx+"-cr",B.credit);st(pfx+"-inc",B.inc);
   }
   fB("il",BL);fB("ip",BP);fB("ik",BK);
+  saveDraft();
 }
 
 // ── Менеджер: сохранение и загрузка ──────────────────────────
@@ -2039,9 +2040,13 @@ function aiSendChip(text){
 
 function fullReset(){
   Object.keys(ST).forEach(k=>ST[k]=[]);
-  ["ldsp-list","fldsp-list","fplen-list","fkr-list","furn-list","kuh-list","shk-list","svet-list","dop-list","vit-list"].forEach(id=>{const e=$(id);if(e)e.innerHTML='<p class="hint">Нет позиций</p>';});
+  var resetIds=["ldsp-list","fldsp-list","fplen-list","fkr-list","furn-list","kuh-list","shk-list","svet-list","dop-list","vit-list","moika-list"];
+  Object.keys(ACC_CFG).forEach(k=>{resetIds.push(ACC_CFG[k].listId);});
+  Object.keys(SIMPLE_CFG).forEach(k=>{resetIds.push(SIMPLE_CFG[k].listId);});
+  resetIds.forEach(id=>{const e=$(id);if(e)e.innerHTML='<p class="hint">Нет позиций</p>';});
   ["hdf-qty","krom-qty","d-sat","d-pdm","svet-inc","c-sl","c-sp","c-sk"].forEach(id=>{const e=$(id);if(e)e.value="0";});
   document.querySelectorAll("[id^=wq]").forEach(e=>e.value="");
+  clearDraft();
   recalc();tab("calc");
 }
 
@@ -2500,7 +2505,49 @@ function getSnap(){
       const q=$(sec+"q"+i);if(q)snap[sec+"q"+i]=q.value;
     });
   });
+  // Мойка
+  ST.moika.forEach((x,i)=>{
+    if(x===null||x===undefined)return;
+    ["moikaTip","moikaSize","moikaColor","moikaQ"].forEach(p=>{const e=$(p+i);if(e)snap[p+i]=e.value;});
+  });
+  // Кухня-допы (универсальный движок, N атрибутов)
+  Object.keys(ACC_CFG).forEach(key=>{
+    const cfg=ACC_CFG[key];
+    ST[key].forEach((x,i)=>{
+      if(x===null||x===undefined)return;
+      cfg.attrs.forEach(a=>{const e=$(key+"_"+a+i);if(e)snap[key+"_"+a+i]=e.value;});
+      const q=$(key+"Q"+i);if(q)snap[key+"Q"+i]=q.value;
+    });
+  });
+  // Кухня-допы (простые, без разбивки — Плинтус/Вытяжка)
+  Object.keys(SIMPLE_CFG).forEach(key=>{
+    ST[key].forEach((x,i)=>{
+      if(x===null||x===undefined)return;
+      const t=$(key+"_tip"+i);if(t)snap[key+"_tip"+i]=t.value;
+      const q=$(key+"Q"+i);if(q)snap[key+"Q"+i]=q.value;
+    });
+  });
   return snap;
+}
+// ── Черновик (защита от обновления страницы) — автосохранение текущего состояния ──
+function saveDraft(){
+  try{
+    if(!C||!C.BL)return;
+    const draft={ST:JSON.parse(JSON.stringify(ST)),snap:getSnap(),savedAt:Date.now()};
+    localStorage.setItem("mebeloff_draft",JSON.stringify(draft));
+  }catch(e){}
+}
+function clearDraft(){
+  try{ localStorage.removeItem("mebeloff_draft"); }catch(e){}
+}
+function restoreDraftOnLoad(){
+  let draft=null;
+  try{ draft=JSON.parse(localStorage.getItem("mebeloff_draft")||"null"); }catch(e){}
+  if(!draft||!draft.ST)return;
+  const hasData=Object.keys(draft.ST).some(k=>draft.ST[k].some(x=>x!==null&&x!==undefined));
+  if(!hasData)return;
+  applySnap(draft);
+  showStatus("OK Черновик восстановлен","#1a5252");setTimeout(hideStatus,2500);
 }
 function saveCalc(){
   if(!C.BL){alert("Сначала добавьте позиции в расчёт");return;}
@@ -2561,13 +2608,13 @@ function clearHistory(){
   localStorage.removeItem("mebeloff_hist");
   renderHist();
 }
-async function loadCalc(id){
-  const hist=JSON.parse(localStorage.getItem("mebeloff_hist")||"[]");
-  const rec=hist.find(r=>r.id===id);
-  if(!rec)return;
+function applySnap(rec){
   // Сброс
   Object.keys(ST).forEach(k=>ST[k]=[]);
-  ["ldsp-list","fldsp-list","fplen-list","fkr-list","furn-list","kuh-list","shk-list","svet-list","dop-list","vit-list"].forEach(id2=>{const e=$(id2);if(e)e.innerHTML='<p class="hint">Нет позиций</p>';});
+  var listIds=["ldsp-list","fldsp-list","fplen-list","fkr-list","furn-list","kuh-list","shk-list","svet-list","dop-list","vit-list","moika-list"];
+  Object.keys(ACC_CFG).forEach(k=>{listIds.push(ACC_CFG[k].listId);});
+  Object.keys(SIMPLE_CFG).forEach(k=>{listIds.push(SIMPLE_CFG[k].listId);});
+  listIds.forEach(id2=>{const e=$(id2);if(e)e.innerHTML='<p class="hint">Нет позиций</p>';});
   // Восстановить снэп полей (коэффициенты, клиент, и т.д.)
   const snap=rec.snap;
   // Простые инпуты
@@ -2638,8 +2685,56 @@ async function loadCalc(id){
     if(snap["vpr"+i]!==undefined){const s=$("vpr"+i);if(s)s.value=snap["vpr"+i];}
     cV(i);
   }
+  // Мойка
+  const moikaST=rec.ST.moika||[];
+  for(let i=0;i<moikaST.length;i++){
+    if(moikaST[i]===null||moikaST[i]===undefined)continue;
+    addMoika();
+    if(snap["moikaTip"+i]!==undefined){const s=$("moikaTip"+i);if(s)s.value=snap["moikaTip"+i];}
+    mTipChange(i);
+    if(snap["moikaSize"+i]!==undefined){const s=$("moikaSize"+i);if(s)s.value=snap["moikaSize"+i];}
+    mSizeChange(i);
+    if(snap["moikaColor"+i]!==undefined){const s=$("moikaColor"+i);if(s)s.value=snap["moikaColor"+i];}
+    if(snap["moikaQ"+i]!==undefined){const q=$("moikaQ"+i);if(q)q.value=snap["moikaQ"+i];}
+    mPriceChange(i);
+  }
+  // Кухня-допы (универсальный движок)
+  Object.keys(ACC_CFG).forEach(key=>{
+    const cfg=ACC_CFG[key];const secST=rec.ST[key]||[];
+    for(let i=0;i<secST.length;i++){
+      if(secST[i]===null||secST[i]===undefined)continue;
+      addAcc(key);
+      cfg.attrs.forEach((a,level)=>{
+        if(level===0){
+          if(snap[key+"_"+a+i]!==undefined){const s=$(key+"_"+a+i);if(s)s.value=snap[key+"_"+a+i];}
+          accRefreshLevel(key,i,1);
+        } else if(snap[key+"_"+a+i]!==undefined){
+          const s=$(key+"_"+a+i);if(s)s.value=snap[key+"_"+a+i];
+        }
+      });
+      if(snap[key+"Q"+i]!==undefined){const q=$(key+"Q"+i);if(q)q.value=snap[key+"Q"+i];}
+      accRecalcRow(key,i);
+    }
+  });
+  // Кухня-допы (простые, без разбивки)
+  Object.keys(SIMPLE_CFG).forEach(key=>{
+    const secST=rec.ST[key]||[];
+    for(let i=0;i<secST.length;i++){
+      if(secST[i]===null||secST[i]===undefined)continue;
+      addSimpleAcc(key);
+      if(snap[key+"_tip"+i]!==undefined){const s=$(key+"_tip"+i);if(s)s.value=snap[key+"_tip"+i];}
+      if(snap[key+"Q"+i]!==undefined){const q=$(key+"Q"+i);if(q)q.value=snap[key+"Q"+i];}
+      simpleRecalcRow(key,i);
+    }
+  });
   renderWorks();recalc();
   page("calc");tab("calc");
+}
+async function loadCalc(id){
+  const hist=JSON.parse(localStorage.getItem("mebeloff_hist")||"[]");
+  const rec=hist.find(r=>r.id===id);
+  if(!rec)return;
+  applySnap(rec);
   showStatus("OK Расчёт загружен","#1a5252");setTimeout(hideStatus,2000);
 }
 async function loadAndKP(id){
@@ -2648,4 +2743,4 @@ async function loadAndKP(id){
 }
 // ===== КОНЕЦ ИСТОРИИ =====
 
-loadFromSheets();
+loadFromSheets().then(restoreDraftOnLoad).catch(restoreDraftOnLoad);
