@@ -183,9 +183,10 @@
       <div class="cb" id="cb-dop"><div id="dop-list"><p class="hint">Нет позиций</p></div><button class="ab" onclick="addDop()">+ Добавить</button></div></div>
     <div class="card"><div class="ch" onclick="tog('works')"><div class="ct"><span style="color:#854F0B">◆</span>Доп. работы<span class="tag tn">без наценки</span></div><div style="display:flex;align-items:center;gap:4px;flex-shrink:0"><span class="cs" id="s-works">0₸</span><span class="ar" id="ar-works">▼</span></div></div>
       <div class="cb" id="cb-works">
-        <p style="font-size:10px;color:var(--t3);margin-bottom:4px">Цены в разделе ниже</p>
+        <p style="font-size:10px;color:var(--t3);margin-bottom:4px">Цены — из Google-таблицы (лист «Работы»). Правка цены здесь действует только на этот заказ</p>
         <div id="works-list"></div>
-        <div class="ss"><div class="stl">Изменить цены работ</div><div id="base-works-list"></div></div>
+        <div id="cworks-list"></div>
+        <button class="ab" onclick="addCWork()">+ Своя работа</button>
       </div></div>
   </div>
 

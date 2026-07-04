@@ -89,7 +89,7 @@ const DB={
   kPlintus:[{tip:"Узкий",p:2000},{tip:"Широкий",p:2500},{tip:"Силикон",p:1800}],
   kVytyazhka:[{tip:"Стандарт",p:3500}]
 };
-const ST={ldsp:[],fldsp:[],fplen:[],fkr:[],furn:[],kuh:[],shk:[],svet:[],dop:[],vit:[],moika:[]};
+const ST={ldsp:[],fldsp:[],fplen:[],fkr:[],furn:[],kuh:[],shk:[],svet:[],dop:[],vit:[],moika:[],cworks:[]};
 let C={};
 let appReady=false;
 const $=id=>document.getElementById(id);
@@ -224,11 +224,39 @@ function addDop(){
 function dC(){return ST.dop.reduce((s,x,i)=>x===null?s:s+(gn("dp"+i))*(gn("dq"+i)),0);}
 function dIt(){return ST.dop.map((x,i)=>{if(x===null)return null;const p=gn("dp"+i),q=gn("dq"+i);if(!q||!p)return null;return{n:$("dn"+i)?.value||"Доп.",q};}).filter(Boolean);}
 function renderWorks(){
-  const wl=$("works-list");if(wl){wl.innerHTML="";DB.works.forEach((w,i)=>{const d=document.createElement("div");if(i>0)d.className="ib";d.style.marginTop="6px";d.innerHTML=`<div class="fr"><span style="font-size:11px;flex:1;min-width:0">${w.n}</span><input class="qi" type="number" inputmode="decimal" id="wq${i}" placeholder="0" min="0" onchange="recalc()" style="width:62px;min-width:62px;max-width:62px"><span class="fp">шт</span><span class="fp" style="min-width:48px;text-align:right">${w.p.toLocaleString("ru")}₸</span></div>`;wl.appendChild(d);});}
-  const bl=$("base-works-list");if(bl){bl.innerHTML="";DB.works.forEach((w,i)=>{const d=document.createElement("div");if(i>0)d.className="ib";d.style.marginTop="6px";d.innerHTML=`<div class="fr"><span style="font-size:11px;flex:1;min-width:0">${w.n}</span><input class="qw" type="number" inputmode="decimal" id="bwp${i}" value="${w.p}" placeholder="0" onchange="DB.works[${i}].p=parseFloat(this.value)||0;renderWorks();recalc()"><span class="fp">₸</span></div>`;bl.appendChild(d);});}
+  const wl=$("works-list");if(!wl)return;
+  wl.innerHTML="";
+  DB.works.forEach((w,i)=>{
+    const d=document.createElement("div");if(i>0)d.className="ib";d.style.marginTop="6px";
+    let h="<div class=\"fr\"><span style=\"font-size:11px;flex:1;min-width:0\">"+w.n+"</span>";
+    h+="<input class=\"qw\" type=\"number\" inputmode=\"decimal\" id=\"wp"+i+"\" value=\""+w.p+"\" placeholder=\"0\" onchange=\"recalc()\" style=\"width:72px;min-width:72px;max-width:72px\"><span class=\"fp\">₸</span>";
+    h+="<input class=\"qi\" type=\"number\" inputmode=\"decimal\" id=\"wq"+i+"\" placeholder=\"0\" min=\"0\" onchange=\"recalc()\" style=\"width:56px;min-width:56px;max-width:56px\"><span class=\"fp\">шт</span></div>";
+    d.innerHTML=h;wl.appendChild(d);
+  });
 }
-function wC(){return DB.works.reduce((s,w,i)=>s+w.p*(gn("wq"+i)),0);}
-function wIt(){return DB.works.map((w,i)=>{const q=gn("wq"+i);if(!q||!w.p)return null;return{n:w.n,q};}).filter(Boolean);}
+function addCWork(){
+  const i=ST.cworks.length;ST.cworks.push(1);
+  const c=$("cworks-list");if(!c)return;
+  const d=document.createElement("div");d.id="cwr"+i;d.className="ib";d.style.marginTop="8px";
+  let h="<div class=\"fr\"><input style=\"font-size:12px;border:1px solid #ddd;border-radius:8px;padding:6px 8px;flex:1;min-width:0\" type=\"text\" id=\"cwn"+i+"\" placeholder=\"Название работы\" onchange=\"recalc()\">";
+  h+="<button class=\"db\" onclick=\"$('cwr"+i+"').style.display='none';ST.cworks["+i+"]=null;recalc()\">✕</button></div>";
+  h+="<div class=\"fr\"><span class=\"lb\">Цена</span><input class=\"qi\" type=\"number\" inputmode=\"decimal\" id=\"cwp"+i+"\" placeholder=\"0\" onchange=\"recalc()\"><span class=\"fp\">₸/шт</span></div>";
+  h+="<div class=\"fr\"><span class=\"lb\">Кол-во</span><input class=\"qi\" type=\"number\" inputmode=\"decimal\" id=\"cwq"+i+"\" placeholder=\"1\" min=\"0\" onchange=\"recalc()\"><span class=\"fp\">шт</span></div>";
+  d.innerHTML=h;c.appendChild(d);recalc();
+}
+function workPrice(i){const e=$("wp"+i);if(e)return parseFloat(e.value)||0;return (DB.works[i]&&DB.works[i].p)||0;}
+function wC(){
+  let s=0;
+  DB.works.forEach((w,i)=>{s+=workPrice(i)*gn("wq"+i);});
+  ST.cworks.forEach((x,i)=>{if(x===null||x===undefined)return;s+=gn("cwp"+i)*gn("cwq"+i);});
+  return s;
+}
+function wIt(){
+  const out=[];
+  DB.works.forEach((w,i)=>{const q=gn("wq"+i);if(!q||!workPrice(i))return;out.push({n:w.n,q});});
+  ST.cworks.forEach((x,i)=>{if(x===null||x===undefined)return;const q=gn("cwq"+i);if(!q||!gn("cwp"+i))return;out.push({n:$("cwn"+i)?.value||"Работа",q});});
+  return out;
+}
 function addVit(){
   const i=ST.vit.length;ST.vit.push(1);
   const c=$("vit-list");if(i===0)c.innerHTML="";
@@ -439,11 +467,10 @@ function accDesItems(key){
   }).filter(Boolean);
 }
 function masterWorkServices(){
-  return DB.works.map((w,i)=>{
-    const q=gn("wq"+i);
-    if(!q||!w.p)return null;
-    return{n:w.n,amount:w.p*q};
-  }).filter(Boolean);
+  const out=[];
+  DB.works.forEach((w,i)=>{const q=gn("wq"+i);const p=workPrice(i);if(!q||!p)return;out.push({n:w.n,amount:p*q});});
+  ST.cworks.forEach((x,i)=>{if(x===null||x===undefined)return;const q=gn("cwq"+i);const p=gn("cwp"+i);if(!q||!p)return;out.push({n:$("cwn"+i)?.value||"Работа",amount:p*q});});
+  return out;
 }
 function allMasterKitchenItems(){
   let items=moikaWorkItems();
@@ -528,7 +555,7 @@ function recalc(){
   const vMoika=mC(),mBrk=mBreak();
   const kAcc=kitchenAccTotals();
   const dfi=$("del-fi");if(dfi)dfi.textContent=fm(vFu+vKu+vSh);
-  const shared=vFu+vKu+vSh+vDel,extras=(vSM+vSI)+vVit.tot+vWk+vDp+vMoika+kAcc.total,eInc=vSI+vVit.inc+vWk+mBrk.des+mBrk.our+kAcc.income;
+  const shared=vFu+vKu+vSh+vDel,extras=(vSM+vSI)+vVit.tot+vWk+vDp+vMoika+kAcc.total,eInc=vSI+vVit.inc+mBrk.des+mBrk.our+kAcc.income;
   // ── Сравнение фурнитуры: те же позиции/количества, но у отмеченных ⚖ строк — цена альтернативной фирмы ──
   const vFuCmp=cCmp("furn"),vKuCmp=cCmp("kuh"),vShCmp=cCmp("shk"),vSMCmp=cCmp("svet");
   const sharedCmp=vFuCmp+vKuCmp+vShCmp+vDel,extrasCmp=(vSMCmp+vSI)+vVit.tot+vWk+vDp+vMoika+kAcc.total;
@@ -572,7 +599,7 @@ function recalc(){
   st("kacc-tot", vMoika+kAcc.total);
   const kWork=mBrk.work+kAcc.work, kDes=mBrk.des+kAcc.des;
   function fB(pfx,B){
-    st(pfx+"-b",B.base);st(pfx+"-a",B.aK);st(pfx+"-r",B.rabM+kWork);st(pfx+"-des",kDes);
+    st(pfx+"-b",B.base);st(pfx+"-a",B.aK);st(pfx+"-r",B.rabM+kWork+vWk);st(pfx+"-des",kDes);
     const se=$(pfx+"-s");if(se){const s=B.sk;se.textContent=(s===0?"0₸":(s>0?"+":"")+Math.round(s).toLocaleString("ru")+"₸");se.style.color=s<0?"#E24B4A":s>0?"#1D9E75":"#aaa";}
     st(pfx+"-t",B.taxA);st(pfx+"-tot",B.tot);st(pfx+"-cr",B.credit);st(pfx+"-inc",B.inc);
   }
@@ -1128,7 +1155,7 @@ function showKP(showL=true, showP=true, showK=false, cmpMode=false){
   dpArr.forEach(function(it){ addRow(it.n,"",it.q+" шт",0,0,0); });
   // Работы
   var wkArr = C.wkIt||[];
-  wkArr.forEach(function(it){ addRow(it.n,"Монтаж / работы","1",it.p||0,it.p||0,it.p||0); });
+  wkArr.forEach(function(it){ addRow(it.n,"Монтаж / работы",it.q+" шт",0,0,0); });
   // Витрины
   var vitKpArr = C.vitIt||[];
   vitKpArr.forEach(function(it){ addRow(it.n,"\u0414\u043e\u043f. \u043f\u043e\u0437\u0438\u0446\u0438\u044f",it.q+" \u0448\u0442.",0,0,0); });
@@ -2046,7 +2073,8 @@ function fullReset(){
   Object.keys(SIMPLE_CFG).forEach(k=>{resetIds.push(SIMPLE_CFG[k].listId);});
   resetIds.forEach(id=>{const e=$(id);if(e)e.innerHTML='<p class="hint">Нет позиций</p>';});
   ["hdf-qty","krom-qty","d-sat","d-pdm","svet-inc","c-sl","c-sp","c-sk"].forEach(id=>{const e=$(id);if(e)e.value="0";});
-  document.querySelectorAll("[id^=wq]").forEach(e=>e.value="");
+  const cwl=$("cworks-list");if(cwl)cwl.innerHTML="";
+  renderWorks();
   clearDraft();
   recalc();tab("calc");
 }
@@ -2470,6 +2498,8 @@ function getSnap(){
   });
   // Работы
   DB.works.forEach((_,i)=>{const e=$("wq"+i);if(e)snap["wq"+i]=e.value;});
+  DB.works.forEach((_,i)=>{const e=$("wp"+i);if(e)snap["wp"+i]=e.value;});
+  ST.cworks.forEach((x,i)=>{if(x===null||x===undefined)return;["cwn","cwp","cwq"].forEach(p=>{const e=$(p+i);if(e)snap[p+i]=e.value;});});
   // Витрины
   ST.vit.forEach((x,i)=>{
     if(x===null)return;
@@ -2548,7 +2578,7 @@ function restoreDraftOnLoad(preReadDraft){
     try{ draft=JSON.parse(localStorage.getItem("mebeloff_draft")||"null"); }catch(e){ console.error("Черновик: ошибка чтения —",e); }
   }
   if(draft&&draft.ST){
-    const hasData=Object.keys(draft.ST).some(k=>draft.ST[k].some(x=>x!==null&&x!==undefined));
+    const hasData=Object.keys(draft.ST).some(k=>draft.ST[k].some(x=>x!==null&&x!==undefined))||DB.works.some((_,i)=>draft.snap&&parseFloat(draft.snap["wq"+i]||0)>0);
     if(hasData){
       applySnap(draft);
       showStatus("OK Черновик восстановлен","#1a5252");setTimeout(hideStatus,2500);
@@ -2634,6 +2664,7 @@ function applySnap(rec){
   Object.keys(ACC_CFG).forEach(k=>{listIds.push(ACC_CFG[k].listId);});
   Object.keys(SIMPLE_CFG).forEach(k=>{listIds.push(SIMPLE_CFG[k].listId);});
   listIds.forEach(id2=>{const e=$(id2);if(e)e.innerHTML='<p class="hint">Нет позиций</p>';});
+  const cwl0=$("cworks-list");if(cwl0)cwl0.innerHTML="";
   // Восстановить снэп полей (коэффициенты, клиент, и т.д.)
   const snap=rec.snap;
   // Простые инпуты
@@ -2641,8 +2672,7 @@ function applySnap(rec){
    "hdf-qty","krom-qty","d-sat","d-pdm","svet-inc","kp-client","kp-object","kp-num","kp-manager"].forEach(fid=>{
     const e=$(fid);if(e&&snap[fid]!==undefined)e.value=snap[fid];
   });
-  // Работы qty
-  DB.works.forEach((_,i)=>{const e=$("wq"+i);if(e&&snap["wq"+i]!==undefined)e.value=snap["wq"+i];});
+  // Работы восстанавливаются В КОНЦЕ, после renderWorks() — иначе значения затираются
   // Восстановить ЛДСП
   const ldspST=rec.ST.ldsp;
   for(let i=0;i<ldspST.length;i++){if(ldspST[i]===null||ldspST[i]===undefined)continue;ST.ldsp.push(ldspST[i]);const c=$("ldsp-list");if(i===0)c.innerHTML="";const d=document.createElement("div");d.id="lr"+i;if(i>0)d.className="ib";d.style.marginTop="8px";const o=DB.ldsp.map((x,j)=>`<option value="${j}">${x.n} — ${x.p.toLocaleString("ru")}₸</option>`).join("");d.innerHTML=`<div class="fr"><select id="ls${i}" onchange="ST.ldsp[${i}]=+this.value;$('lp${i}').textContent=DB.ldsp[+this.value].p.toLocaleString('ru')+'₸/л';recalc()">${o}</select><button class="db" onclick="$('lr${i}').style.display='none';ST.ldsp[${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="lq${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="lp${i}">${DB.ldsp[0].p.toLocaleString("ru")}₸/л</span></div>`;c.appendChild(d);if(snap["ls"+i]!==undefined){const s=$("ls"+i);if(s){s.value=snap["ls"+i];ST.ldsp[i]=+snap["ls"+i];}}if(snap["lq"+i]!==undefined){const q=$("lq"+i);if(q)q.value=snap["lq"+i];}}
@@ -2746,7 +2776,16 @@ function applySnap(rec){
       simpleRecalcRow(key,i);
     }
   });
-  renderWorks();recalc();
+  renderWorks();
+  DB.works.forEach((_,i)=>{const e=$("wq"+i);if(e&&snap["wq"+i]!==undefined)e.value=snap["wq"+i];});
+  DB.works.forEach((_,i)=>{const e=$("wp"+i);if(e&&snap["wp"+i]!==undefined)e.value=snap["wp"+i];});
+  const cwST=rec.ST.cworks||[];
+  for(let i=0;i<cwST.length;i++){
+    if(cwST[i]===null||cwST[i]===undefined){ST.cworks.push(null);continue;}
+    addCWork();
+    ["cwn","cwp","cwq"].forEach(p=>{if(snap[p+i]!==undefined){const e=$(p+i);if(e)e.value=snap[p+i];}});
+  }
+  recalc();
   page("calc");tab("calc");
 }
 async function loadCalc(id){
@@ -2765,4 +2804,5 @@ async function loadAndKP(id){
 let _preReadDraft=null;
 try{ _preReadDraft=JSON.parse(localStorage.getItem("mebeloff_draft")||"null"); }catch(e){}
 checkStorageAvailable();
+renderWorks();
 loadFromSheets().then(()=>restoreDraftOnLoad(_preReadDraft)).catch(()=>restoreDraftOnLoad(_preReadDraft));
