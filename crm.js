@@ -16,6 +16,10 @@
 //                          и НЕ поля, заполненные руками в таблице.
 //   Формирование Договора → статус "Договор", Согл. цена, Аванс,
 //                          Дата договора.
+//   Изменения к договору  → лист "Изменения": ±сумма двигает
+//                          Согл. цену (она всегда = итоговая) и Долг;
+//                          Аванс и Оплачено не трогаются. Долг < 0
+//                          показывается как «Переплата».
 // Снимок расчёта хранится JSON-строкой в 3 колонках по 45 000
 // символов (лимит ячейки Google — 50 000).
 // ============================================================
@@ -286,7 +290,21 @@
       '.crm-op .sm.out{color:#c0392b}'+
       '.crm-op .del{background:none;border:none;color:#ccc;cursor:pointer;font-size:13px;line-height:1;padding:2px}'+
       '.crm-op .del:hover{color:#c0392b}'+
-      '.crm-sec-t{font-size:13px;font-weight:600;color:#444;margin:14px 0 8px}';
+      '.crm-sec-t{font-size:13px;font-weight:600;color:#444;margin:14px 0 8px}'+
+      '.crm-ch-box{background:#fff;border:1px solid #eee;border-radius:10px;margin-bottom:10px;overflow:hidden}'+
+      '.crm-ch-h{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #f0f0ee}'+
+      '.crm-ch-h b{font-size:12px;color:#444;flex:1}'+
+      '.crm-ch-row{display:flex;gap:8px;align-items:center;padding:7px 12px;font-size:11px;color:#555;border-bottom:1px solid #f7f7f5}'+
+      '.crm-ch-row:last-child{border-bottom:none}'+
+      '.crm-ch-row .dt{color:#999;min-width:64px}'+
+      '.crm-ch-row .ds{flex:1;color:#333;min-width:80px}'+
+      '.crm-ch-row .sm{font-weight:700;white-space:nowrap;margin-left:auto}'+
+      '.crm-ch-row .sm.in{color:#0F6E56}'+
+      '.crm-ch-row .sm.out{color:#c0392b}'+
+      '.crm-ch-row .del{background:none;border:none;color:#ccc;cursor:pointer;font-size:13px;line-height:1;padding:2px}'+
+      '.crm-ch-row .del:hover{color:#c0392b}'+
+      '.crm-over{color:#0F6E56}'+
+      '.crm-overpaid{color:#0F6E56;font-weight:600}';
     document.head.appendChild(st);
   }
 
@@ -576,6 +594,29 @@
   var CAT_IN  = ['Доплата','Прочий приход'];
   var CAT_OUT = ['Материалы','Оплата мастеру','Оплата дизайнеру','Аренда','Реклама','Транспорт','Инструмент','Прочее'];
 
+  // ── Изменения к договору (лист "Изменения") ────────────────
+  var CH = [];
+  var CH_LOADED = false;
+
+  function fetchChanges(cb){
+    if(!getToken()){ cb('__no_key__'); return; }
+    fetch(GS_URL + '?action=changes&token=' + encodeURIComponent(getToken()))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(res && res.ok){ CH = res.changes || []; CH_LOADED = true; cb(null); }
+        else cb((res && res.error) || 'таблица вернула ошибку');
+      })
+      .catch(function(e){ cb(String(e && e.message || e)); });
+  }
+
+  function changesOf(num){
+    var out = [];
+    for(var i=0;i<CH.length;i++){
+      if(String(CH[i].num) === String(num)) out.push(CH[i]);
+    }
+    return out;
+  }
+
   function fetchFin(cb){
     if(!getToken()){ cb('__no_key__'); return; }
     fetch(GS_URL + '?action=fin&token=' + encodeURIComponent(getToken()))
@@ -859,12 +900,13 @@
     var debt = debtOf(o);
     var dEl = document.createElement('span');
     if(debt > 0){ dEl.className='crm-debt'; dEl.textContent = 'долг ' + fm0(debt); }
+    else if(debt < 0){ dEl.className='crm-overpaid'; dEl.textContent = 'переплата ' + fm0(-debt); }
     var days = daysInWork(o);
     var dayEl = document.createElement('span');
     if(days !== null){ dayEl.className='crm-days'; dayEl.textContent = days + ' дн.'; }
     l3.appendChild(dEl); l3.appendChild(dayEl);
     d.appendChild(l1); d.appendChild(l2);
-    if(debt>0 || days!==null) d.appendChild(l3);
+    if(debt!==0 || days!==null) d.appendChild(l3);
     var nx = nextStatus(o);
     if(nx){
       var nb = document.createElement('button');
@@ -961,7 +1003,7 @@
       }
       var money = document.createElement('span'); money.className='money';
       var debt = debtOf(o);
-      money.textContent = fm0(o.sogl || o.pred) + (debt>0 ? ' / долг '+fm0(debt) : '');
+      money.textContent = fm0(o.sogl || o.pred) + (debt>0 ? ' / долг '+fm0(debt) : (debt<0 ? ' / переплата '+fm0(-debt) : ''));
       r.appendChild(num); r.appendChild(badge); r.appendChild(cli); r.appendChild(sub); r.appendChild(money);
       r.addEventListener('click', function(){ openCard(o.num); });
       list.appendChild(r);
@@ -1056,6 +1098,67 @@
     bg.appendChild(m);
     document.body.appendChild(bg);
     setTimeout(function(){ try{ iSum.focus(); }catch(e){} }, 50);
+  }
+
+  function openChangeModal(o){
+    var bg = document.createElement('div'); bg.className='crm-modal-bg';
+    bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
+    var m = document.createElement('div'); m.className='crm-modal';
+    var h = document.createElement('div'); h.className='crm-m-h';
+    var title = document.createElement('b');
+    title.textContent = 'Изменение к договору \u2116' + o.num;
+    var x = document.createElement('button'); x.className='crm-m-x'; x.textContent='\u00D7';
+    x.addEventListener('click', function(){ document.body.removeChild(bg); });
+    h.appendChild(title); h.appendChild(x);
+    var b = document.createElement('div'); b.className='crm-m-b';
+
+    var selDir = document.createElement('select');
+    var opP = document.createElement('option'); opP.value='plus';  opP.textContent='Добавили (+)';
+    var opM = document.createElement('option'); opM.value='minus'; opM.textContent='Убрали (\u2212)';
+    selDir.appendChild(opP); selDir.appendChild(opM);
+
+    var iSum = inp('', 'number'); iSum.placeholder = '0';
+    var today = new Date();
+    var iDate = inp(today.getFullYear()+'-'+('0'+(today.getMonth()+1)).slice(-2)+'-'+('0'+today.getDate()).slice(-2), 'date');
+    var iDesc = inp(''); iDesc.placeholder = 'Что добавили или убрали';
+
+    var r1 = document.createElement('div'); r1.className='crm-2col';
+    r1.appendChild(field('Тип', selDir)); r1.appendChild(field('Сумма, \u20B8', iSum));
+    b.appendChild(r1);
+    b.appendChild(field('Дата', iDate));
+    b.appendChild(field('Описание', iDesc));
+
+    var note = document.createElement('div'); note.className='crm-fin-note';
+    note.textContent = 'Итоговая цена и долг пересчитаются сами. Аванс и оплаты не меняются \u2014 это изменение цены, а не движение денег.';
+    b.appendChild(note);
+
+    var btns = document.createElement('div'); btns.className='crm-m-btns';
+    var bSave = document.createElement('button'); bSave.className='crm-m-btn save'; bSave.textContent='Записать';
+    bSave.addEventListener('click', function(){
+      var sum = Math.round(parseFloat(iSum.value) || 0);
+      if(sum <= 0){ toast('\u26A0\uFE0F Введи сумму', '#BA7517'); return; }
+      var desc = iDesc.value.trim();
+      if(!desc){ toast('\u26A0\uFE0F Опиши изменение', '#BA7517'); return; }
+      var signed = selDir.value === 'minus' ? -sum : sum;
+      bSave.disabled = true; bSave.textContent = 'Записываю...';
+      post({ action:'addChange', change:{ num:String(o.num), desc:desc, sum:signed, date:iDate.value } }, function(res){
+        CH.push({ id:(res && res.id) || String(Date.now()), num:String(o.num), date:iDate.value, desc:desc, sum:signed });
+        if(res && res.sogl !== undefined){ o.sogl = Number(res.sogl)||0; }
+        document.body.removeChild(bg);
+        renderAll();
+        openCard(o.num);
+        toast('OK ' + (signed>=0 ? '+' : '\u2212') + fm0(Math.abs(signed)) + ' к договору \u2116'+o.num+', итоговая цена: '+fm0(o.sogl), '#1a5252');
+      }, function(err){
+        bSave.disabled=false; bSave.textContent='Записать';
+        toast('\u26A0\uFE0F Не записалось: '+err, '#BA7517');
+      });
+    });
+    btns.appendChild(bSave);
+    b.appendChild(btns);
+    m.appendChild(h); m.appendChild(b);
+    bg.appendChild(m);
+    document.body.appendChild(bg);
+    setTimeout(function(){ try{ iSum.focus(); }catch(e){} }, 60);
   }
 
   function openNewOrderModal(){
@@ -1193,21 +1296,92 @@
     r3.appendChild(field('Оплачено дополнительно, \u20B8', payWrap));
     b.appendChild(r3);
 
-    var g = document.createElement('div'); g.className='crm-money-grid';
-    function gRow(k,v){
-      var a=document.createElement('span');a.textContent=k;
-      var c=document.createElement('b');c.textContent=v;c.style.textAlign='right';
-      g.appendChild(a);g.appendChild(c);
+    var moneyWrap = document.createElement('div');
+    function renderMoney(){
+      moneyWrap.innerHTML = '';
+      var g = document.createElement('div'); g.className='crm-money-grid';
+      function gRow(k,v,cls){
+        var a=document.createElement('span');a.textContent=k;
+        var c=document.createElement('b');c.textContent=v;c.style.textAlign='right';
+        if(cls) c.className = cls;
+        g.appendChild(a);g.appendChild(c);
+      }
+      var chs = CH_LOADED ? changesOf(o.num) : [];
+      var chSum = 0;
+      chs.forEach(function(c){ chSum += Number(c.sum)||0; });
+      gRow('Предв. цена', fm0(o.pred));
+      if(chs.length){
+        gRow('Цена по договору', fm0((Number(o.sogl)||0) - chSum));
+        gRow('Изменения ('+chs.length+')', (chSum>=0 ? '+' : '\u2212') + fm0(Math.abs(chSum)));
+        gRow('Итоговая цена', fm0(o.sogl));
+      } else {
+        gRow('Согл. цена', o.sogl ? fm0(o.sogl) : '\u2014');
+      }
+      gRow('Аванс', o.avans ? fm0(o.avans) : '\u2014');
+      var debt = debtOf(o);
+      if(debt < 0) gRow('Переплата', fm0(-debt), 'crm-over');
+      else gRow('Долг', fm0(debt));
+      gRow('Итог ЛДСП', fm0(o.totL));
+      gRow('Итог Плёнка', fm0(o.totP));
+      gRow('Итог Краска', fm0(o.totK));
+      gRow('Договор от', o.dogDate ? fmtDate(o.dogDate) : '\u2014');
+      moneyWrap.appendChild(g);
+
+      if((Number(o.sogl)||0) > 0){
+        var box = document.createElement('div'); box.className='crm-ch-box';
+        var bh = document.createElement('div'); bh.className='crm-ch-h';
+        var bt = document.createElement('b'); bt.textContent = 'Изменения к договору';
+        var add = document.createElement('button'); add.className='crm-vbtn new';
+        add.textContent = '\u00B1 Изменение';
+        add.addEventListener('click', function(){
+          document.body.removeChild(bg);
+          openChangeModal(o);
+        });
+        bh.appendChild(bt); bh.appendChild(add);
+        box.appendChild(bh);
+        if(!CH_LOADED){
+          var ld = document.createElement('div'); ld.className='crm-ch-row';
+          ld.textContent = 'Загружаю...';
+          box.appendChild(ld);
+        } else if(!chs.length){
+          var em = document.createElement('div'); em.className='crm-ch-row';
+          em.style.color = '#999';
+          em.textContent = 'Клиент что-то добавил или убрал после договора \u2014 фиксируй здесь, а не новым договором.';
+          box.appendChild(em);
+        } else {
+          chs.forEach(function(c){
+            var r = document.createElement('div'); r.className='crm-ch-row';
+            var dt = document.createElement('span'); dt.className='dt'; dt.textContent = fmtDate(c.date);
+            var ds = document.createElement('span'); ds.className='ds'; ds.textContent = c.desc;
+            var sm = document.createElement('span'); sm.className = 'sm ' + (Number(c.sum)>=0 ? 'in' : 'out');
+            sm.textContent = (Number(c.sum)>=0 ? '+' : '\u2212') + fm0(Math.abs(Number(c.sum)||0));
+            var del = document.createElement('button'); del.className='del'; del.textContent='\u2715';
+            del.title = 'Удалить изменение';
+            del.addEventListener('click', function(){
+              var sure = confirm('Удалить изменение \u00AB'+c.desc+'\u00BB? Итоговая цена и долг вернутся назад на '+fm0(Math.abs(Number(c.sum)||0))+'.');
+              if(!sure) return;
+              post({ action:'delChange', id: c.id }, function(res){
+                CH = CH.filter(function(x){ return x.id !== c.id; });
+                if(res && res.sogl !== undefined) o.sogl = Number(res.sogl)||0;
+                renderMoney();
+                renderAll();
+                toast('OK Изменение удалено, цена и долг возвращены', '#1a5252');
+              }, function(err){
+                toast('\u26A0\uFE0F Не удалилось: '+err, '#BA7517');
+              });
+            });
+            r.appendChild(dt); r.appendChild(ds); r.appendChild(sm); r.appendChild(del);
+            box.appendChild(r);
+          });
+        }
+        moneyWrap.appendChild(box);
+      }
     }
-    gRow('Предв. цена', fm0(o.pred));
-    gRow('Согл. цена', o.sogl ? fm0(o.sogl) : '\u2014');
-    gRow('Аванс', o.avans ? fm0(o.avans) : '\u2014');
-    gRow('Долг', fm0(debtOf(o)));
-    gRow('Итог ЛДСП', fm0(o.totL));
-    gRow('Итог Плёнка', fm0(o.totP));
-    gRow('Итог Краска', fm0(o.totK));
-    gRow('Договор от', o.dogDate ? fmtDate(o.dogDate) : '\u2014');
-    b.appendChild(g);
+    renderMoney();
+    if(!CH_LOADED && (Number(o.sogl)||0) > 0){
+      fetchChanges(function(err){ if(!err) renderMoney(); });
+    }
+    b.appendChild(moneyWrap);
 
     var btns = document.createElement('div'); btns.className='crm-m-btns';
     var bOpen = document.createElement('button'); bOpen.className='crm-m-btn open'; bOpen.textContent='\uD83D\uDCC2 Открыть расчёт';
