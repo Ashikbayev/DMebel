@@ -122,6 +122,30 @@
   var VIEW = localStorage.getItem('moff_crm_view') || 'board';
   var FILTER = 'all';
   var SEARCH = '';
+  var CITY_FILTER = 'all';
+  var MONTH_FILTER = 'all';
+  var MONTH_NAMES = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+
+  function monthKey(v){
+    if(!v) return '';
+    var d = new Date(v);
+    if(isNaN(d.getTime())) return '';
+    return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2);
+  }
+  function monthLabel(key){
+    var p = key.split('-');
+    return (MONTH_NAMES[(+p[1])-1] || p[1]) + ' ' + p[0];
+  }
+  function isActive(o){
+    return ['Готова','Отказ','Отложено'].indexOf(o.status) < 0;
+  }
+  function nextStatus(o){
+    var i = STATUSES.indexOf(o.status);
+    if(i < 0 || o.status==='Готова' || o.status==='Отказ' || o.status==='Отложено') return null;
+    var nx = STATUSES[i+1];
+    if(!nx || nx==='Отказ' || nx==='Отложено') return null;
+    return nx;
+  }
 
   function fm0(n){ n = Math.round(Number(n)||0); return n.toLocaleString('ru-RU') + '\u20B8'; }
   function fmtDate(v){
@@ -147,6 +171,7 @@
       String(o.client||'').toLowerCase().indexOf(s)>=0 ||
       String(o.phone||'').toLowerCase().indexOf(s)>=0 ||
       String(o.obj||'').toLowerCase().indexOf(s)>=0 ||
+      String(o.city||'').toLowerCase().indexOf(s)>=0 ||
       String(o.furn||'').toLowerCase().indexOf(s)>=0;
   }
 
@@ -196,7 +221,18 @@
       '.crm-m-btns{display:flex;gap:8px;margin-top:12px}'+
       '.crm-m-btn{flex:1;padding:10px;border-radius:8px;border:none;font-size:12px;font-weight:600;cursor:pointer}'+
       '.crm-m-btn.save{background:#1a5252;color:#fff}'+
-      '.crm-m-btn.open{background:#fff;color:#1a5252;border:1px solid #1a5252}';
+      '.crm-m-btn.open{background:#fff;color:#1a5252;border:1px solid #1a5252}'+
+      '.crm-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:10px}'+
+      '.crm-sum-t{background:#fff;border:1px solid #eee;border-radius:10px;padding:10px 12px}'+
+      '.crm-sum-t .v{font-size:15px;font-weight:700;color:#1a5252;white-space:nowrap}'+
+      '.crm-sum-t .v.warn{color:#c0392b}'+
+      '.crm-sum-t .k{font-size:10px;color:#999;margin-top:2px}'+
+      '.crm-cityb{font-size:11px;border:1px solid #ddd;background:#fff;border-radius:14px;padding:5px 11px;cursor:pointer;color:#666}'+
+      '.crm-cityb.on{background:#5DCAA5;border-color:#5DCAA5;color:#fff}'+
+      '.crm-next{margin-top:6px;width:100%;font-size:10px;border:1px solid #e0e0e0;background:#fafaf8;border-radius:6px;padding:4px 6px;cursor:pointer;color:#1a5252;text-align:center}'+
+      '.crm-next:hover{background:#1a5252;color:#fff;border-color:#1a5252}'+
+      '.crm-warn-line{font-size:11px;color:#BA7517;background:#fdf6ec;border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer}'+
+      '.crm-tel{color:#185FA5;text-decoration:none}';
     document.head.appendChild(st);
   }
 
@@ -232,6 +268,28 @@
     var root = document.getElementById('crm-root');
     if(!root) return;
     root.innerHTML = '';
+    // ── Сводка ──
+    var act = ORDERS.filter(isActive);
+    var moneyInWork = 0;
+    act.forEach(function(o){ moneyInWork += Number(o.sogl) || Number(o.pred) || 0; });
+    var debtTotal = 0;
+    ORDERS.forEach(function(o){ if(o.status!=='Отказ'){ var d=debtOf(o); if(d>0) debtTotal+=d; } });
+    var nowKey = monthKey(new Date());
+    var mountsNow = ORDERS.filter(function(o){ return o.status!=='Отказ' && monthKey(o.mountDate)===nowKey; }).length;
+    var sum = document.createElement('div');
+    sum.className = 'crm-sum';
+    function tile(v, k, warn){
+      var t = document.createElement('div'); t.className='crm-sum-t';
+      var ve = document.createElement('div'); ve.className='v'+(warn?' warn':''); ve.textContent=v;
+      var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
+      t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
+    }
+    tile(String(act.length), 'заказов в работе');
+    tile(fm0(moneyInWork), 'денег в работе');
+    tile(fm0(debtTotal), 'долг клиентов', debtTotal>0);
+    tile(String(mountsNow), 'установок в этом месяце');
+    root.appendChild(sum);
+    // ── Инструменты ──
     var tools = document.createElement('div');
     tools.className = 'crm-tools';
     var bBoard = document.createElement('button');
@@ -243,10 +301,39 @@
     bList.textContent = 'Список';
     bList.addEventListener('click', function(){ VIEW='list'; localStorage.setItem('moff_crm_view','list'); renderAll(); });
     var search = document.createElement('input');
-    search.type = 'search'; search.placeholder = 'Поиск: №, клиент, телефон...';
+    search.type = 'search'; search.placeholder = 'Поиск: №, клиент, телефон, город...';
     search.value = SEARCH; search.style.flex = '1'; search.style.minWidth = '140px';
     search.addEventListener('input', function(){ SEARCH = search.value.trim(); renderView(); });
     tools.appendChild(bBoard); tools.appendChild(bList); tools.appendChild(search);
+    // города
+    var cities = [];
+    ORDERS.forEach(function(o){ var c=String(o.city||'').trim(); if(c && cities.indexOf(c)<0) cities.push(c); });
+    cities.sort();
+    if(cities.length){
+      var bAllC = document.createElement('button');
+      bAllC.className = 'crm-cityb' + (CITY_FILTER==='all' ? ' on' : '');
+      bAllC.textContent = 'Все';
+      bAllC.addEventListener('click', function(){ CITY_FILTER='all'; renderAll(); });
+      tools.appendChild(bAllC);
+      cities.forEach(function(c){
+        var bc = document.createElement('button');
+        bc.className = 'crm-cityb' + (CITY_FILTER===c ? ' on' : '');
+        bc.textContent = c;
+        bc.addEventListener('click', function(){ CITY_FILTER = (CITY_FILTER===c ? 'all' : c); renderAll(); });
+        tools.appendChild(bc);
+      });
+    }
+    // месяц установки
+    var mkeys = [];
+    ORDERS.forEach(function(o){ var k=monthKey(o.mountDate); if(k && mkeys.indexOf(k)<0) mkeys.push(k); });
+    mkeys.sort();
+    var mSel = document.createElement('select');
+    var mAll = document.createElement('option'); mAll.value='all'; mAll.textContent='Установка: все месяцы'; mSel.appendChild(mAll);
+    mkeys.forEach(function(k){ var op=document.createElement('option'); op.value=k; op.textContent='Установка: '+monthLabel(k); mSel.appendChild(op); });
+    var mNone = document.createElement('option'); mNone.value='none'; mNone.textContent='В работе без даты установки'; mSel.appendChild(mNone);
+    mSel.value = MONTH_FILTER;
+    mSel.addEventListener('change', function(){ MONTH_FILTER = mSel.value; renderView(); });
+    tools.appendChild(mSel);
     var filt = null;
     if(VIEW === 'list'){
       filt = document.createElement('select');
@@ -266,14 +353,33 @@
     renderView();
   }
 
+  function monthOk(o){
+    if(MONTH_FILTER==='all') return true;
+    if(MONTH_FILTER==='none') return isActive(o) && !monthKey(o.mountDate);
+    return monthKey(o.mountDate)===MONTH_FILTER;
+  }
   function renderView(){
     var view = document.getElementById('crm-view');
     if(!view) return;
     view.innerHTML = '';
-    var vis = ORDERS.filter(matches);
+    var vis = ORDERS.filter(function(o){
+      if(!matches(o)) return false;
+      if(CITY_FILTER!=='all' && String(o.city||'').trim()!==CITY_FILTER) return false;
+      return monthOk(o);
+    });
     var cnt = document.getElementById('crm-count');
     if(cnt) cnt.textContent = vis.length + ' из ' + ORDERS.length;
     if(!ORDERS.length){ view.innerHTML = '<div class="crm-empty">Заказов пока нет. Сохрани расчёт с № заказа — он появится здесь.</div>'; return; }
+    if(MONTH_FILTER!=='all' && MONTH_FILTER!=='none'){
+      var noDate = ORDERS.filter(function(o){ return isActive(o) && !monthKey(o.mountDate) && matches(o) && (CITY_FILTER==='all' || String(o.city||'').trim()===CITY_FILTER); }).length;
+      if(noDate){
+        var w = document.createElement('div');
+        w.className = 'crm-warn-line';
+        w.textContent = '\u26A0\uFE0F Ещё ' + noDate + ' заказ(ов) в работе без даты установки — они не попали в этот фильтр. Нажми, чтобы показать их.';
+        w.addEventListener('click', function(){ MONTH_FILTER='none'; renderAll(); });
+        view.appendChild(w);
+      }
+    }
     if(VIEW === 'board') renderBoard(view, vis); else renderList(view, vis);
   }
 
@@ -297,6 +403,25 @@
     l3.appendChild(dEl); l3.appendChild(dayEl);
     d.appendChild(l1); d.appendChild(l2);
     if(debt>0 || days!==null) d.appendChild(l3);
+    var nx = nextStatus(o);
+    if(nx){
+      var nb = document.createElement('button');
+      nb.className = 'crm-next';
+      nb.textContent = '\u2192 ' + nx;
+      nb.addEventListener('click', function(e){
+        e.stopPropagation();
+        nb.disabled = true; nb.textContent = '...';
+        post({ action:'updateOrder', order:{ num:String(o.num), status:nx } }, function(){
+          o.status = nx;
+          renderAll();
+          toast('OK \u2116'+o.num+' \u2192 '+nx, '#1a5252');
+        }, function(err){
+          nb.disabled = false; nb.textContent = '\u2192 ' + nx;
+          toast('\u26A0\uFE0F Статус не записался: '+err, '#BA7517');
+        });
+      });
+      d.appendChild(nb);
+    }
     d.addEventListener('click', function(){ openCard(o.num); });
     return d;
   }
@@ -325,7 +450,11 @@
     var list = document.createElement('div');
     list.className = 'crm-list';
     var rows = vis.filter(function(o){ return FILTER==='all' || o.status===FILTER; });
-    rows.sort(function(a,b){ return String(b.num).localeCompare(String(a.num),'ru',{numeric:true}); });
+    if(MONTH_FILTER!=='all' && MONTH_FILTER!=='none'){
+      rows.sort(function(a,b){ return new Date(a.mountDate||0).getTime() - new Date(b.mountDate||0).getTime(); });
+    } else {
+      rows.sort(function(a,b){ return String(b.num).localeCompare(String(a.num),'ru',{numeric:true}); });
+    }
     if(!rows.length){ list.innerHTML = '<div class="crm-empty">Ничего не найдено</div>'; view.appendChild(list); return; }
     rows.forEach(function(o){
       var r = document.createElement('div'); r.className='crm-row';
@@ -336,7 +465,20 @@
       var cli = document.createElement('span'); cli.className='cli';
       cli.textContent = (o.client||'') + (o.furn ? ' \u00B7 '+o.furn : '');
       var sub = document.createElement('span'); sub.className='sub';
-      sub.textContent = (o.city||'') + (o.phone ? ' \u00B7 '+o.phone : '');
+      sub.textContent = (o.city||'') + (o.city && (o.phone||o.mountDate) ? ' \u00B7 ' : '');
+      if(o.phone){
+        var tel = document.createElement('a');
+        tel.className = 'crm-tel';
+        tel.href = 'tel:' + String(o.phone).replace(/[^+\d]/g,'');
+        tel.textContent = o.phone;
+        tel.addEventListener('click', function(e){ e.stopPropagation(); });
+        sub.appendChild(tel);
+      }
+      if(o.mountDate && monthKey(o.mountDate)){
+        var md = document.createElement('span');
+        md.textContent = (o.phone ? ' \u00B7 ' : '') + '\u0443\u0441\u0442. ' + fmtDate(o.mountDate);
+        sub.appendChild(md);
+      }
       var money = document.createElement('span'); money.className='money';
       var debt = debtOf(o);
       money.textContent = fm0(o.sogl || o.pred) + (debt>0 ? ' / долг '+fm0(debt) : '');
@@ -386,7 +528,18 @@
 
     b.appendChild(field('Статус', selSt));
     var r1 = document.createElement('div'); r1.className='crm-2col';
-    r1.appendChild(field('Клиент', iClient)); r1.appendChild(field('Телефон', iPhone));
+    r1.appendChild(field('Клиент', iClient));
+    var phoneWrap = document.createElement('div');
+    phoneWrap.style.display='flex'; phoneWrap.style.gap='6px'; phoneWrap.style.alignItems='center';
+    iPhone.style.flex='1';
+    phoneWrap.appendChild(iPhone);
+    var telBtn = document.createElement('a');
+    telBtn.textContent = '\uD83D\uDCDE';
+    telBtn.style.cssText = 'text-decoration:none;font-size:16px;border:1px solid #ddd;border-radius:8px;padding:5px 8px';
+    telBtn.href = o.phone ? 'tel:' + String(o.phone).replace(/[^+\d]/g,'') : '#';
+    if(!o.phone) telBtn.style.opacity = '.35';
+    phoneWrap.appendChild(telBtn);
+    r1.appendChild(field('Телефон', phoneWrap));
     b.appendChild(r1);
     var r2 = document.createElement('div'); r2.className='crm-2col';
     r2.appendChild(field('Город', iCity)); r2.appendChild(field('Тип мебели', iFurn));
@@ -445,7 +598,7 @@
         o.status=upd.status; o.client=upd.client; o.obj=upd.obj; o.phone=upd.phone;
         o.city=upd.city; o.furn=upd.furn; o.note=upd.note; o.mountDate=upd.mountDate; o.paid=upd.paid;
         document.body.removeChild(bg);
-        renderView();
+        renderAll();
         toast('OK Заказ \u2116'+o.num+' обновлён', '#1a5252');
       }, function(err){
         bSave.disabled=false; bSave.textContent='\uD83D\uDCBE Сохранить';
