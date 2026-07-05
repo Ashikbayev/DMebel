@@ -270,7 +270,23 @@
       '.crm-ftbl td{font-size:11px;color:#333;text-align:right;padding:7px 10px;border-bottom:1px solid #f5f5f3}'+
       '.crm-ftbl td:first-child{text-align:left;font-weight:600;color:#222}'+
       '.crm-ftbl tr:last-child td{border-bottom:none}'+
-      '.crm-ftbl td.debt{color:#c0392b}';
+      '.crm-ftbl td.debt{color:#c0392b}'+
+      '.crm-bar.fin-in{background:#0F6E56}'+
+      '.crm-bar.fin-out{background:#D85A30}'+
+      '.crm-ops{background:#fff;border:1px solid #eee;border-radius:10px;margin-bottom:10px;overflow:hidden}'+
+      '.crm-ops-h{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #f0f0ee}'+
+      '.crm-ops-h b{font-size:12px;color:#444}'+
+      '.crm-op{display:flex;gap:8px;align-items:center;padding:7px 12px;font-size:11px;color:#555;border-bottom:1px solid #f7f7f5;flex-wrap:wrap}'+
+      '.crm-op:last-child{border-bottom:none}'+
+      '.crm-op .dt{color:#999;min-width:64px}'+
+      '.crm-op .cat{font-weight:600;color:#333}'+
+      '.crm-op .cmt{color:#999;flex:1;min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
+      '.crm-op .sm{font-weight:700;margin-left:auto;white-space:nowrap}'+
+      '.crm-op .sm.in{color:#0F6E56}'+
+      '.crm-op .sm.out{color:#c0392b}'+
+      '.crm-op .del{background:none;border:none;color:#ccc;cursor:pointer;font-size:13px;line-height:1;padding:2px}'+
+      '.crm-op .del:hover{color:#c0392b}'+
+      '.crm-sec-t{font-size:13px;font-weight:600;color:#444;margin:14px 0 8px}';
     document.head.appendChild(st);
   }
 
@@ -555,8 +571,162 @@
   }
 
   var MONTH_SHORT = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+  var FIN = [];
+  var FIN_LOADED = false;
+  var CAT_IN  = ['Доплата','Прочий приход'];
+  var CAT_OUT = ['Материалы','Оплата мастеру','Оплата дизайнеру','Аренда','Реклама','Транспорт','Инструмент','Прочее'];
+
+  function fetchFin(cb){
+    if(!getToken()){ cb('__no_key__'); return; }
+    fetch(GS_URL + '?action=fin&token=' + encodeURIComponent(getToken()))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(res && res.ok){ FIN = res.fin || []; FIN_LOADED = true; cb(null); }
+        else cb((res && res.error) || 'таблица вернула ошибку');
+      })
+      .catch(function(e){ cb(String(e && e.message || e)); });
+  }
 
   function renderFin(view){
+    if(!FIN_LOADED){
+      var ld = document.createElement('div'); ld.className='crm-empty';
+      ld.textContent = 'Загружаю операции...';
+      view.appendChild(ld);
+      fetchFin(function(err){
+        if(err){ ld.textContent = 'Операции не загрузились: ' + err; renderSales(view); return; }
+        renderView();
+      });
+      return;
+    }
+    renderKassa(view);
+    renderSales(view);
+  }
+
+  function renderKassa(view){
+    var inc = 0, exp = 0, mInc = 0, mExp = 0;
+    var nowKey = monthKey(new Date());
+    FIN.forEach(function(f){
+      var isIn = f.type === 'Приход';
+      if(isIn) inc += f.sum; else exp += f.sum;
+      if(monthKey(f.date) === nowKey){ if(isIn) mInc += f.sum; else mExp += f.sum; }
+    });
+    var t0 = document.createElement('div'); t0.className='crm-sec-t';
+    t0.textContent = 'Касса — фактические деньги';
+    view.appendChild(t0);
+    var sum = document.createElement('div'); sum.className='crm-sum';
+    function tile(v, k, warn){
+      var t = document.createElement('div'); t.className='crm-sum-t';
+      var ve = document.createElement('div'); ve.className='v'+(warn?' warn':''); ve.textContent=v;
+      var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
+      t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
+    }
+    tile(fm0(inc), 'приход, всего');
+    tile(fm0(exp), 'расход, всего', exp > inc);
+    tile(fm0(inc - exp), 'итог (приход − расход)', inc - exp < 0);
+    tile('+' + fm0(mInc) + ' / −' + fm0(mExp), 'этот месяц');
+    view.appendChild(sum);
+
+    // график приход/расход по месяцам
+    var byM = {};
+    FIN.forEach(function(f){
+      var k = monthKey(f.date); if(!k) return;
+      if(!byM[k]) byM[k] = { inc:0, exp:0 };
+      if(f.type === 'Приход') byM[k].inc += f.sum; else byM[k].exp += f.sum;
+    });
+    var keys = Object.keys(byM).sort();
+    if(keys.length){
+      var allKeys = [];
+      var p0 = keys[0].split('-');
+      var d0 = new Date(+p0[0], +p0[1]-1, 1);
+      var dNow = new Date();
+      while(d0.getTime() <= dNow.getTime()){ allKeys.push(monthKey(d0)); d0.setMonth(d0.getMonth()+1); }
+      if(allKeys.length > 12) allKeys = allKeys.slice(-12);
+      var maxV = 1;
+      allKeys.forEach(function(k){ var m = byM[k]; if(m){ if(m.inc > maxV) maxV = m.inc; if(m.exp > maxV) maxV = m.exp; } });
+      var ch = document.createElement('div'); ch.className='crm-chart';
+      var ct = document.createElement('div'); ct.className='crm-chart-t';
+      ct.textContent = 'Приход и расход по месяцам';
+      ch.appendChild(ct);
+      var bars = document.createElement('div'); bars.className='crm-bars';
+      allKeys.forEach(function(k){
+        var m = byM[k] || { inc:0, exp:0 };
+        var g = document.createElement('div'); g.className='crm-bgrp';
+        var pair = document.createElement('div'); pair.className='crm-bpair';
+        var b1 = document.createElement('div'); b1.className='crm-bar fin-in';
+        b1.style.height = Math.round(m.inc / maxV * 110) + 'px';
+        b1.title = monthLabel(k) + ': приход ' + fm0(m.inc);
+        var b2 = document.createElement('div'); b2.className='crm-bar fin-out';
+        b2.style.height = Math.round(m.exp / maxV * 110) + 'px';
+        b2.title = monthLabel(k) + ': расход ' + fm0(m.exp);
+        pair.appendChild(b1); pair.appendChild(b2);
+        var lx = document.createElement('div'); lx.className='crm-bx';
+        var pk = k.split('-');
+        lx.textContent = MONTH_SHORT[(+pk[1])-1] + ' ' + pk[0].slice(2);
+        g.appendChild(pair); g.appendChild(lx);
+        bars.appendChild(g);
+      });
+      ch.appendChild(bars);
+      var leg = document.createElement('div'); leg.className='crm-legend';
+      var l1 = document.createElement('span');
+      var i1 = document.createElement('i'); i1.style.background='#0F6E56';
+      l1.appendChild(i1); l1.appendChild(document.createTextNode('Приход'));
+      var l2 = document.createElement('span');
+      var i2 = document.createElement('i'); i2.style.background='#D85A30';
+      l2.appendChild(i2); l2.appendChild(document.createTextNode('Расход'));
+      leg.appendChild(l1); leg.appendChild(l2);
+      ch.appendChild(leg);
+      view.appendChild(ch);
+    }
+
+    // последние операции + кнопка добавления
+    var ops = document.createElement('div'); ops.className='crm-ops';
+    var oh = document.createElement('div'); oh.className='crm-ops-h';
+    var ob = document.createElement('b'); ob.textContent = 'Операции' + (FIN.length ? ' (' + FIN.length + ')' : '');
+    var addB = document.createElement('button'); addB.className='crm-vbtn new'; addB.textContent = '+ Операция';
+    addB.style.marginLeft = 'auto';
+    addB.addEventListener('click', function(){ openFinModal({}); });
+    oh.appendChild(ob); oh.appendChild(addB);
+    ops.appendChild(oh);
+    if(!FIN.length){
+      var em = document.createElement('div'); em.className='crm-empty';
+      em.textContent = 'Операций пока нет. Аванс появится сам при формировании Договора, расходы добавляй кнопкой «+ Операция».';
+      ops.appendChild(em);
+    } else {
+      var sorted = FIN.slice().sort(function(a,b){ return new Date(b.date||0).getTime() - new Date(a.date||0).getTime(); });
+      sorted.slice(0, 15).forEach(function(f){
+        var r = document.createElement('div'); r.className='crm-op';
+        var dt = document.createElement('span'); dt.className='dt'; dt.textContent = fmtDate(f.date);
+        var cat = document.createElement('span'); cat.className='cat';
+        cat.textContent = f.cat + (f.num ? ' · №' + f.num : '');
+        var cmt = document.createElement('span'); cmt.className='cmt'; cmt.textContent = f.comment || '';
+        var sm = document.createElement('span');
+        sm.className = 'sm ' + (f.type === 'Приход' ? 'in' : 'out');
+        sm.textContent = (f.type === 'Приход' ? '+' : '−') + fm0(f.sum);
+        var del = document.createElement('button'); del.className='del'; del.textContent='✕';
+        del.title = 'Удалить операцию';
+        del.addEventListener('click', function(){
+          var sure = confirm('Удалить операцию «' + f.cat + ' ' + fm0(f.sum) + '»?' + (f.cat==='Доплата'&&f.num ? ' Оплачено по заказу №'+f.num+' уменьшится.' : ''));
+          if(!sure) return;
+          post({ action:'delFin', id: f.id }, function(){
+            FIN = FIN.filter(function(x){ return x.id !== f.id; });
+            if(f.type==='Приход' && f.cat==='Доплата' && f.num){
+              for(var i=0;i<ORDERS.length;i++){ if(String(ORDERS[i].num)===String(f.num)){ ORDERS[i].paid = Math.max(0,(Number(ORDERS[i].paid)||0) - f.sum); break; } }
+            }
+            renderAll();
+            toast('OK Операция удалена', '#1a5252');
+          }, function(err){ toast('⚠️ Не удалилось: ' + err, '#BA7517'); });
+        });
+        r.appendChild(dt); r.appendChild(cat); r.appendChild(cmt); r.appendChild(sm); r.appendChild(del);
+        ops.appendChild(r);
+      });
+    }
+    view.appendChild(ops);
+  }
+
+  function renderSales(view){
+    var t0 = document.createElement('div'); t0.className='crm-sec-t';
+    t0.textContent = 'Продажи — по договорам';
+    view.appendChild(t0);
     var real = ORDERS.filter(function(o){ return o.status !== 'Отказ'; });
     var withSogl = real.filter(function(o){ return Number(o.sogl) > 0; });
     var revenue = 0, received = 0, debtT = 0;
@@ -813,6 +983,81 @@
     return e;
   }
 
+  function openFinModal(pre){
+    var bg = document.createElement('div'); bg.className='crm-modal-bg';
+    bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
+    var m = document.createElement('div'); m.className='crm-modal';
+    var h = document.createElement('div'); h.className='crm-m-h';
+    var title = document.createElement('b');
+    title.textContent = pre.num ? 'Оплата по заказу \u2116' + pre.num : 'Новая операция';
+    var x = document.createElement('button'); x.className='crm-m-x'; x.textContent='\u00D7';
+    x.addEventListener('click', function(){ document.body.removeChild(bg); });
+    h.appendChild(title); h.appendChild(x);
+    var b = document.createElement('div'); b.className='crm-m-b';
+
+    var selType = document.createElement('select');
+    ['Приход','Расход'].forEach(function(t){ var op=document.createElement('option'); op.value=t; op.textContent=t; selType.appendChild(op); });
+    var selCat = document.createElement('select');
+    function fillCats(){
+      selCat.innerHTML = '';
+      var cats = selType.value === 'Приход' ? CAT_IN : CAT_OUT;
+      cats.forEach(function(c){ var op=document.createElement('option'); op.value=c; op.textContent=c; selCat.appendChild(op); });
+    }
+    selType.addEventListener('change', fillCats);
+    selType.value = pre.type || 'Приход';
+    fillCats();
+    if(pre.cat) selCat.value = pre.cat;
+
+    var iSum = inp('', 'number'); iSum.placeholder = '0';
+    var today = new Date();
+    var iDate = inp(today.getFullYear()+'-'+('0'+(today.getMonth()+1)).slice(-2)+'-'+('0'+today.getDate()).slice(-2), 'date');
+    var iNum = inp(pre.num || ''); iNum.placeholder = '\u2116 заказа (не обязательно)';
+    iNum.setAttribute('list', 'crm-num-list');
+    var dl = document.createElement('datalist'); dl.id = 'crm-num-list';
+    ORDERS.forEach(function(o){ var op=document.createElement('option'); op.value=String(o.num); dl.appendChild(op); });
+    var iCmt = inp(''); iCmt.placeholder = 'Комментарий';
+
+    var r1 = document.createElement('div'); r1.className='crm-2col';
+    r1.appendChild(field('Тип', selType)); r1.appendChild(field('Категория', selCat));
+    b.appendChild(r1);
+    var r2 = document.createElement('div'); r2.className='crm-2col';
+    r2.appendChild(field('Сумма, \u20B8', iSum)); r2.appendChild(field('Дата', iDate));
+    b.appendChild(r2);
+    b.appendChild(field('\u2116 заказа', iNum));
+    b.appendChild(dl);
+    b.appendChild(field('Комментарий', iCmt));
+
+    var btns = document.createElement('div'); btns.className='crm-m-btns';
+    var bSave = document.createElement('button'); bSave.className='crm-m-btn save'; bSave.textContent='Записать';
+    bSave.addEventListener('click', function(){
+      var sum = parseFloat(iSum.value) || 0;
+      if(sum <= 0){ toast('\u26A0\uFE0F Введи сумму', '#BA7517'); return; }
+      bSave.disabled = true; bSave.textContent = 'Записываю...';
+      var fin = {
+        type: selType.value, cat: selCat.value, sum: sum,
+        date: iDate.value, num: iNum.value.trim(), comment: iCmt.value.trim()
+      };
+      post({ action:'addFin', fin: fin }, function(res){
+        FIN.unshift({ id: (res && res.id) || String(Date.now()), date: fin.date, type: fin.type, cat: fin.cat, sum: fin.sum, num: fin.num, comment: fin.comment });
+        if(fin.type==='Приход' && fin.cat==='Доплата' && fin.num){
+          for(var i=0;i<ORDERS.length;i++){ if(String(ORDERS[i].num)===String(fin.num)){ ORDERS[i].paid = (Number(ORDERS[i].paid)||0) + fin.sum; break; } }
+        }
+        document.body.removeChild(bg);
+        renderAll();
+        toast('OK ' + fin.type + ' ' + fm0(fin.sum) + ' записан', '#1a5252');
+      }, function(err){
+        bSave.disabled=false; bSave.textContent='Записать';
+        toast('\u26A0\uFE0F Не записалось: '+err, '#BA7517');
+      });
+    });
+    btns.appendChild(bSave);
+    b.appendChild(btns);
+    m.appendChild(h); m.appendChild(b);
+    bg.appendChild(m);
+    document.body.appendChild(bg);
+    setTimeout(function(){ try{ iSum.focus(); }catch(e){} }, 50);
+  }
+
   function openNewOrderModal(){
     var bg = document.createElement('div'); bg.className='crm-modal-bg';
     bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
@@ -908,7 +1153,20 @@
     var iFurn = inp(o.furn), iObj = inp(o.obj);
     var iNote = document.createElement('textarea'); iNote.rows=2; iNote.value=o.note||'';
     var iMount = inp(o.mountDate ? String(new Date(o.mountDate).getFullYear())+'-'+('0'+(new Date(o.mountDate).getMonth()+1)).slice(-2)+'-'+('0'+new Date(o.mountDate).getDate()).slice(-2) : '', 'date');
-    var iPaid = inp(o.paid || '', 'number'); iPaid.placeholder='0';
+    var payWrap = document.createElement('div');
+    payWrap.style.cssText = 'display:flex;gap:6px;align-items:center';
+    var iPaid = inp(o.paid || 0, 'number');
+    iPaid.readOnly = true;
+    iPaid.style.cssText = 'flex:1;background:#f6f6f4;color:#777';
+    iPaid.title = 'Заполняется автоматически из операций «Доплата» (вкладка Финансы)';
+    var payBtn = document.createElement('button');
+    payBtn.className = 'crm-vbtn new';
+    payBtn.textContent = '+ Оплата';
+    payBtn.addEventListener('click', function(){
+      document.body.removeChild(bg);
+      openFinModal({ type:'Приход', cat:'Доплата', num: String(o.num) });
+    });
+    payWrap.appendChild(iPaid); payWrap.appendChild(payBtn);
 
     b.appendChild(field('Статус', selSt));
     var r1 = document.createElement('div'); r1.className='crm-2col';
@@ -932,7 +1190,7 @@
     b.appendChild(field('Примечание', iNote));
     var r3 = document.createElement('div'); r3.className='crm-2col';
     r3.appendChild(field('Дата установки', iMount));
-    r3.appendChild(field('Оплачено дополнительно, \u20B8', iPaid));
+    r3.appendChild(field('Оплачено дополнительно, \u20B8', payWrap));
     b.appendChild(r3);
 
     var g = document.createElement('div'); g.className='crm-money-grid';
@@ -975,12 +1233,11 @@
         city: iCity.value.trim(),
         furn: iFurn.value.trim(),
         note: iNote.value.trim(),
-        mountDate: iMount.value,
-        paid: parseFloat(iPaid.value) || 0
+        mountDate: iMount.value
       };
       post({ action:'updateOrder', order: upd }, function(){
         o.status=upd.status; o.client=upd.client; o.obj=upd.obj; o.phone=upd.phone;
-        o.city=upd.city; o.furn=upd.furn; o.note=upd.note; o.mountDate=upd.mountDate; o.paid=upd.paid;
+        o.city=upd.city; o.furn=upd.furn; o.note=upd.note; o.mountDate=upd.mountDate;
         document.body.removeChild(bg);
         renderAll();
         toast('OK Заказ \u2116'+o.num+' обновлён', '#1a5252');
