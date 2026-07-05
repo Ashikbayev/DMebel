@@ -241,7 +241,26 @@
       '.crm-al-h .tgl{margin-left:auto;font-size:11px;color:#c9a15f}'+
       '.crm-al-row{display:flex;gap:8px;align-items:center;padding:7px 12px;font-size:11px;color:#555;border-top:1px solid #faf3e6;cursor:pointer}'+
       '.crm-al-row:hover{background:#fdfaf4}'+
-      '.crm-al-row b{color:#222;white-space:nowrap}';
+      '.crm-al-row b{color:#222;white-space:nowrap}'+
+      '.crm-fin-note{font-size:10px;color:#aaa;margin:6px 0 14px;line-height:1.5}'+
+      '.crm-chart{background:#fff;border:1px solid #eee;border-radius:10px;padding:14px 12px 6px;margin-bottom:10px}'+
+      '.crm-chart-t{font-size:12px;font-weight:600;color:#444;margin-bottom:10px}'+
+      '.crm-bars{display:flex;align-items:flex-end;gap:6px;height:140px;overflow-x:auto;padding-bottom:4px}'+
+      '.crm-bgrp{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:44px;flex:1}'+
+      '.crm-bpair{display:flex;align-items:flex-end;gap:2px;height:110px}'+
+      '.crm-bar{width:14px;border-radius:3px 3px 0 0;min-height:2px}'+
+      '.crm-bar.rev{background:#1a5252}'+
+      '.crm-bar.av{background:#5DCAA5}'+
+      '.crm-bx{font-size:9px;color:#999;white-space:nowrap}'+
+      '.crm-legend{display:flex;gap:14px;font-size:10px;color:#777;margin-top:6px;padding-bottom:6px}'+
+      '.crm-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px}'+
+      '.crm-ftbl{width:100%;border-collapse:collapse;background:#fff;border:1px solid #eee;border-radius:10px;overflow:hidden}'+
+      '.crm-ftbl th{font-size:10px;color:#999;text-align:right;padding:8px 10px;border-bottom:1px solid #eee;font-weight:600}'+
+      '.crm-ftbl th:first-child{text-align:left}'+
+      '.crm-ftbl td{font-size:11px;color:#333;text-align:right;padding:7px 10px;border-bottom:1px solid #f5f5f3}'+
+      '.crm-ftbl td:first-child{text-align:left;font-weight:600;color:#222}'+
+      '.crm-ftbl tr:last-child td{border-bottom:none}'+
+      '.crm-ftbl td.debt{color:#c0392b}';
     document.head.appendChild(st);
   }
 
@@ -378,11 +397,17 @@
     bList.className = 'crm-vbtn' + (VIEW==='list' ? ' on' : '');
     bList.textContent = 'Список';
     bList.addEventListener('click', function(){ VIEW='list'; localStorage.setItem('moff_crm_view','list'); renderAll(); });
+    var bFin = document.createElement('button');
+    bFin.className = 'crm-vbtn' + (VIEW==='fin' ? ' on' : '');
+    bFin.textContent = 'Финансы';
+    bFin.addEventListener('click', function(){ VIEW='fin'; localStorage.setItem('moff_crm_view','fin'); renderAll(); });
+    tools.appendChild(bBoard); tools.appendChild(bList); tools.appendChild(bFin);
+    if(VIEW !== 'fin'){
     var search = document.createElement('input');
     search.type = 'search'; search.placeholder = 'Поиск: №, клиент, телефон, город...';
     search.value = SEARCH; search.style.flex = '1'; search.style.minWidth = '140px';
     search.addEventListener('input', function(){ SEARCH = search.value.trim(); renderView(); });
-    tools.appendChild(bBoard); tools.appendChild(bList); tools.appendChild(search);
+    tools.appendChild(search);
     // города
     var cities = [];
     ORDERS.forEach(function(o){ var c=String(o.city||'').trim(); if(c && cities.indexOf(c)<0) cities.push(c); });
@@ -421,6 +446,7 @@
       filt.addEventListener('change', function(){ FILTER = filt.value; renderView(); });
       tools.appendChild(filt);
     }
+    }
     var cnt = document.createElement('span');
     cnt.className = 'crm-count'; cnt.id = 'crm-count';
     tools.appendChild(cnt);
@@ -446,6 +472,11 @@
       return monthOk(o);
     });
     var cnt = document.getElementById('crm-count');
+    if(VIEW === 'fin'){
+      if(cnt) cnt.textContent = '';
+      renderFin(view);
+      return;
+    }
     if(cnt) cnt.textContent = vis.length + ' из ' + ORDERS.length;
     if(!ORDERS.length){ view.innerHTML = '<div class="crm-empty">Заказов пока нет. Сохрани расчёт с № заказа — он появится здесь.</div>'; return; }
     if(MONTH_FILTER!=='all' && MONTH_FILTER!=='none'){
@@ -459,6 +490,122 @@
       }
     }
     if(VIEW === 'board') renderBoard(view, vis); else renderList(view, vis);
+  }
+
+  var MONTH_SHORT = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+
+  function renderFin(view){
+    var real = ORDERS.filter(function(o){ return o.status !== 'Отказ'; });
+    var withSogl = real.filter(function(o){ return Number(o.sogl) > 0; });
+    var revenue = 0, received = 0, debtT = 0;
+    withSogl.forEach(function(o){ revenue += Number(o.sogl)||0; });
+    real.forEach(function(o){
+      received += (Number(o.avans)||0) + (Number(o.paid)||0);
+      var d = debtOf(o); if(d > 0) debtT += d;
+    });
+    var avg = withSogl.length ? revenue / withSogl.length : 0;
+
+    var sum = document.createElement('div'); sum.className='crm-sum';
+    function tile(v, k, warn){
+      var t = document.createElement('div'); t.className='crm-sum-t';
+      var ve = document.createElement('div'); ve.className='v'+(warn?' warn':''); ve.textContent=v;
+      var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
+      t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
+    }
+    tile(fm0(revenue), 'выручка по договорам, всего');
+    tile(fm0(received), 'получено (авансы + доплаты)');
+    tile(fm0(debtT), 'долг клиентов', debtT>0);
+    tile(fm0(avg), 'средний чек (' + withSogl.length + ' догов.)');
+    view.appendChild(sum);
+
+    // помесячные данные по дате договора
+    var byM = {};
+    withSogl.forEach(function(o){
+      var k = monthKey(o.dogDate);
+      if(!k) return;
+      if(!byM[k]) byM[k] = { sogl:0, avans:0, count:0, debt:0 };
+      byM[k].sogl  += Number(o.sogl)||0;
+      byM[k].avans += Number(o.avans)||0;
+      byM[k].count += 1;
+      var d = debtOf(o); if(d>0) byM[k].debt += d;
+    });
+    var keys = Object.keys(byM).sort();
+    if(!keys.length){
+      var e = document.createElement('div'); e.className='crm-empty';
+      e.textContent = 'Пока нет заказов с договорами — график появится после первого договора.';
+      view.appendChild(e);
+      return;
+    }
+    // непрерывный ряд месяцев от первого до текущего, максимум 12 последних
+    var allKeys = [];
+    var start = keys[0].split('-');
+    var d0 = new Date(+start[0], +start[1]-1, 1);
+    var dNow = new Date();
+    while(d0.getTime() <= dNow.getTime()){
+      allKeys.push(monthKey(d0));
+      d0.setMonth(d0.getMonth()+1);
+    }
+    if(allKeys.length > 12) allKeys = allKeys.slice(-12);
+    var maxV = 1;
+    allKeys.forEach(function(k){ var m = byM[k]; if(m && m.sogl > maxV) maxV = m.sogl; });
+
+    var ch = document.createElement('div'); ch.className='crm-chart';
+    var ct = document.createElement('div'); ct.className='crm-chart-t';
+    ct.textContent = 'По месяцам договоров' + (allKeys.length===12 ? ' (последние 12)' : '');
+    ch.appendChild(ct);
+    var bars = document.createElement('div'); bars.className='crm-bars';
+    allKeys.forEach(function(k){
+      var m = byM[k] || { sogl:0, avans:0, count:0 };
+      var g = document.createElement('div'); g.className='crm-bgrp';
+      var pair = document.createElement('div'); pair.className='crm-bpair';
+      var b1 = document.createElement('div'); b1.className='crm-bar rev';
+      b1.style.height = Math.round(m.sogl / maxV * 110) + 'px';
+      b1.title = monthLabel(k) + ': выручка ' + fm0(m.sogl) + ' (' + m.count + ' догов.)';
+      var b2 = document.createElement('div'); b2.className='crm-bar av';
+      b2.style.height = Math.round(m.avans / maxV * 110) + 'px';
+      b2.title = monthLabel(k) + ': авансы ' + fm0(m.avans);
+      pair.appendChild(b1); pair.appendChild(b2);
+      var lx = document.createElement('div'); lx.className='crm-bx';
+      var p = k.split('-');
+      lx.textContent = MONTH_SHORT[(+p[1])-1] + ' ' + p[0].slice(2);
+      g.appendChild(pair); g.appendChild(lx);
+      bars.appendChild(g);
+    });
+    ch.appendChild(bars);
+    var leg = document.createElement('div'); leg.className='crm-legend';
+    var l1 = document.createElement('span');
+    var i1 = document.createElement('i'); i1.style.background='#1a5252';
+    l1.appendChild(i1); l1.appendChild(document.createTextNode('Выручка (согл. цена)'));
+    var l2 = document.createElement('span');
+    var i2 = document.createElement('i'); i2.style.background='#5DCAA5';
+    l2.appendChild(i2); l2.appendChild(document.createTextNode('Авансы'));
+    leg.appendChild(l1); leg.appendChild(l2);
+    ch.appendChild(leg);
+    view.appendChild(ch);
+
+    // таблица месяцев (новые сверху)
+    var tbl = document.createElement('table'); tbl.className='crm-ftbl';
+    var thead = document.createElement('tr');
+    ['Месяц','Договоров','Выручка','Авансы','Долг по этим заказам'].forEach(function(t){
+      var th = document.createElement('th'); th.textContent = t; thead.appendChild(th);
+    });
+    tbl.appendChild(thead);
+    allKeys.slice().reverse().forEach(function(k){
+      var m = byM[k]; if(!m) return;
+      var tr = document.createElement('tr');
+      function td(t, cls){ var c = document.createElement('td'); c.textContent = t; if(cls) c.className = cls; tr.appendChild(c); }
+      td(monthLabel(k));
+      td(String(m.count));
+      td(fm0(m.sogl));
+      td(fm0(m.avans));
+      td(m.debt > 0 ? fm0(m.debt) : '\u2014', m.debt > 0 ? 'debt' : '');
+      tbl.appendChild(tr);
+    });
+    view.appendChild(tbl);
+
+    var note = document.createElement('div'); note.className='crm-fin-note';
+    note.textContent = 'Выручка и авансы привязаны к месяцу договора. Доплаты («Оплачено») пока учитываются общей суммой без даты платежа — помесячный учёт всех приходов и расходов появится вместе с листом «Финансы» на следующем этапе.';
+    view.appendChild(note);
   }
 
   function makeCard(o){
