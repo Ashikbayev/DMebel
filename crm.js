@@ -313,6 +313,8 @@
       '.crm-ch-row .sm.out{color:#c0392b}'+
       '.crm-ch-row .del{background:none;border:none;color:#ccc;cursor:pointer;font-size:13px;line-height:1;padding:2px}'+
       '.crm-ch-row .del:hover{color:#c0392b}'+
+      '.crm-ch-row .prn{background:none;border:none;color:#bbb;cursor:pointer;font-size:13px;line-height:1;padding:2px}'+
+      '.crm-ch-row .prn:hover{color:#BA7517}'+
       '.crm-over{color:#0F6E56}'+
       '.crm-overpaid{color:#0F6E56;font-weight:600}';
     document.head.appendChild(st);
@@ -1171,6 +1173,99 @@
     setTimeout(function(){ try{ iSum.focus(); }catch(e){} }, 60);
   }
 
+  // ── Печать «Доп. соглашение №K» к договору ─────────────────
+  // Стиль и реквизиты продублированы из generateDogovor (main.js) —
+  // модуль изолирован, main.js не трогаем. При смене реквизитов ИП
+  // менять в обоих местах!
+  function escHtml(s){
+    return String(s==null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function ruDateCrm(v){
+    var M = ['\u044f\u043d\u0432\u0430\u0440\u044f','\u0444\u0435\u0432\u0440\u0430\u043b\u044f','\u043c\u0430\u0440\u0442\u0430','\u0430\u043f\u0440\u0435\u043b\u044f','\u043c\u0430\u044f','\u0438\u044e\u043d\u044f','\u0438\u044e\u043b\u044f','\u0430\u0432\u0433\u0443\u0441\u0442\u0430','\u0441\u0435\u043d\u0442\u044f\u0431\u0440\u044f','\u043e\u043a\u0442\u044f\u0431\u0440\u044f','\u043d\u043e\u044f\u0431\u0440\u044f','\u0434\u0435\u043a\u0430\u0431\u0440\u044f'];
+    var d = new Date(v);
+    if(!v || isNaN(d.getTime())) return '\u00ab____\u00bb ________________ 20___ \u0433.';
+    return '\u00ab' + ('0'+d.getDate()).slice(-2) + '\u00bb ' + M[d.getMonth()] + ' ' + d.getFullYear() + ' \u0433.';
+  }
+  function tenge(n){ return Math.round(Math.abs(Number(n)||0)).toLocaleString('ru') + ' \u0442\u0435\u043d\u0433\u0435'; }
+
+  // o — заказ, chs — его изменения (в порядке листа), ci — индекс печатаемого.
+  // Итоговая стоимость считается НА МОМЕНТ этого соглашения:
+  // цена договора + сумма изменений с 1-го по это включительно.
+  function printChangeAgreement(o, chs, ci){
+    var c = chs[ci];
+    var kNum = ci + 1;
+    var allSum = 0, uptoSum = 0;
+    chs.forEach(function(x, i){
+      var s = Number(x.sum)||0;
+      allSum += s;
+      if(i <= ci) uptoSum += s;
+    });
+    var base = (Number(o.sogl)||0) - allSum;
+    var totalAt = base + uptoSum;
+    var plus = Number(c.sum) >= 0;
+    var client = escHtml(o.client) || '___________________________________';
+    var addr   = escHtml(o.obj)    || '___________________________________';
+    var phone  = escHtml(o.phone)  || '_______________';
+    var desc   = escHtml(c.desc);
+    var dogRu  = ruDateCrm(o.dogDate);
+    var chRu   = ruDateCrm(c.date);
+
+    var H = '';
+    H += '<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8">';
+    H += '<title>\u0414\u043e\u043f. \u0441\u043e\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u0435 \u2116' + kNum + ' \u043a \u0414\u043e\u0433\u043e\u0432\u043e\u0440\u0443 \u2116' + escHtml(o.num) + ' \u2014 MebelOFF.kz</title>';
+    H += '<style>';
+    H += 'body{font-family:"Times New Roman",Times,serif;font-size:12pt;color:#000;background:#fff;margin:0;line-height:1.5}';
+    H += '.pg{max-width:210mm;margin:0 auto;padding:18mm 22mm 18mm 28mm;box-sizing:border-box}';
+    H += 'h1{text-align:center;font-size:14pt;font-weight:bold;margin:0 0 2px;letter-spacing:1px}';
+    H += 'h2{text-align:center;font-size:12pt;font-weight:normal;margin:0 0 2px}';
+    H += '.c{text-align:center}';
+    H += 'p{margin:3pt 0;text-align:justify}';
+    H += '.ind{text-indent:20pt}';
+    H += '.b{font-weight:bold}';
+    H += '.hr{border:none;border-top:2px solid #C9A96E;margin:10pt 0}';
+    H += '.sw{display:flex;gap:28px;margin-top:14pt}';
+    H += '.sc{flex:1;font-size:11pt}';
+    H += '.sl{display:block;border-top:1px solid #000;margin-top:26pt;padding-top:3pt}';
+    H += '.btn{position:fixed;top:14px;right:14px;background:#C9A96E;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-size:13px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);z-index:999}';
+    H += '@media print{.btn{display:none!important}.pg{padding:14mm 20mm 14mm 24mm}}';
+    H += '</style></head><body>';
+    H += '<button class="btn" onclick="window.print()">\uD83D\uDDA8 \u041f\u0435\u0447\u0430\u0442\u044c / PDF</button>';
+    H += '<div class="pg">';
+
+    H += '<h1>\u0414\u041e\u041f\u041e\u041b\u041d\u0418\u0422\u0415\u041b\u042c\u041d\u041e\u0415 \u0421\u041e\u0413\u041b\u0410\u0428\u0415\u041d\u0418\u0415 \u2116\u00a0' + kNum + '</h1>';
+    H += '<h2>\u043a \u0414\u043e\u0433\u043e\u0432\u043e\u0440\u0443 \u043d\u0430 \u0438\u0437\u0433\u043e\u0442\u043e\u0432\u043b\u0435\u043d\u0438\u0435 \u0438 \u043c\u043e\u043d\u0442\u0430\u0436 \u043a\u043e\u0440\u043f\u0443\u0441\u043d\u043e\u0439 \u043c\u0435\u0431\u0435\u043b\u0438 \u2116\u00a0<b>' + escHtml(o.num) + '</b> \u043e\u0442 ' + dogRu + '</h2>';
+    H += '<p class="c" style="margin-top:5pt">\u0433. \u0421\u0430\u0442\u043f\u0430\u0435\u0432 &nbsp;&nbsp; ' + chRu + '</p>';
+    H += '<hr class="hr">';
+
+    H += '<p class="ind">\u0418\u043d\u0434\u0438\u0432\u0438\u0434\u0443\u0430\u043b\u044c\u043d\u044b\u0439 \u043f\u0440\u0435\u0434\u043f\u0440\u0438\u043d\u0438\u043c\u0430\u0442\u0435\u043b\u044c \u00abMebeloff.kz\u00bb (\u0411\u0418\u041d/\u0418\u0418\u041d 900328351393), \u0432 \u043b\u0438\u0446\u0435 \u041c\u0443\u0448\u0435\u043d\u043e\u0432\u0430 \u0422\u0438\u043b\u0435\u043a\u0430 \u0422\u043b\u0435\u0443\u0445\u0430\u043d\u043e\u0432\u0438\u0447\u0430, \u0438\u043c\u0435\u043d\u0443\u0435\u043c\u044b\u0439 \u0432 \u0434\u0430\u043b\u044c\u043d\u0435\u0439\u0448\u0435\u043c \u00ab\u0418\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u00bb, \u0441 \u043e\u0434\u043d\u043e\u0439 \u0441\u0442\u043e\u0440\u043e\u043d\u044b, \u0438</p>';
+    H += '<p class="ind"><b>' + client + '</b> (\u0418\u0418\u041d/\u0411\u0418\u041d: _______________), \u0438\u043c\u0435\u043d\u0443\u0435\u043c\u044b\u0439(-\u0430\u044f) \u0432 \u0434\u0430\u043b\u044c\u043d\u0435\u0439\u0448\u0435\u043c \u00ab\u0417\u0430\u043a\u0430\u0437\u0447\u0438\u043a\u00bb, \u0441 \u0434\u0440\u0443\u0433\u043e\u0439 \u0441\u0442\u043e\u0440\u043e\u043d\u044b,</p>';
+    H += '<p class="ind">\u0437\u0430\u043a\u043b\u044e\u0447\u0438\u043b\u0438 \u043d\u0430\u0441\u0442\u043e\u044f\u0449\u0435\u0435 \u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0435 \u0441\u043e\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u0435 (\u0434\u0430\u043b\u0435\u0435 \u2014 \u00ab\u0421\u043e\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u0435\u00bb) \u043a \u0443\u043a\u0430\u0437\u0430\u043d\u043d\u043e\u043c\u0443 \u0414\u043e\u0433\u043e\u0432\u043e\u0440\u0443 \u043e \u043d\u0438\u0436\u0435\u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0435\u043c:</p>';
+    H += '<hr class="hr">';
+
+    H += '<p>1. \u0421\u0442\u043e\u0440\u043e\u043d\u044b \u0441\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043b\u0438 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0435\u0435 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0435 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0430\u0446\u0438\u0438 \u0418\u0437\u0434\u0435\u043b\u0438\u044f \u043f\u043e \u0414\u043e\u0433\u043e\u0432\u043e\u0440\u0443: <b>' + desc + '</b>.</p>';
+    H += '<p>2. \u0412 \u0441\u0432\u044f\u0437\u0438 \u0441 \u0443\u043a\u0430\u0437\u0430\u043d\u043d\u044b\u043c \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0435\u043c \u043e\u0431\u0449\u0430\u044f \u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c \u0440\u0430\u0431\u043e\u0442 \u043f\u043e \u0414\u043e\u0433\u043e\u0432\u043e\u0440\u0443 ' + (plus ? '\u0443\u0432\u0435\u043b\u0438\u0447\u0438\u0432\u0430\u0435\u0442\u0441\u044f' : '\u0443\u043c\u0435\u043d\u044c\u0448\u0430\u0435\u0442\u0441\u044f') + ' \u043d\u0430 <b>' + tenge(c.sum) + '</b>.</p>';
+    H += '<p>3. \u041e\u0431\u0449\u0430\u044f \u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c \u0440\u0430\u0431\u043e\u0442 \u043f\u043e \u0414\u043e\u0433\u043e\u0432\u043e\u0440\u0443 \u0441 \u0443\u0447\u0451\u0442\u043e\u043c \u043d\u0430\u0441\u0442\u043e\u044f\u0449\u0435\u0433\u043e \u0421\u043e\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u044f \u0441\u043e\u0441\u0442\u0430\u0432\u043b\u044f\u0435\u0442 <b>' + tenge(totalAt) + '</b>.</p>';
+    H += '<p>4. \u0412\u0441\u0435 \u0440\u0430\u0441\u0447\u0451\u0442\u044b \u043f\u043e \u043d\u0430\u0441\u0442\u043e\u044f\u0449\u0435\u043c\u0443 \u0421\u043e\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u044e \u043f\u0440\u043e\u0438\u0437\u0432\u043e\u0434\u044f\u0442\u0441\u044f \u0432 \u043f\u043e\u0440\u044f\u0434\u043a\u0435, \u043f\u0440\u0435\u0434\u0443\u0441\u043c\u043e\u0442\u0440\u0435\u043d\u043d\u043e\u043c \u0414\u043e\u0433\u043e\u0432\u043e\u0440\u043e\u043c' + (plus ? '' : '; \u0438\u0437\u043b\u0438\u0448\u043d\u0435 \u0443\u043f\u043b\u0430\u0447\u0435\u043d\u043d\u0430\u044f \u0441\u0443\u043c\u043c\u0430 (\u043f\u0440\u0438 \u0435\u0451 \u0432\u043e\u0437\u043d\u0438\u043a\u043d\u043e\u0432\u0435\u043d\u0438\u0438) \u0443\u0447\u0438\u0442\u044b\u0432\u0430\u0435\u0442\u0441\u044f \u043f\u0440\u0438 \u043e\u043a\u043e\u043d\u0447\u0430\u0442\u0435\u043b\u044c\u043d\u043e\u043c \u0440\u0430\u0441\u0447\u0451\u0442\u0435 \u043b\u0438\u0431\u043e \u0432\u043e\u0437\u0432\u0440\u0430\u0449\u0430\u0435\u0442\u0441\u044f \u0417\u0430\u043a\u0430\u0437\u0447\u0438\u043a\u0443') + '.</p>';
+    H += '<p>5. \u0412 \u0441\u0432\u044f\u0437\u0438 \u0441 \u0443\u043a\u0430\u0437\u0430\u043d\u043d\u044b\u043c \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0435\u043c \u0441\u0440\u043e\u043a \u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u044f \u0440\u0430\u0431\u043e\u0442 \u043f\u043e \u0414\u043e\u0433\u043e\u0432\u043e\u0440\u0443 \u043f\u0440\u043e\u0434\u043b\u0435\u0432\u0430\u0435\u0442\u0441\u044f \u043d\u0430 ________ \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u043d\u044b\u0445 \u0434\u043d\u0435\u0439; \u043d\u043e\u0432\u0430\u044f \u0434\u0430\u0442\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0438\u044f \u0440\u0430\u0431\u043e\u0442: \u00ab____\u00bb ________________ 20___ \u0433. \u0415\u0441\u043b\u0438 \u043f\u043e\u043b\u044f \u043d\u0430\u0441\u0442\u043e\u044f\u0449\u0435\u0433\u043e \u043f\u0443\u043d\u043a\u0442\u0430 \u043d\u0435 \u0437\u0430\u043f\u043e\u043b\u043d\u0435\u043d\u044b, \u0441\u0440\u043e\u043a\u0438, \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u043d\u044b\u0435 \u0414\u043e\u0433\u043e\u0432\u043e\u0440\u043e\u043c, \u043e\u0441\u0442\u0430\u044e\u0442\u0441\u044f \u0431\u0435\u0437 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0439.</p>';
+    H += '<p>6. \u041e\u0441\u0442\u0430\u043b\u044c\u043d\u044b\u0435 \u0443\u0441\u043b\u043e\u0432\u0438\u044f \u0414\u043e\u0433\u043e\u0432\u043e\u0440\u0430 \u043e\u0441\u0442\u0430\u044e\u0442\u0441\u044f \u0431\u0435\u0437 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0439. \u041d\u0430\u0441\u0442\u043e\u044f\u0449\u0435\u0435 \u0421\u043e\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u0435 \u0441\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u043e \u0432 \u0434\u0432\u0443\u0445 \u044d\u043a\u0437\u0435\u043c\u043f\u043b\u044f\u0440\u0430\u0445, \u0438\u043c\u0435\u044e\u0449\u0438\u0445 \u0440\u0430\u0432\u043d\u0443\u044e \u044e\u0440\u0438\u0434\u0438\u0447\u0435\u0441\u043a\u0443\u044e \u0441\u0438\u043b\u0443, \u043f\u043e \u043e\u0434\u043d\u043e\u043c\u0443 \u0434\u043b\u044f \u043a\u0430\u0436\u0434\u043e\u0439 \u0438\u0437 \u0421\u0442\u043e\u0440\u043e\u043d, \u0432\u0441\u0442\u0443\u043f\u0430\u0435\u0442 \u0432 \u0441\u0438\u043b\u0443 \u0441 \u043c\u043e\u043c\u0435\u043d\u0442\u0430 \u043f\u043e\u0434\u043f\u0438\u0441\u0430\u043d\u0438\u044f \u0438 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u043d\u0435\u043e\u0442\u044a\u0435\u043c\u043b\u0435\u043c\u043e\u0439 \u0447\u0430\u0441\u0442\u044c\u044e \u0414\u043e\u0433\u043e\u0432\u043e\u0440\u0430.</p>';
+
+    H += '<hr class="hr"><p class="c b">\u0420\u0415\u041a\u0412\u0418\u0417\u0418\u0422\u042b \u0418 \u041f\u041e\u0414\u041f\u0418\u0421\u0418 \u0421\u0422\u041e\u0420\u041e\u041d</p>';
+    H += '<div class="sw"><div class="sc"><p class="b">\u0418\u0421\u041f\u041e\u041b\u041d\u0418\u0422\u0415\u041b\u042c</p>';
+    H += '<p>\u0418\u041f \u00abMebeloff.kz\u00bb<br>\u0420\u0435\u0441\u043f\u0443\u0431\u043b\u0438\u043a\u0430 \u041a\u0430\u0437\u0430\u0445\u0441\u0442\u0430\u043d, \u0433. \u0421\u0430\u0442\u043f\u0430\u0435\u0432,<br>\u043f\u0440. \u0421\u0430\u0442\u043f\u0430\u0435\u0432\u0430 147/1<br>\u0411\u0418\u041d/\u0418\u0418\u041d: 900328351393<br>\u0422\u0435\u043b.: +7\u00a0707\u00a0540\u00a07626</p>';
+    H += '<span class="sl">\u041f\u043e\u0434\u043f\u0438\u0441\u044c: __________ / \u041c\u0443\u0448\u0435\u043d\u043e\u0432 \u0422.\u0422.</span>';
+    H += '<p style="margin-top:4pt">\u0414\u0430\u0442\u0430: ' + chRu + '</p></div>';
+    H += '<div class="sc"><p class="b">\u0417\u0410\u041a\u0410\u0417\u0427\u0418\u041a</p>';
+    H += '<p>\u0424.\u0418.\u041e.: <b>' + client + '</b><br>\u0418\u0418\u041d/\u0411\u0418\u041d: _______________<br>\u0410\u0434\u0440\u0435\u0441: ' + addr + '<br>\u0422\u0435\u043b.: ' + phone + '</p>';
+    H += '<span class="sl">\u041f\u043e\u0434\u043f\u0438\u0441\u044c: __________ / ______________</span>';
+    H += '<p style="margin-top:4pt">\u0414\u0430\u0442\u0430: ' + chRu + '</p></div></div>';
+    H += '</div></body></html>';
+
+    var w = window.open('','_blank');
+    if (w) { w.document.write(H); w.document.close(); }
+    else { toast('\u26A0\uFE0F \u0411\u0440\u0430\u0443\u0437\u0435\u0440 \u0437\u0430\u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u0430\u043b \u043e\u043a\u043d\u043e \u2014 \u0440\u0430\u0437\u0440\u0435\u0448\u0438 \u0432\u0441\u043f\u043b\u044b\u0432\u0430\u044e\u0449\u0438\u0435 \u043e\u043a\u043d\u0430 \u0434\u043b\u044f \u0441\u0430\u0439\u0442\u0430', '#BA7517'); }
+  }
+
   function openNewOrderModal(){
     var bg = document.createElement('div'); bg.className='crm-modal-bg';
     bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
@@ -1359,12 +1454,17 @@
           em.textContent = 'Клиент что-то добавил или убрал после договора \u2014 фиксируй здесь, а не новым договором.';
           box.appendChild(em);
         } else {
-          chs.forEach(function(c){
+          chs.forEach(function(c, ci){
             var r = document.createElement('div'); r.className='crm-ch-row';
             var dt = document.createElement('span'); dt.className='dt'; dt.textContent = fmtDate(c.date);
             var ds = document.createElement('span'); ds.className='ds'; ds.textContent = c.desc;
             var sm = document.createElement('span'); sm.className = 'sm ' + (Number(c.sum)>=0 ? 'in' : 'out');
             sm.textContent = (Number(c.sum)>=0 ? '+' : '\u2212') + fm0(Math.abs(Number(c.sum)||0));
+            var pr = document.createElement('button'); pr.className='prn'; pr.textContent='\uD83D\uDDA8';
+            pr.title = 'Печать доп. соглашения \u2116' + (ci+1);
+            pr.addEventListener('click', function(){
+              printChangeAgreement(o, chs, ci);
+            });
             var del = document.createElement('button'); del.className='del'; del.textContent='\u2715';
             del.title = 'Удалить изменение';
             del.addEventListener('click', function(){
@@ -1380,7 +1480,7 @@
                 toast('\u26A0\uFE0F Не удалилось: '+err, '#BA7517');
               });
             });
-            r.appendChild(dt); r.appendChild(ds); r.appendChild(sm); r.appendChild(del);
+            r.appendChild(dt); r.appendChild(ds); r.appendChild(sm); r.appendChild(pr); r.appendChild(del);
             box.appendChild(r);
           });
         }
