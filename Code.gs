@@ -146,6 +146,7 @@ function ordersSheet_(ss) {
     sh = ss.insertSheet(ORDERS_SHEET);
     sh.getRange(1, 1, 1, ORDERS_HEADER.length).setValues([ORDERS_HEADER]).setFontWeight('bold');
     sh.setFrozenRows(1);
+    sh.hideColumns(COL.snap1, 3);
   }
   return sh;
 }
@@ -206,9 +207,20 @@ function updateOrder_(ss, o) {
     if (o.obj)    sh.getRange(row, COL.obj).setValue(o.obj);
   }
   if (o.status)  sh.getRange(row, COL.status).setValue(o.status);
+  if (o.client)  sh.getRange(row, COL.client).setValue(o.client);
+  if (o.obj)     sh.getRange(row, COL.obj).setValue(o.obj);
+  if (o.city !== undefined)      sh.getRange(row, COL.city).setValue(o.city);
+  if (o.phone !== undefined)     sh.getRange(row, COL.phone).setValue(o.phone);
+  if (o.furn !== undefined)      sh.getRange(row, COL.furn).setValue(o.furn);
+  if (o.note !== undefined)      sh.getRange(row, COL.note).setValue(o.note);
+  if (o.mountDate !== undefined) sh.getRange(row, COL.mountDate).setValue(o.mountDate);
+  if (o.paid !== undefined)      sh.getRange(row, COL.paid).setValue(o.paid);
   if (o.soglPrice !== undefined) sh.getRange(row, COL.sogl).setValue(o.soglPrice);
   if (o.avans !== undefined)     sh.getRange(row, COL.avans).setValue(o.avans);
-  if (o.soglPrice !== undefined && o.avans !== undefined) sh.getRange(row, COL.debt).setValue((o.soglPrice || 0) - (o.avans || 0));
+  var soglV = Number(sh.getRange(row, COL.sogl).getValue()) || 0;
+  var avV   = Number(sh.getRange(row, COL.avans).getValue()) || 0;
+  var paidV = Number(sh.getRange(row, COL.paid).getValue()) || 0;
+  if (soglV > 0) sh.getRange(row, COL.debt).setValue(soglV - avV - paidV);
   if (o.status === 'Договор')    sh.getRange(row, COL.dogDate).setValue(new Date());
   sh.getRange(row, COL.updated).setValue(new Date());
   return { ok: true, row: row, created: isNew };

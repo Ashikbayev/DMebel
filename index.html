@@ -261,6 +261,14 @@
 </div>
 
 <!-- ИСТОРИЯ -->
+<div class="pg" id="pg-crm">
+  <div class="hdr" style="position:sticky;top:0;z-index:50">
+    <div class="hdr-logo">C</div>
+    <h1>СРМ — Заказы</h1>
+    <button onclick="if(window.crmReload)window.crmReload()" style="margin-left:auto;background:none;border:1px solid #e0e0e0;border-radius:6px;padding:4px 10px;font-size:11px;color:#666;cursor:pointer">↻ Обновить</button>
+  </div>
+  <div id="crm-root" style="padding:10px 12px"></div>
+</div>
 <div class="pg" id="pg-hist">
   <div class="hdr" style="position:sticky;top:0;z-index:50">
     <div class="hdr-logo">H</div>
@@ -897,6 +905,7 @@
 <div class="bar">
   <button class="bbt on" id="bbt-calc" onclick="page('calc')"><i class="ti ti-calculator"></i>Расчёт</button>
   <button class="bbt" id="bbt-kp" onclick="if(C.BL)openKpVarModal()"><i class="ti ti-file-text"></i>КП</button>
+  <button class="bbt" id="bbt-crm" onclick="page('crm')"><i class="ti ti-layout-kanban"></i>СРМ</button>
   <button class="bbt" id="bbt-hist" onclick="page('hist')"><i class="ti ti-history"></i>История</button>
   <button class="bbt" id="bbt-conf" onclick="page('conf')"><i class="ti ti-cube-3d-sphere"></i>3D</button>
   <button class="bbt" id="bbt-kitchen" onclick="page('kitchen')"><i class="ti ti-tools-kitchen-2"></i>Кухня</button>
