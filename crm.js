@@ -23,9 +23,18 @@
   'use strict';
 
   var GS_URL = window.CRM_GS_URL || '';
-  var TOKEN  = 'MebelOFF-2026';   // должен совпадать с CRM_TOKEN в Code.gs
   var SNAP_LIMIT = 45000;         // символов на колонку
   var SNAP_COLS  = 3;
+
+  // Ключ доступа СРМ (совпадает с CRM_TOKEN в Code.gs).
+  // В коде НЕ хранится — сайт публичный, и токен в исходниках был бы
+  // виден любому. Вводится один раз на каждом устройстве и лежит
+  // в localStorage. В файл бэкапа намеренно не попадает.
+  function getToken(){ return localStorage.getItem('moff_crm_token') || ''; }
+  function setToken(t){
+    if (t) localStorage.setItem('moff_crm_token', t);
+    else localStorage.removeItem('moff_crm_token');
+  }
 
   function toast(msg, color){
     if (typeof window.showStatus === 'function') {
@@ -36,7 +45,8 @@
 
   function post(payload, onOk, onErr){
     if (!GS_URL) { if (onErr) onErr('не задан URL таблицы'); return; }
-    payload.token = TOKEN;
+    payload.token = getToken();
+    if (!payload.token) { if (onErr) onErr('не введён ключ доступа — открой вкладку СРМ и введи ключ'); return; }
     // ВАЖНО: body как простой текст (без заголовка application/json) —
     // иначе браузер шлёт preflight-запрос OPTIONS, на который Apps Script
     // не отвечает, и запрос падает по CORS.
@@ -265,13 +275,51 @@
   }
 
   function fetchOrders(cb){
-    fetch(GS_URL + '?action=orders')
+    if(!getToken()){ cb('__no_key__'); return; }
+    fetch(GS_URL + '?action=orders&token=' + encodeURIComponent(getToken()))
       .then(function(r){ return r.json(); })
       .then(function(res){
         if(res && res.ok){ ORDERS = res.orders || []; LOADED = true; cb(null); }
+        else if(res && res.error === 'нет доступа') cb('__bad_key__');
         else cb((res && res.error) || 'таблица вернула ошибку');
       })
       .catch(function(e){ cb(String(e && e.message || e)); });
+  }
+
+  function renderKeyGate(badKey){
+    var root = document.getElementById('crm-root');
+    if(!root) return;
+    injectCrmStyle();
+    root.innerHTML = '';
+    var box = document.createElement('div');
+    box.style.cssText = 'max-width:380px;margin:40px auto;background:#fff;border:1px solid #eee;border-radius:12px;padding:20px';
+    var h = document.createElement('div');
+    h.style.cssText = 'font-size:14px;font-weight:600;color:#222;margin-bottom:6px';
+    h.textContent = '\uD83D\uDD11 Ключ доступа СРМ';
+    var p = document.createElement('div');
+    p.style.cssText = 'font-size:11px;color:#888;line-height:1.5;margin-bottom:12px';
+    p.textContent = badKey
+      ? 'Ключ не подошёл. Проверь, что он совпадает с CRM_TOKEN в Code.gs (буква в букву).'
+      : 'Данные клиентов защищены. Введи ключ один раз — он сохранится на этом устройстве. Ключ — это значение CRM_TOKEN из Code.gs.';
+    var inp2 = document.createElement('input');
+    inp2.type = 'password';
+    inp2.placeholder = 'Ключ доступа';
+    inp2.style.cssText = 'width:100%;font-size:13px;border:1px solid #ddd;border-radius:8px;padding:9px 10px;box-sizing:border-box;margin-bottom:10px';
+    var btn = document.createElement('button');
+    btn.className = 'crm-m-btn save';
+    btn.style.width = '100%';
+    btn.textContent = 'Войти в СРМ';
+    function submit(){
+      var v = inp2.value.trim();
+      if(!v){ toast('\u26A0\uFE0F Введи ключ', '#BA7517'); return; }
+      setToken(v);
+      window.crmReload();
+    }
+    btn.addEventListener('click', submit);
+    inp2.addEventListener('keydown', function(e){ if(e.key === 'Enter') submit(); });
+    box.appendChild(h); box.appendChild(p); box.appendChild(inp2); box.appendChild(btn);
+    root.appendChild(box);
+    setTimeout(function(){ try{ inp2.focus(); }catch(e){} }, 50);
   }
 
   window.crmPageOpen = function(){
@@ -280,6 +328,8 @@
     var root = document.getElementById('crm-root');
     if(root) root.innerHTML = '<div class="crm-empty">Загружаю заказы из таблицы...</div>';
     fetchOrders(function(err){
+      if(err === '__no_key__'){ renderKeyGate(false); return; }
+      if(err === '__bad_key__'){ setToken(''); renderKeyGate(true); return; }
       if(err){ if(root) root.innerHTML = '<div class="crm-empty">Не удалось загрузить: '+err+'<br><br><button class="crm-vbtn" onclick="crmReload()">Повторить</button></div>'; return; }
       renderAll();
     });
@@ -450,6 +500,18 @@
     var cnt = document.createElement('span');
     cnt.className = 'crm-count'; cnt.id = 'crm-count';
     tools.appendChild(cnt);
+    var bKey = document.createElement('button');
+    bKey.className = 'crm-vbtn';
+    bKey.textContent = '\uD83D\uDD11';
+    bKey.title = 'Сменить ключ доступа СРМ';
+    bKey.addEventListener('click', function(){
+      var sure = confirm('Выйти из СРМ на этом устройстве? Для входа снова понадобится ключ.');
+      if(!sure) return;
+      setToken('');
+      LOADED = false; ORDERS = [];
+      renderKeyGate(false);
+    });
+    tools.appendChild(bKey);
     root.appendChild(tools);
     var view = document.createElement('div');
     view.id = 'crm-view';
@@ -936,7 +998,7 @@
   }
 
   function openCalcFromOrder(num, done){
-    fetch(GS_URL + '?action=order&num=' + encodeURIComponent(num))
+    fetch(GS_URL + '?action=order&num=' + encodeURIComponent(num) + '&token=' + encodeURIComponent(getToken()))
       .then(function(r){ return r.json(); })
       .then(function(res){
         if(!res || !res.ok){ done((res && res.error) || 'таблица вернула ошибку'); return; }
