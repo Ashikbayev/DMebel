@@ -1,6 +1,7 @@
 
 
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxDa66S-OSeSR1B6B2EoS0h5R6X2jW22zccdJP8HtbiGwEh-IGzqf5BsmXNRTeTWN78/exec';
+window.CRM_GS_URL = SHEETS_URL;
 
 // Статус загрузки
 function showStatus(msg, color) {
@@ -1044,6 +1045,7 @@ function generateDogovor() {
   var w = window.open('','_blank');
   if (w) { w.document.write(H); w.document.close(); }
   else { alert('\u0411\u0440\u0430\u0443\u0437\u0435\u0440 \u0437\u0430\u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u0430\u043b \u043e\u043a\u043d\u043e. \u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 \u0432\u0441\u043f\u043b\u044b\u0432\u0430\u044e\u0449\u0438\u0435 \u043e\u043a\u043d\u0430 \u0434\u043b\u044f \u044d\u0442\u043e\u0433\u043e \u0441\u0430\u0439\u0442\u0430.'); }
+  if(window.crmDogovorSigned)window.crmDogovorSigned({num:numVal,client:client,obj:obj,total:Math.round(tot),avans:p1,fullPay:fullPay});
 }
 
 
@@ -2618,6 +2620,7 @@ function saveCalc(){
   if(hist.length>50)hist.pop();
   localStorage.setItem("mebeloff_hist",JSON.stringify(hist));
   showStatus("OK Расчёт сохранён","#1D9E75");setTimeout(hideStatus,2000);
+  if(window.crmPushOrder)window.crmPushOrder(rec);
 }
 function renderHist(){
   const hist=JSON.parse(localStorage.getItem("mebeloff_hist")||"[]");
