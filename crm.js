@@ -232,7 +232,16 @@
       '.crm-next{margin-top:6px;width:100%;font-size:10px;border:1px solid #e0e0e0;background:#fafaf8;border-radius:6px;padding:4px 6px;cursor:pointer;color:#1a5252;text-align:center}'+
       '.crm-next:hover{background:#1a5252;color:#fff;border-color:#1a5252}'+
       '.crm-warn-line{font-size:11px;color:#BA7517;background:#fdf6ec;border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer}'+
-      '.crm-tel{color:#185FA5;text-decoration:none}';
+      '.crm-tel{color:#185FA5;text-decoration:none}'+
+      '.crm-vbtn.new{background:#0F6E56;color:#fff;border-color:#0F6E56}'+
+      '.crm-col.drag{outline:2px dashed #1a5252;outline-offset:-2px;background:#eef4f2}'+
+      '.crm-card[draggable=true]{user-select:none}'+
+      '.crm-al{background:#fff;border:1px solid #f0d9b5;border-radius:10px;margin-bottom:10px;overflow:hidden}'+
+      '.crm-al-h{display:flex;align-items:center;gap:6px;padding:9px 12px;font-size:12px;font-weight:600;color:#BA7517;cursor:pointer;background:#fdf6ec}'+
+      '.crm-al-h .tgl{margin-left:auto;font-size:11px;color:#c9a15f}'+
+      '.crm-al-row{display:flex;gap:8px;align-items:center;padding:7px 12px;font-size:11px;color:#555;border-top:1px solid #faf3e6;cursor:pointer}'+
+      '.crm-al-row:hover{background:#fdfaf4}'+
+      '.crm-al-row b{color:#222;white-space:nowrap}';
     document.head.appendChild(st);
   }
 
@@ -264,6 +273,40 @@
     fetchOrders(function(err){ if(!err) renderAll(); });
   }
 
+  function buildAlerts(){
+    var out = [];
+    var now = Date.now();
+    var instIdx = STATUSES.indexOf('Установка');
+    ORDERS.forEach(function(o){
+      var debt = debtOf(o);
+      if(o.status === 'Готова' && debt > 0){
+        out.push({ o:o, text:'мебель готова, а долг не закрыт: ' + fm0(debt) });
+        return;
+      }
+      if(!isActive(o)) return;
+      var md = o.mountDate ? new Date(o.mountDate) : null;
+      if(md && !isNaN(md.getTime())){
+        var days = Math.floor((md.getTime() - now) / 86400000);
+        var stIdx = STATUSES.indexOf(o.status);
+        if(days < 0 && stIdx >= 0 && stIdx < instIdx){
+          out.push({ o:o, text:'дата установки прошла (' + fmtDate(o.mountDate) + '), а заказ ещё на этапе «' + o.status + '»' });
+          return;
+        }
+        if(days >= 0 && days <= 7){
+          out.push({ o:o, text:'установка ' + (days===0 ? 'СЕГОДНЯ' : 'через ' + days + ' дн.') + ' (' + fmtDate(o.mountDate) + '), этап: ' + o.status });
+          return;
+        }
+      }
+      if(o.updated){
+        var u = new Date(o.updated);
+        if(!isNaN(u.getTime()) && (now - u.getTime()) > 14 * 86400000){
+          out.push({ o:o, text:'нет движения больше 2 недель (этап «' + o.status + '»)' });
+        }
+      }
+    });
+    return out;
+  }
+
   function renderAll(){
     var root = document.getElementById('crm-root');
     if(!root) return;
@@ -289,9 +332,44 @@
     tile(fm0(debtTotal), 'долг клиентов', debtTotal>0);
     tile(String(mountsNow), 'установок в этом месяце');
     root.appendChild(sum);
+    // ── Требует внимания ──
+    var alerts = buildAlerts();
+    if(alerts.length){
+      var al = document.createElement('div'); al.className='crm-al';
+      var alh = document.createElement('div'); alh.className='crm-al-h';
+      var open = localStorage.getItem('moff_crm_alerts') !== '0';
+      var alBody = document.createElement('div');
+      alBody.style.display = open ? '' : 'none';
+      var tgl = document.createElement('span'); tgl.className='tgl';
+      tgl.textContent = open ? 'свернуть' : 'показать';
+      var htxt = document.createElement('span');
+      htxt.textContent = '\u26A0\uFE0F Требует внимания: ' + alerts.length;
+      alh.appendChild(htxt); alh.appendChild(tgl);
+      alh.addEventListener('click', function(){
+        var vis2 = alBody.style.display === 'none';
+        alBody.style.display = vis2 ? '' : 'none';
+        tgl.textContent = vis2 ? 'свернуть' : 'показать';
+        localStorage.setItem('moff_crm_alerts', vis2 ? '1' : '0');
+      });
+      alerts.forEach(function(a){
+        var r = document.createElement('div'); r.className='crm-al-row';
+        var nEl = document.createElement('b'); nEl.textContent = '\u2116'+a.o.num;
+        var tEl = document.createElement('span'); tEl.textContent = a.text;
+        r.appendChild(nEl); r.appendChild(tEl);
+        r.addEventListener('click', function(){ openCard(a.o.num); });
+        alBody.appendChild(r);
+      });
+      al.appendChild(alh); al.appendChild(alBody);
+      root.appendChild(al);
+    }
     // ── Инструменты ──
     var tools = document.createElement('div');
     tools.className = 'crm-tools';
+    var bNew = document.createElement('button');
+    bNew.className = 'crm-vbtn new';
+    bNew.textContent = '+ Заказ';
+    bNew.addEventListener('click', openNewOrderModal);
+    tools.appendChild(bNew);
     var bBoard = document.createElement('button');
     bBoard.className = 'crm-vbtn' + (VIEW==='board' ? ' on' : '');
     bBoard.textContent = 'Доска';
@@ -386,6 +464,11 @@
   function makeCard(o){
     var d = document.createElement('div');
     d.className = 'crm-card';
+    d.draggable = true;
+    d.addEventListener('dragstart', function(e){
+      e.dataTransfer.setData('text/plain', String(o.num));
+      e.dataTransfer.effectAllowed = 'move';
+    });
     d.style.borderLeftColor = ST_COLOR[o.status] || '#ccc';
     var l1 = document.createElement('div'); l1.className='l1';
     var t1 = document.createElement('span'); t1.textContent = '\u2116' + o.num + (o.furn ? ' \u00B7 ' + o.furn : '');
@@ -433,6 +516,24 @@
       var inCol = vis.filter(function(o){ return o.status === st; });
       if(!inCol.length && (st==='Отказ' || st==='Отложено')) return;
       var col = document.createElement('div'); col.className='crm-col';
+      col.addEventListener('dragover', function(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; col.classList.add('drag'); });
+      col.addEventListener('dragleave', function(){ col.classList.remove('drag'); });
+      col.addEventListener('drop', function(e){
+        e.preventDefault();
+        col.classList.remove('drag');
+        var num = e.dataTransfer.getData('text/plain');
+        var o = null;
+        for(var i=0;i<ORDERS.length;i++){ if(String(ORDERS[i].num)===String(num)){ o=ORDERS[i]; break; } }
+        if(!o || o.status === st) return;
+        var from = o.status;
+        o.status = st; renderAll();
+        post({ action:'updateOrder', order:{ num:String(num), status:st } }, function(){
+          toast('OK \u2116'+num+': '+from+' \u2192 '+st, '#1a5252');
+        }, function(err){
+          o.status = from; renderAll();
+          toast('\u26A0\uFE0F Статус не записался, вернул обратно: '+err, '#BA7517');
+        });
+      });
       var h = document.createElement('div'); h.className='crm-col-h';
       var dot = document.createElement('span'); dot.className='dot'; dot.style.background = ST_COLOR[st];
       var nm = document.createElement('span'); nm.textContent = st;
@@ -501,6 +602,80 @@
     e.type = type || 'text';
     e.value = (val===undefined||val===null) ? '' : String(val);
     return e;
+  }
+
+  function openNewOrderModal(){
+    var bg = document.createElement('div'); bg.className='crm-modal-bg';
+    bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
+    var m = document.createElement('div'); m.className='crm-modal';
+    var h = document.createElement('div'); h.className='crm-m-h';
+    var title = document.createElement('b'); title.textContent = 'Новый заказ (\u2116 присвоится автоматически)';
+    var x = document.createElement('button'); x.className='crm-m-x'; x.textContent='\u00D7';
+    x.addEventListener('click', function(){ document.body.removeChild(bg); });
+    h.appendChild(title); h.appendChild(x);
+    var b = document.createElement('div'); b.className='crm-m-b';
+
+    var selSt = document.createElement('select');
+    STATUSES.forEach(function(s){ var op=document.createElement('option'); op.value=s; op.textContent=s; selSt.appendChild(op); });
+    selSt.value = 'Замер';
+    var iClient = inp(''), iPhone = inp(''), iCity = inp(''), iFurn = inp(''), iObj = inp('');
+    iClient.placeholder = 'Имя клиента'; iPhone.placeholder = '+7 ...';
+    iCity.placeholder = 'Сат / Жез'; iFurn.placeholder = 'Кухня / Шкаф / ...';
+    var iNote = document.createElement('textarea'); iNote.rows=2;
+
+    b.appendChild(field('Статус', selSt));
+    var r1 = document.createElement('div'); r1.className='crm-2col';
+    r1.appendChild(field('Клиент', iClient)); r1.appendChild(field('Телефон', iPhone));
+    b.appendChild(r1);
+    var r2 = document.createElement('div'); r2.className='crm-2col';
+    r2.appendChild(field('Город', iCity)); r2.appendChild(field('Тип мебели', iFurn));
+    b.appendChild(r2);
+    b.appendChild(field('Адрес / объект', iObj));
+    b.appendChild(field('Примечание', iNote));
+
+    var btns = document.createElement('div'); btns.className='crm-m-btns';
+    var bSave = document.createElement('button'); bSave.className='crm-m-btn save'; bSave.textContent='Создать заказ';
+    bSave.addEventListener('click', function(){
+      if(!iClient.value.trim() && !iPhone.value.trim()){
+        toast('\u26A0\uFE0F Укажи хотя бы имя или телефон клиента', '#BA7517');
+        return;
+      }
+      bSave.disabled = true; bSave.textContent = 'Создаю...';
+      var order = {
+        status: selSt.value,
+        client: iClient.value.trim(),
+        phone: iPhone.value.trim(),
+        city: iCity.value.trim(),
+        furn: iFurn.value.trim(),
+        obj: iObj.value.trim(),
+        note: iNote.value.trim()
+      };
+      post({ action:'createOrder', order: order }, function(res){
+        if(!res || !res.num){
+          bSave.disabled=false; bSave.textContent='Создать заказ';
+          toast('\u26A0\uFE0F ' + ((res && res.error) || 'таблица не вернула номер'), '#BA7517');
+          return;
+        }
+        ORDERS.unshift({
+          num: res.num, status: order.status, client: order.client, phone: order.phone,
+          city: order.city, furn: order.furn, obj: order.obj, note: order.note,
+          pred: 0, sogl: 0, avans: 0, paid: 0, totL: 0, totP: 0, totK: 0,
+          dogDate: '', mountDate: '', updated: new Date().toISOString()
+        });
+        document.body.removeChild(bg);
+        renderAll();
+        toast('OK Заказ \u2116' + res.num + ' создан: ' + (order.client || order.phone), '#1a5252');
+      }, function(err){
+        bSave.disabled=false; bSave.textContent='Создать заказ';
+        toast('\u26A0\uFE0F Не создался: '+err, '#BA7517');
+      });
+    });
+    btns.appendChild(bSave);
+    b.appendChild(btns);
+    m.appendChild(h); m.appendChild(b);
+    bg.appendChild(m);
+    document.body.appendChild(bg);
+    setTimeout(function(){ try{ iClient.focus(); }catch(e){} }, 50);
   }
 
   function openCard(num){

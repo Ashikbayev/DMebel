@@ -130,6 +130,7 @@ function doPost(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     if (req.action === 'saveOrder')        res = saveOrder_(ss, req.order || {});
     else if (req.action === 'updateOrder') res = updateOrder_(ss, req.order || {});
+    else if (req.action === 'createOrder') res = createOrder_(ss, req.order || {});
     else res.error = 'неизвестное действие: ' + req.action;
   } catch (err) {
     res = { ok: false, error: String(err) };
@@ -137,6 +138,33 @@ function doPost(e) {
     try { lock.releaseLock(); } catch (e2) {}
   }
   return out_(res, null);
+}
+
+// Новый заказ без расчёта (со звонка): № присваивается автоматически = макс. существующий + 1
+function createOrder_(ss, o) {
+  var sh = ordersSheet_(ss);
+  var last = sh.getLastRow();
+  var maxN = 0;
+  if (last >= 2) {
+    var nums = sh.getRange(2, COL.num, last - 1, 1).getValues();
+    nums.forEach(function(r){
+      var n = parseInt(String(r[0]).replace(/\D/g, ''), 10);
+      if (n && n > maxN) maxN = n;
+    });
+  }
+  var num = o.num ? String(o.num) : String(maxN + 1);
+  if (findRowByNum_(sh, num) > 0) return { ok: false, error: 'заказ №' + num + ' уже существует' };
+  var row = last + 1;
+  sh.getRange(row, COL.num).setValue(num);
+  sh.getRange(row, COL.status).setValue(o.status || 'Замер');
+  if (o.client) sh.getRange(row, COL.client).setValue(o.client);
+  if (o.phone)  sh.getRange(row, COL.phone).setValue(o.phone);
+  if (o.city)   sh.getRange(row, COL.city).setValue(o.city);
+  if (o.furn)   sh.getRange(row, COL.furn).setValue(o.furn);
+  if (o.obj)    sh.getRange(row, COL.obj).setValue(o.obj);
+  if (o.note)   sh.getRange(row, COL.note).setValue(o.note);
+  sh.getRange(row, COL.updated).setValue(new Date());
+  return { ok: true, num: num };
 }
 
 // Лист "Заказы": вернуть, создать при отсутствии
