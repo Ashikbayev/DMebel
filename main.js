@@ -96,7 +96,7 @@ let appReady=false;
 const $=id=>document.getElementById(id);
 const fm=n=>Math.round(n).toLocaleString("ru")+"₸";
 const gn=id=>{const e=$(id);return e?(parseFloat(e.value)||0):0;};
-const st=(id,v)=>{const e=$(id);if(e)e.textContent=fm(v);};
+const st=(id,v)=>{const e=$(id);if(e){e.textContent=fm(v);e.classList.toggle("filled",v>0);}};
 const sx=(id,v)=>{const e=$(id);if(e)e.textContent=v;};
 function page(p){["calc","kp","hist","conf","kitchen","crm"].forEach(n=>{$("pg-"+n)?.classList.toggle("on",n===p);const b=$("bbt-"+n);if(b)b.classList.toggle("on",n===p);});if(p==="hist")renderHist();if(p==="conf"){initConf();}if(p==="kitchen"){initKitchen();}if(p==="crm"&&window.crmPageOpen){window.crmPageOpen();}}
 function tab(t){["calc","coef","extra","vit","itog"].forEach(s=>$("scr-"+s).classList.toggle("on",s===t));document.querySelectorAll(".tb").forEach((b,i)=>b.classList.toggle("on",["calc","coef","extra","vit","itog"][i]===t));document.body.classList.toggle("itog-active",t==="itog");recalc();window.scrollTo(0,0);}
@@ -589,7 +589,7 @@ function recalc(){
     if(be)be.textContent="Себестоимость "+fm(b.base)+" · работа мастера "+fm(b.work)+" · доход дизайнера "+fm(b.des)+" · наш доход "+fm(b.our)+" · допустимая скидка до "+fm(b.disc);
   });
   Object.keys(SIMPLE_CFG).forEach(k=>{st("s-"+k,simpleTotal(k));});
-  const sv=$("s-vit");if(sv)sv.textContent=fm(vVit.tot);
+  const sv=$("s-vit");if(sv){sv.textContent=fm(vVit.tot);sv.classList.toggle("filled",vVit.tot>0);}
   const mb=$("moika-breakdown");
   if(mb)mb.textContent="Себестоимость "+fm(mBrk.base)+" · работа мастера "+fm(mBrk.work)+" · доход дизайнера "+fm(mBrk.des)+" · наш доход "+fm(mBrk.our)+" · допустимая скидка до "+fm(mBrk.disc);
   // Итог → сводка по всем Доп.позициям Кухни разом (Мойка + остальные разделы)
