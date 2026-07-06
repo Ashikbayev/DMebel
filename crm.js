@@ -246,6 +246,7 @@
       '.crm-m-btn{flex:1;padding:10px;border-radius:8px;border:none;font-size:12px;font-weight:600;cursor:pointer}'+
       '.crm-m-btn.save{background:#1a5252;color:#fff}'+
       '.crm-m-btn.open{background:#fff;color:#1a5252;border:1px solid #1a5252}'+
+      '.crm-m-btn.danger{background:#fff;color:#c0392b;border:1px solid #e0b4ae;flex:0 0 auto;padding:10px 14px}'+
       '.crm-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:10px}'+
       '.crm-sum-t{background:#fff;border:1px solid #eee;border-radius:10px;padding:10px 12px}'+
       '.crm-sum-t .v{font-size:15px;font-weight:700;color:#1a5252;white-space:nowrap}'+
@@ -1493,6 +1494,44 @@
     b.appendChild(moneyWrap);
 
     var btns = document.createElement('div'); btns.className='crm-m-btns';
+    var bDel = document.createElement('button'); bDel.className='crm-m-btn danger'; bDel.textContent='\uD83D\uDDD1';
+    bDel.title = 'Удалить заказ из СРМ';
+    bDel.addEventListener('click', function(){
+      var chCnt = CH_LOADED ? changesOf(o.num).length : 0;
+      var finCnt = 0;
+      if(FIN_LOADED){
+        FIN.forEach(function(f){ if(String(f.num)===String(o.num)) finCnt++; });
+      }
+      var w1 = 'Удалить заказ \u2116' + o.num + (o.client ? ' (' + o.client + ')' : '') + ' из СРМ?\n\n';
+      w1 += 'Вместе с ним из таблицы удалятся снимок расчёта';
+      if(chCnt) w1 += ' и изменения к договору (' + chCnt + ' шт.)';
+      w1 += '.';
+      if(finCnt) w1 += '\n\nОперации в Финансах (' + finCnt + ' шт.) останутся в кассе, но отвяжутся от \u2116 (пометка \u00abзаказ удалён\u00bb).';
+      w1 += '\nЛокальная История в калькуляторе не затрагивается.';
+      if(!confirm(w1)) return;
+      if(!confirm('ВТОРОЕ ПРЕДУПРЕЖДЕНИЕ\n\nДействие необратимо: строку заказа и снимок расчёта в таблице восстановить будет НЕЛЬЗЯ.\n\nТочно удалить заказ \u2116' + o.num + '?')) return;
+      bDel.disabled = true; bDel.textContent = '...';
+      post({ action:'delOrder', num: String(o.num) }, function(res){
+        ORDERS = ORDERS.filter(function(x){ return String(x.num) !== String(o.num); });
+        CH = CH.filter(function(x){ return String(x.num) !== String(o.num); });
+        FIN.forEach(function(f){
+          if(String(f.num) === String(o.num)){
+            f.num = '';
+            f.comment = (f.comment ? f.comment + ' ' : '') + '(был заказ \u2116' + o.num + ', удалён)';
+          }
+        });
+        document.body.removeChild(bg);
+        renderAll();
+        var extra = '';
+        if(res && res.removedChanges) extra += ' (+' + res.removedChanges + ' измен.)';
+        if(res && res.detachedFin) extra += ', операций отвязано: ' + res.detachedFin;
+        toast('OK Заказ \u2116' + o.num + ' удалён из СРМ' + extra, '#1a5252');
+      }, function(err){
+        bDel.disabled = false; bDel.textContent = '\uD83D\uDDD1';
+        toast('\u26A0\uFE0F Не удалилось: ' + err, '#BA7517');
+      });
+    });
+    btns.appendChild(bDel);
     var bOpen = document.createElement('button'); bOpen.className='crm-m-btn open'; bOpen.textContent='\uD83D\uDCC2 Открыть расчёт';
     bOpen.addEventListener('click', function(){
       var sure = confirm('Открыть расчёт заказа \u2116'+o.num+'? Текущий несохранённый расчёт в калькуляторе будет заменён.');
