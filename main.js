@@ -35,7 +35,7 @@ async function loadFromSheets() {
       DB.fas_kr = data.fas_kr;
       DB.furn = data.furn;
       DB.kuh = data.kuh;
-      DB.shk = data.shk || DB.shk;
+      DB.shk = (data.shk && data.shk.length) ? data.shk : DB.shk;
       DB.acc = data.acc || DB.acc;
       DB.svet = data.svet;
       DB.works = data.works;
@@ -214,6 +214,34 @@ function cIt(sec){
     const parts=[cat];if(vid&&vid!=="—")parts.push(vid);if(firm&&firm!=="—")parts.push(firm);
     return{n:parts.join(" "),q};
   }).filter(Boolean);
+}
+// ── Авто-слоты: колонка «Авто» листов Фурнитура/Кухня/Шкаф ──
+// Рисует преднастроенные строки разделов (категория/вид/фирма выставлены,
+// кол-во пустое — слот финансово инертен, в КП/договор не попадает).
+// Вызывается ТОЛЬКО на чистом старте (черновик не восстановлен) и в
+// fullReset(); applySnap сам сносит всё и строит своё — шаблон не мешает.
+// Лимит 10 слотов на строку листа — защита от опечатки в колонке «Авто».
+function renderTpl(){
+  var lids={furn:"furn-list",kuh:"kuh-list",shk:"shk-list"};
+  Object.keys(lids).forEach(function(sec){
+    var arr=gA(sec);
+    if(!arr||!arr.length)return;
+    arr.forEach(function(row){
+      var n=Math.min(10,Math.max(0,Math.floor(Number(row.auto)||0)));
+      for(var j=0;j<n;j++){
+        addCat(sec,arr,lids[sec]);
+        var i=ST[sec].length-1;
+        var c=$(sec+"c"+i);
+        if(c)c.value=String(row.cat);
+        uC(sec,i);
+        var v=$(sec+"v"+i);
+        if(v&&row.vid&&String(row.vid)!=="—")v.value=String(row.vid);
+        var f=$(sec+"f"+i);
+        if(f&&row.firm&&String(row.firm)!=="—")f.value=String(row.firm);
+        uCP(sec,i);
+      }
+    });
+  });
 }
 function addDop(){
   const i=ST.dop.length;ST.dop.push(1);
@@ -2077,6 +2105,7 @@ function fullReset(){
   ["hdf-qty","krom-qty","d-sat","d-pdm","svet-inc","c-sl","c-sp","c-sk"].forEach(id=>{const e=$(id);if(e)e.value="0";});
   const cwl=$("cworks-list");if(cwl)cwl.innerHTML="";
   renderWorks();
+  renderTpl();
   clearDraft();
   recalc();tab("calc");
 }
@@ -2579,13 +2608,16 @@ function restoreDraftOnLoad(preReadDraft){
   if(draft===null){
     try{ draft=JSON.parse(localStorage.getItem("mebeloff_draft")||"null"); }catch(e){ console.error("Черновик: ошибка чтения —",e); }
   }
+  let restored=false;
   if(draft&&draft.ST){
     const hasData=Object.keys(draft.ST).some(k=>draft.ST[k].some(x=>x!==null&&x!==undefined))||DB.works.some((_,i)=>draft.snap&&parseFloat(draft.snap["wq"+i]||0)>0);
     if(hasData){
       applySnap(draft);
       showStatus("OK Черновик восстановлен","#1a5252");setTimeout(hideStatus,2500);
+      restored=true;
     }
   }
+  if(!restored)renderTpl();
   appReady=true;
 }
 function checkStorageAvailable(){
