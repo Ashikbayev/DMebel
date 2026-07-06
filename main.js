@@ -2105,6 +2105,9 @@ function fullReset(){
   ["hdf-qty","krom-qty","d-sat","d-pdm","svet-inc","c-sl","c-sp","c-sk"].forEach(id=>{const e=$(id);if(e)e.value="0";});
   const cwl=$("cworks-list");if(cwl)cwl.innerHTML="";
   renderWorks();
+  // Новый расчёт = чистый лист: свернуть все карточки разделов —
+  // авто-слоты шаблона ждут внутри, суммы видны в шапках карточек
+  document.querySelectorAll("#pg-calc .cb.op,#pg-calc .ar.op").forEach(e=>e.classList.remove("op"));
   renderTpl();
   clearDraft();
   recalc();tab("calc");
