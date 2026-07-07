@@ -22,47 +22,144 @@ function hideStatus() {
   if (el) { el.style.opacity = '0'; setTimeout(() => el.remove(), 500); }
 }
 
+// ── v3.2: надёжность цен ─────────────────────────────────────
+// pricesSource: 'live' — сервер, 'cache' — кэш localStorage после
+// отказа сети, 'fallback' — зашитый DB (кэша нет). Пока не отработал
+// loadFromSheets, стоит 'fallback' — КП/договор до загрузки цен спросят
+// подтверждение, это осознанно.
+var PRICES_CACHE_KEY = 'mebeloff_prices_cache';
+var pricesSource = 'fallback';
+var pricesCacheTs = 0;
+
+// Раскладка данных сервера (или кэша) по DB — общая для live и cache.
+function applyPricesData(data) {
+  DB.ldsp = data.ldsp;
+  DB.hdf_p = data.hdf_p || 9000;
+  DB.krom_p = data.krom_p || 200;
+  DB.fas_plen = data.fas_plen;
+  DB.fas_kr = data.fas_kr;
+  DB.furn = data.furn;
+  DB.kuh = data.kuh;
+  DB.shk = (data.shk && data.shk.length) ? data.shk : DB.shk;
+  DB.acc = data.acc || DB.acc;
+  DB.svet = data.svet;
+  DB.works = data.works;
+  DB.vit = data.vit;
+  if (data.moika && data.moika.length > 0) DB.moika = data.moika;
+  if (data.kStol && data.kStol.length > 0) DB.kStol = data.kStol;
+  if (data.kSushilka && data.kSushilka.length > 0) DB.kSushilka = data.kSushilka;
+  if (data.kTelesk && data.kTelesk.length > 0) DB.kTelesk = data.kTelesk;
+  if (data.kPetlya && data.kPetlya.length > 0) DB.kPetlya = data.kPetlya;
+  if (data.kRuchka && data.kRuchka.length > 0) DB.kRuchka = data.kRuchka;
+  if (data.kNozhki && data.kNozhki.length > 0) DB.kNozhki = data.kNozhki;
+  if (data.kPodsvetka && data.kPodsvetka.length > 0) DB.kPodsvetka = data.kPodsvetka;
+  if (data.kKargo && data.kKargo.length > 0) DB.kKargo = data.kKargo;
+  if (data.kPlintus && data.kPlintus.length > 0) DB.kPlintus = data.kPlintus;
+  if (data.kVytyazhka && data.kVytyazhka.length > 0) DB.kVytyazhka = data.kVytyazhka;
+  renderWorks();
+  recalc();
+  kpManagerLoadList();
+}
+
+// Кэш цен: {ts, data} одной строкой. Запись под try/catch — переполнение
+// квоты localStorage не должно ломать работу (данные ~0,1 МБ при лимите 5).
+function savePricesCache(data) {
+  try {
+    localStorage.setItem(PRICES_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: data }));
+  } catch (e) { console.error('Кэш цен: запись не удалась —', e); }
+}
+function readPricesCache() {
+  try {
+    var raw = localStorage.getItem(PRICES_CACHE_KEY);
+    if (!raw) return null;
+    var obj = JSON.parse(raw);
+    if (obj && obj.data && obj.data.ldsp && obj.data.ldsp.length > 0) return obj;
+  } catch (e) { console.error('Кэш цен: чтение не удалось —', e); }
+  return null;
+}
+
+// Отказ сети: сперва кэш, только потом зашитый fallback. В обоих
+// случаях — несмываемый баннер.
+function usePricesCacheOrFallback() {
+  var cached = readPricesCache();
+  if (cached) {
+    applyPricesData(cached.data);
+    pricesSource = 'cache';
+    pricesCacheTs = cached.ts || 0;
+    showStatus('⚠️ Нет связи — цены из кэша', '#BA7517');
+    setTimeout(hideStatus, 3000);
+  } else {
+    pricesSource = 'fallback';
+    showStatus('⚠️ Нет интернета — работаю офлайн', '#BA7517');
+    setTimeout(hideStatus, 3000);
+  }
+  showPriceBanner();
+}
+
+// Несмываемый баннер под шапкой (top:48 — шапка sticky ~48px не
+// перекрывается; нижняя навигация .bar на bottom:0 не задета).
+// Кнопка «Повторить» = перезагрузка: черновик её переживает, а живое
+// переподключение без перезагрузки не делаем — пересоздание слотов
+// на лету было источником багов.
+function showPriceBanner() {
+  if (pricesSource === 'live') return;
+  var el = document.getElementById('price-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'price-banner';
+    el.style.cssText = 'position:fixed;top:48px;left:0;right:0;z-index:99;padding:8px 12px;font-size:12px;font-weight:600;text-align:center;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;box-shadow:0 2px 6px rgba(0,0,0,.18)';
+    document.body.appendChild(el);
+  }
+  var msg;
+  if (pricesSource === 'cache') {
+    var d = pricesCacheTs ? new Date(pricesCacheTs) : null;
+    var when = d ? (d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })) : 'неизвестно когда';
+    msg = '⚠ Нет связи — цены из кэша от ' + when;
+    el.style.background = '#BA7517';
+  } else {
+    msg = '⚠ Нет связи и нет кэша — РЕЗЕРВНЫЕ цены (могут быть устаревшими)';
+    el.style.background = '#C0392B';
+  }
+  el.style.color = '#fff';
+  el.innerHTML = '';
+  var span = document.createElement('span');
+  span.textContent = msg;
+  el.appendChild(span);
+  var btn = document.createElement('button');
+  btn.textContent = 'Повторить';
+  btn.style.cssText = 'padding:4px 12px;border:none;border-radius:6px;background:rgba(255,255,255,.25);color:#fff;font-size:12px;font-weight:600;cursor:pointer';
+  btn.onclick = function () { location.reload(); };
+  el.appendChild(btn);
+  el.style.display = 'flex';
+}
+function hidePriceBanner() {
+  var el = document.getElementById('price-banner');
+  if (el) el.remove();
+}
+
+// Защита денег: КП и договор на не-живых ценах — только через confirm.
+function confirmStalePrices() {
+  if (pricesSource === 'live') return true;
+  return confirm('Внимание: нет связи с базой цен. Цены могут быть устаревшими. Сформировать всё равно?');
+}
+
 async function loadFromSheets() {
   showStatus('Загружаю цены из базы...', '#1a5252');
   try {
     const res = await fetch(SHEETS_URL);
     const data = await res.json();
     if (data.ldsp && data.ldsp.length > 0) {
-      DB.ldsp = data.ldsp;
-      DB.hdf_p = data.hdf_p || 9000;
-      DB.krom_p = data.krom_p || 200;
-      DB.fas_plen = data.fas_plen;
-      DB.fas_kr = data.fas_kr;
-      DB.furn = data.furn;
-      DB.kuh = data.kuh;
-      DB.shk = (data.shk && data.shk.length) ? data.shk : DB.shk;
-      DB.acc = data.acc || DB.acc;
-      DB.svet = data.svet;
-      DB.works = data.works;
-      DB.vit = data.vit;
-      if (data.moika && data.moika.length > 0) DB.moika = data.moika;
-      if (data.kStol && data.kStol.length > 0) DB.kStol = data.kStol;
-      if (data.kSushilka && data.kSushilka.length > 0) DB.kSushilka = data.kSushilka;
-      if (data.kTelesk && data.kTelesk.length > 0) DB.kTelesk = data.kTelesk;
-      if (data.kPetlya && data.kPetlya.length > 0) DB.kPetlya = data.kPetlya;
-      if (data.kRuchka && data.kRuchka.length > 0) DB.kRuchka = data.kRuchka;
-      if (data.kNozhki && data.kNozhki.length > 0) DB.kNozhki = data.kNozhki;
-      if (data.kPodsvetka && data.kPodsvetka.length > 0) DB.kPodsvetka = data.kPodsvetka;
-      if (data.kKargo && data.kKargo.length > 0) DB.kKargo = data.kKargo;
-      if (data.kPlintus && data.kPlintus.length > 0) DB.kPlintus = data.kPlintus;
-      if (data.kVytyazhka && data.kVytyazhka.length > 0) DB.kVytyazhka = data.kVytyazhka;
-      renderWorks();
-      recalc();
-      kpManagerLoadList();
+      applyPricesData(data);
+      pricesSource = 'live';
+      savePricesCache(data);
+      hidePriceBanner();
       showStatus('OK: Цены загружены из Google Sheets', '#1D9E75');
       setTimeout(hideStatus, 2500);
     } else {
-      showStatus('⚠️ Нет данных — работаю офлайн', '#BA7517');
-      setTimeout(hideStatus, 3000);
+      usePricesCacheOrFallback();
     }
   } catch(e) {
-    showStatus('⚠️ Нет интернета — работаю офлайн', '#BA7517');
-    setTimeout(hideStatus, 3000);
+    usePricesCacheOrFallback();
   }
 }
 
@@ -828,6 +925,7 @@ function generateDesignerList(){
 }
 
 function generateDogovor() {
+  if(!confirmStalePrices())return; // v3.2: цены не live — только через подтверждение
   var client  = ($('dog-client')    ||{}).value || '___________________________________';
   var iin     = ($('dog-iin')       ||{}).value || '_______________';
   var addr    = ($('dog-addr')      ||{}).value || '___________________________________';
@@ -1140,6 +1238,7 @@ function kpToggleStyle(){
 }
 
 function showKP(showL=true, showP=true, showK=false, cmpMode=false){
+  if(!confirmStalePrices())return; // v3.2: цены не live — только через подтверждение
   var BLu = cmpMode ? C.BLc : C.BL;
   var BPu = cmpMode ? C.BPc : C.BP;
   var BKu = cmpMode ? C.BKc : C.BK;
