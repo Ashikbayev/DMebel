@@ -122,6 +122,19 @@ function addSimple(sec,arr,lid){
 function sC(sec,arr){return ST[sec].reduce((s,x,i)=>{if(x===null||x===undefined)return s;return s+(arr[x]?.p||0)*(gn(sec+"q"+i));},0);}
 function sIt(sec,arr){return ST[sec].map((x,i)=>{if(x===null||x===undefined)return null;const q=gn(sec+"q"+i);if(!q)return null;return{n:arr[x]?.n,q};}).filter(Boolean);}
 function gA(sec){return sec==="furn"?DB.furn:sec==="kuh"?DB.kuh:sec==="shk"?DB.shk:DB.svet;}
+// ── Подсветка заполненных строк фурнитуры ──
+// Кол-во > 0 → строка получает класс hl (фон + зелёная планка слева):
+// открыл раздел — сразу видно, где проставлено количество. Вызывается из
+// recalc, поэтому покрывает ввод, авто-слоты, черновик, Историю и сброс.
+function hlRows(){
+  ["furn","kuh","shk","svet"].forEach(function(sec){
+    ST[sec].forEach(function(item,i){
+      var r=$(sec+"r"+i);
+      if(!r)return;
+      r.classList.toggle("hl",!!item&&gn(sec+"q"+i)>0);
+    });
+  });
+}
 function addCat(sec,arr,lid){
   const a=ST[sec];const i=a.length;a.push({p:0,cmpOn:false,cmpFirm:null});
   const c=$(lid);if(i===0)c.innerHTML="";
@@ -648,6 +661,7 @@ function recalc(){
     st(pfx+"-t",B.taxA);st(pfx+"-tot",B.tot);st(pfx+"-cr",B.credit);st(pfx+"-inc",B.inc);
   }
   fB("il",BL);fB("ip",BP);fB("ik",BK);
+  hlRows();
   saveDraft();
 }
 
