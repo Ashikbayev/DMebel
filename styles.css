@@ -30,9 +30,11 @@ input.qw{font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:6px
 input.qt{font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:6px 8px;background:var(--in);flex:1;min-width:0}
 .fp{font-size:10px;color:var(--t3);white-space:nowrap;flex-shrink:0}
 .ib{border-top:1px solid #f0f0f0;padding-top:8px;margin-top:8px}
-/* Заполненная строка фурнитуры (кол-во > 0): мягкий фон + планка слева.
-   Без изменения отступов — строки не прыгают при вводе количества. */
-#pg-calc .hl{background:color-mix(in srgb,#1a5252 6%,#fff);border-radius:8px;box-shadow:inset 3px 0 0 #1a5252}
+/* Строки каскадных разделов: у ВСЕХ постоянная прозрачная планка слева и
+   одинаковые отступы — при вводе кол-ва ничего не прыгает, меняется цвет. */
+#furn-list>div,#kuh-list>div,#shk-list>div,#svet-list>div{border-left:3px solid transparent;padding:6px 8px;border-radius:0 10px 10px 0;transition:background-color .15s}
+/* Заполненная строка (кол-во > 0): заметный фон + сплошная зелёная планка */
+#pg-calc .hl{background:#e9f2ef;border-left-color:#1a5252}
 #pg-calc .hl.ib{border-top-color:transparent}
 #pg-calc .hl .fp{color:#1a5252;font-weight:700}
 #pg-calc .hl input.qi{border-color:#1a5252;background:#fff;font-weight:600}
