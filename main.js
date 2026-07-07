@@ -130,9 +130,24 @@ function addCat(sec,arr,lid){
   d.innerHTML=`<div class="fr"><select id="${sec}c${i}" onchange="uC('${sec}',${i})">${cats.map(c=>`<option value="${c}">${c}</option>`).join("")}</select><button class="db" title="Сравнить с другой фирмой" onclick="toggleCmp('${sec}',${i})">⚖</button><button class="db" onclick="$('${sec}r${i}').style.display='none';ST['${sec}'][${i}]=null;recalc()">✕</button></div><div class="fr" id="${sec}vf${i}"></div><div id="${sec}cmp${i}"></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="${sec}q${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="${sec}pp${i}">0₸</span></div>`;
   c.appendChild(d);uC(sec,i);
 }
+// ── Подбор строки прайса ──
+// sv: значения листа к строке — Таблица отдаёт «123»/«450» ЧИСЛОМ, а select
+// всегда строка; строгое === иначе промахивается мимо цены.
+// fRow: СНАЧАЛА точное совпадение Вид+Фирма, и только потом «—» как джокер.
+// Иначе строка с видом «—», стоящая в листе выше, перехватывает конкретный
+// вид (Пантограф «—» 15000 затенял Пантограф Серый 25000).
+function sv(x){return x===undefined||x===null?"":String(x);}
+function fRow(arr,cat,vid,firm){
+  const c=sv(cat),v=sv(vid),f=sv(firm);
+  const byCat=arr.filter(x=>sv(x.cat)===c);
+  return byCat.find(x=>sv(x.vid)===v&&sv(x.firm)===f)
+    ||byCat.find(x=>sv(x.vid)===v&&(sv(x.firm)==="—"||!x.firm))
+    ||byCat.find(x=>(sv(x.vid)===v||sv(x.vid)==="—")&&(sv(x.firm)===f||sv(x.firm)==="—"||!x.firm))
+    ||null;
+}
 function uC(sec,i){
   const arr=gA(sec);const cat=$(sec+"c"+i)?.value;
-  const rows=arr.filter(x=>x.cat===cat);
+  const rows=arr.filter(x=>sv(x.cat)===sv(cat));
   const vids=[...new Set(rows.map(x=>x.vid))];
   const firms=[...new Set(rows.map(x=>x.firm).filter(f=>f&&f!=="—"))];
   const vf=$(sec+"vf"+i);vf.innerHTML="";
@@ -143,7 +158,7 @@ function uC(sec,i){
 function uCP(sec,i){
   const arr=gA(sec);const a=ST[sec];
   const cat=$(sec+"c"+i)?.value,vid=$(sec+"v"+i)?.value||"—",firm=$(sec+"f"+i)?.value||"—";
-  const row=arr.find(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")&&(x.firm===firm||x.firm==="—"||!x.firm));
+  const row=fRow(arr,cat,vid,firm);
   const p=row?.p||0;if(a[i])a[i]=Object.assign({},a[i],{p});
   const pr=$(sec+"pp"+i);if(pr)pr.textContent=p.toLocaleString("ru")+"₸";
   renderCmpRow(sec,i);
@@ -167,7 +182,7 @@ function renderCmpRow(sec,i){
   if(!a.cmpOn){host.innerHTML="";return;}
   const arr=gA(sec);
   const cat=$(sec+"c"+i)?.value,vid=$(sec+"v"+i)?.value||"—",curFirm=$(sec+"f"+i)?.value||"—";
-  const firms=[...new Set(arr.filter(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")).map(x=>x.firm).filter(f=>f&&f!=="—"&&f!==curFirm))];
+  const firms=[...new Set(arr.filter(x=>sv(x.cat)===sv(cat)&&(sv(x.vid)===sv(vid)||sv(x.vid)==="—")).map(x=>x.firm).filter(f=>f&&f!=="—"&&f!==curFirm))];
   if(firms.length===0){host.innerHTML="<div class='fr' style='margin-top:4px'><span class='lb' style='color:#888'>⚖ Сравнить</span><span style='font-size:11px;color:#aaa'>нет другой фирмы в этой категории</span></div>";return;}
   if(!a.cmpFirm||firms.indexOf(a.cmpFirm)<0)a.cmpFirm=firms[0];
   let opts="";firms.forEach(f=>{opts+="<option value='"+f+"'"+(f===a.cmpFirm?" selected":"")+">"+f+"</option>";});
@@ -179,7 +194,7 @@ function cCmp(sec){
     if(!item)return s;
     const cat=$(sec+"c"+i)?.value,vid=$(sec+"v"+i)?.value||"—";
     const firm=(item.cmpOn&&item.cmpFirm)?item.cmpFirm:($(sec+"f"+i)?.value||"—");
-    const row=arr.find(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")&&(x.firm===firm||x.firm==="—"||!x.firm));
+    const row=fRow(arr,cat,vid,firm);
     return s+(row?.p||0)*(gn(sec+"q"+i));
   },0);
 }
@@ -189,7 +204,7 @@ function cItCmp(sec){
     if(!item)return null;
     const cat=$(sec+"c"+i)?.value||"",vid=$(sec+"v"+i)?.value||"—";
     const firm=(item.cmpOn&&item.cmpFirm)?item.cmpFirm:($(sec+"f"+i)?.value||"—");
-    const row=arr.find(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")&&(x.firm===firm||x.firm==="—"||!x.firm));
+    const row=fRow(arr,cat,vid,firm);
     const q=gn(sec+"q"+i);if(!q)return null;
     const parts=[cat];if(vid&&vid!=="—")parts.push(vid);if(firm&&firm!=="—")parts.push(firm);
     return{n:parts.join(" "),q};
@@ -200,7 +215,7 @@ function cC(sec){
   return ST[sec].reduce((s,item,i)=>{
     if(!item)return s;
     const cat=$(sec+"c"+i)?.value,vid=$(sec+"v"+i)?.value||"—",firm=$(sec+"f"+i)?.value||"—";
-    const row=arr.find(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")&&(x.firm===firm||x.firm==="—"||!x.firm));
+    const row=fRow(arr,cat,vid,firm);
     return s+(row?.p||0)*(gn(sec+"q"+i));
   },0);
 }
@@ -209,7 +224,7 @@ function cIt(sec){
   return ST[sec].map((item,i)=>{
     if(!item)return null;
     const cat=$(sec+"c"+i)?.value||"",vid=$(sec+"v"+i)?.value||"—",firm=$(sec+"f"+i)?.value||"—";
-    const row=arr.find(x=>x.cat===cat&&(x.vid===vid||x.vid==="—")&&(x.firm===firm||x.firm==="—"||!x.firm));
+    const row=fRow(arr,cat,vid,firm);
     const q=gn(sec+"q"+i);if(!q)return null;
     const parts=[cat];if(vid&&vid!=="—")parts.push(vid);if(firm&&firm!=="—")parts.push(firm);
     return{n:parts.join(" "),q};
