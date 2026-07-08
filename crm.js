@@ -1661,6 +1661,21 @@
       });
     });
     btns.appendChild(bDel);
+    var bBuy = document.createElement('button'); bBuy.className='crm-m-btn'; bBuy.textContent='🛒 Список закупщику';
+    bBuy.addEventListener('click', function(){
+      if(typeof orderPurchase !== 'function'){ toast('⚠️ Калькулятор ещё не загрузился — открой вкладку расчёта', '#BA7517'); return; }
+      bBuy.disabled = true; bBuy.textContent = 'Считаю...';
+      loadOrderRec(o.num, function(err, rec){
+        if(err){ bBuy.disabled=false; bBuy.textContent='🛒 Список закупщику'; toast('⚠️ '+err, '#BA7517'); return; }
+        fetchStock(function(serr){
+          bBuy.disabled=false; bBuy.textContent='🛒 Список закупщику';
+          if(serr==='__no_key__'){ toast('⚠️ Введи ключ доступа', '#BA7517'); return; }
+          if(serr){ toast('⚠️ Остатки не загрузились: '+serr, '#BA7517'); return; }
+          var pur = orderPurchase(rec.snap, DB, STOCK);
+          openPurchaseModal(o, pur);
+        });
+      });
+    });
     var bOpen = document.createElement('button'); bOpen.className='crm-m-btn open'; bOpen.textContent='\uD83D\uDCC2 Открыть расчёт';
     bOpen.addEventListener('click', function(){
       var sure = confirm('Открыть расчёт заказа \u2116'+o.num+'? Текущий несохранённый расчёт в калькуляторе будет заменён.');
@@ -1697,8 +1712,103 @@
         toast('\u26A0\uFE0F Не сохранилось: '+err, '#BA7517');
       });
     });
-    btns.appendChild(bOpen); btns.appendChild(bSave);
+    btns.appendChild(bBuy); btns.appendChild(bOpen); btns.appendChild(bSave);
     b.appendChild(btns);
+
+    m.appendChild(h); m.appendChild(b);
+    bg.appendChild(m);
+    document.body.appendChild(bg);
+  }
+
+  // ── Список закупщику из заказа (order-driven) ────────────
+  // Тянет снимок заказа, считает orderPurchase(снимок, прайс, остатки).
+  function loadOrderRec(num, done){
+    fetch(GS_URL + '?action=order&num=' + encodeURIComponent(num) + '&token=' + encodeURIComponent(getToken()))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(!res || !res.ok){ done((res && res.error) || 'таблица вернула ошибку'); return; }
+        var snap = res.order && res.order.snapshot;
+        if(!snap){ done('у заказа нет сохранённого снимка расчёта'); return; }
+        var rec;
+        try{ rec = JSON.parse(snap); }
+        catch(e){ done('снимок повреждён (возможно, был слишком большим при сохранении)'); return; }
+        if(!rec || !rec.snap){ done('снимок неполный'); return; }
+        done(null, rec);
+      })
+      .catch(function(e){ done(String(e && e.message || e)); });
+  }
+
+  function openPurchaseModal(o, pur){
+    var bg = document.createElement('div'); bg.className = 'crm-modal-bg';
+    bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
+    var m = document.createElement('div'); m.className = 'crm-modal';
+    var h = document.createElement('div'); h.className = 'crm-m-h';
+    var title = document.createElement('b'); title.textContent = 'Список закупщику — заказ \u2116' + o.num;
+    var x = document.createElement('button'); x.className = 'crm-m-x'; x.textContent = '\u00D7';
+    x.addEventListener('click', function(){ document.body.removeChild(bg); });
+    h.appendChild(title); h.appendChild(x);
+    var b = document.createElement('div'); b.className = 'crm-m-b';
+
+    var tracked = (pur && pur.tracked) || [];
+    var untracked = (pur && pur.untracked) || [];
+    tracked.sort(function(a,c){ return (c.buy - a.buy) || String(a.name||a.key).localeCompare(String(c.name||c.key), 'ru'); });
+
+    var toBuy = tracked.filter(function(t){ return t.buy > 0; }).length;
+    var lead = document.createElement('div'); lead.className = 'crm-empty';
+    lead.style.textAlign = 'left'; lead.style.padding = '4px 0';
+    lead.textContent = toBuy ? ('Докупить позиций: ' + toBuy) : 'Всё есть на складе — докупать нечего.';
+    b.appendChild(lead);
+
+    var fmt = function(n){ n = Number(n) || 0; return Number.isInteger(n) ? String(n) : n.toFixed(2); };
+
+    if(tracked.length){
+      var t1 = document.createElement('b'); t1.textContent = 'Со складским учётом';
+      t1.style.display = 'block'; t1.style.margin = '8px 0 4px';
+      b.appendChild(t1);
+      var tbl = document.createElement('table'); tbl.className = 'crm-ftbl';
+      var thr = document.createElement('tr');
+      ['Наименование','Ед','Нужно','Есть','Докупить'].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thr.appendChild(th); });
+      tbl.appendChild(thr);
+      tracked.forEach(function(t){
+        var tr = document.createElement('tr');
+        var c1 = document.createElement('td'); c1.textContent = String(t.name || t.key); tr.appendChild(c1);
+        var c2 = document.createElement('td'); c2.textContent = String(t.unit || ''); tr.appendChild(c2);
+        var c3 = document.createElement('td'); c3.textContent = fmt(t.need); tr.appendChild(c3);
+        var c4 = document.createElement('td'); c4.textContent = String(t.have); tr.appendChild(c4);
+        var c5 = document.createElement('td'); c5.textContent = String(t.buy);
+        if(t.buy > 0){ c5.style.color = '#A32D2D'; c5.style.fontWeight = '500'; }
+        tr.appendChild(c5);
+        tbl.appendChild(tr);
+      });
+      b.appendChild(tbl);
+    }
+
+    if(untracked.length){
+      var t2 = document.createElement('b'); t2.textContent = 'Без складского учёта';
+      t2.style.display = 'block'; t2.style.margin = '12px 0 4px';
+      b.appendChild(t2);
+      var hint = document.createElement('div'); hint.className = 'crm-empty';
+      hint.style.textAlign = 'left'; hint.style.fontSize = '11px'; hint.style.padding = '0 0 4px';
+      hint.textContent = 'Нет артикула — проверь наличие вручную.';
+      b.appendChild(hint);
+      var tbl2 = document.createElement('table'); tbl2.className = 'crm-ftbl';
+      var thr2 = document.createElement('tr');
+      ['Наименование','Кол-во'].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thr2.appendChild(th); });
+      tbl2.appendChild(thr2);
+      untracked.forEach(function(u){
+        var tr = document.createElement('tr');
+        var c1 = document.createElement('td'); c1.textContent = String(u.n || ''); tr.appendChild(c1);
+        var c2 = document.createElement('td'); c2.textContent = String(u.q); tr.appendChild(c2);
+        tbl2.appendChild(tr);
+      });
+      b.appendChild(tbl2);
+    }
+
+    if(!tracked.length && !untracked.length){
+      var e = document.createElement('div'); e.className = 'crm-empty';
+      e.textContent = 'В заказе нет складских позиций.';
+      b.appendChild(e);
+    }
 
     m.appendChild(h); m.appendChild(b);
     bg.appendChild(m);
