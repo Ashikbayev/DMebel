@@ -86,7 +86,7 @@
     var order = {
       num:    String(rec.num || ''),
       client: rec.client || '',
-      obj:    rec.obj || '',
+      furn:   rec.obj || '',
       predPrice: Math.round(rec.totL || rec.totP || rec.totK || 0),
       totL: Math.round(rec.totL || 0),
       totP: Math.round(rec.totP || 0),
@@ -118,7 +118,7 @@
       soglPrice: Math.round(info.total || 0),
       avans:     Math.round(info.avans || 0),
       client:    info.client || '',
-      obj:       info.obj || '',
+      furn:      info.obj || '',
       fromDogovor: true
     }}, function(res){
       if(res && res.protected){
