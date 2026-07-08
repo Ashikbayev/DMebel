@@ -31,6 +31,76 @@ var PRICES_CACHE_KEY = 'mebeloff_prices_cache';
 var pricesSource = 'fallback';
 var pricesCacheTs = 0;
 
+// ── v3.3: дубли позиций в прайсе ─────────────────────────────
+// В листе таблицы могут оказаться две строки с одинаковым cat+vid+firm,
+// но разными ценами. fRow() берёт первое совпадение — какая цена
+// «выиграет», зависит от порядка строк. Тихая ошибка, деньги расходятся.
+// Правило владельца: оставляем ПОСЛЕДНЮЮ строку (последняя запись в
+// таблице = актуальная цена), остальные выкидываем из массива в памяти.
+// keys — поля ключа: furn/shk = ['cat','vid','firm'], kuh = ['cat','vid'].
+// Возвращает {clean: [...], dupes: [{key, count, keptPrice}]}.
+function deduplicatePriceList(arr, keys) {
+  if (!arr || !arr.length) return { clean: arr || [], dupes: [] };
+  var byKey = {};   // ключ → индекс в clean (перезапись = «оставить последнюю»)
+  var counts = {};  // ключ → сколько раз встретился
+  var clean = [];
+  for (var i = 0; i < arr.length; i++) {
+    var row = arr[i];
+    var key = keys.map(function(k){ return sv(row[k]); }).join(' / ');
+    counts[key] = (counts[key] || 0) + 1;
+    if (byKey[key] === undefined) {
+      byKey[key] = clean.length;
+      clean.push(row);
+    } else {
+      clean[byKey[key]] = row; // дубль: последняя строка замещает предыдущую
+    }
+  }
+  var dupes = [];
+  for (var key2 in counts) {
+    if (counts[key2] > 1) {
+      var kept = clean[byKey[key2]];
+      dupes.push({ key: key2, count: counts[key2], keptPrice: kept ? kept.p : undefined });
+    }
+  }
+  return { clean: clean, dupes: dupes };
+}
+
+// Прогнать дедупликацию по furn/kuh/shk и один раз предупредить.
+// Вызывается из applyPricesData — т.е. и на live, и на кэше.
+function dedupeDbPriceLists() {
+  var found = [];
+  var jobs = [
+    { name: 'Фурнитура', field: 'furn', keys: ['cat', 'vid', 'firm'] },
+    { name: 'Кухня',     field: 'kuh',  keys: ['cat', 'vid'] },
+    { name: 'Шкаф',      field: 'shk',  keys: ['cat', 'vid', 'firm'] }
+  ];
+  jobs.forEach(function(j){
+    var res = deduplicatePriceList(DB[j.field], j.keys);
+    DB[j.field] = res.clean;
+    res.dupes.forEach(function(d){
+      found.push(j.name + ': ' + d.key + ' ×' + d.count + ' (оставлена цена ' + d.keptPrice + ')');
+    });
+  });
+  if (found.length > 0) {
+    console.warn('⚠ Дубли в прайсе (оставлена последняя цена):\n' + found.join('\n'));
+    // Свой тост, не db-status: loadFromSheets сразу после applyPricesData
+    // показывает зелёный «OK: Цены загружены» и прячет db-status через
+    // 2,5 с — предупреждение о дублях было бы перетёрто или спрятано рано.
+    var first = found[0];
+    var more = found.length > 1 ? ' и ещё ' + (found.length - 1) : '';
+    var el = document.getElementById('dupe-warn');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'dupe-warn';
+      el.style.cssText = 'position:fixed;top:84px;left:0;right:0;z-index:201;padding:8px 14px;font-size:12px;font-weight:600;text-align:center;background:#BA7517;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.18)';
+      document.body.appendChild(el);
+    }
+    el.textContent = '⚠ Дубли в прайсе: ' + first + more + '. Проверь таблицу.';
+    setTimeout(function(){ var d = document.getElementById('dupe-warn'); if (d) d.remove(); }, 6000);
+  }
+  return found;
+}
+
 // Раскладка данных сервера (или кэша) по DB — общая для live и cache.
 function applyPricesData(data) {
   DB.ldsp = data.ldsp;
@@ -41,6 +111,7 @@ function applyPricesData(data) {
   DB.furn = data.furn;
   DB.kuh = data.kuh;
   DB.shk = (data.shk && data.shk.length) ? data.shk : DB.shk;
+  dedupeDbPriceLists(); // v3.3: дубли cat+vid(+firm) — оставить последнюю цену
   DB.acc = data.acc || DB.acc;
   DB.svet = data.svet;
   DB.works = data.works;
