@@ -81,6 +81,25 @@ function dedupeDbPriceLists() {
       found.push(j.name + ': ' + d.key + ' ×' + d.count + ' (оставлена цена ' + d.keptPrice + ')');
     });
   });
+  // v3.4: артикул обязан быть уникален СКВОЗНО по furn/kuh/shk —
+  // один SKU на двух РАЗНЫХ позициях порвёт восстановление снимков
+  // (find вернёт первую попавшуюся). Точные дубли строк к этому моменту
+  // уже вычищены выше, так что оставшийся повтор — настоящая ошибка.
+  // Только предупреждаем, ничего не удаляем: цены у позиций верные.
+  var skuSeen = {};
+  var skuDupes = {};
+  ['furn', 'kuh', 'shk'].forEach(function(f2){
+    var list = DB[f2] || [];
+    for (var i2 = 0; i2 < list.length; i2++) {
+      var s2 = sv(list[i2].sku);
+      if (s2 === '') continue;
+      if (skuSeen[s2]) skuDupes[s2] = true; else skuSeen[s2] = true;
+    }
+  });
+  var dupSkuList = Object.keys(skuDupes);
+  if (dupSkuList.length > 0) {
+    found.push('Артикул задублирован: ' + dupSkuList.join(', ') + ' — у каждой позиции должен быть свой');
+  }
   if (found.length > 0) {
     console.warn('⚠ Дубли в прайсе (оставлена последняя цена):\n' + found.join('\n'));
     // Свой тост, не db-status: loadFromSheets сразу после applyPricesData
@@ -2767,6 +2786,9 @@ function getSnap(){
       const v=$(sec+"v"+i);if(v)snap[sec+"v"+i]=v.value;
       const f=$(sec+"f"+i);if(f)snap[sec+"f"+i]=f.value;
       const q=$(sec+"q"+i);if(q)snap[sec+"q"+i]=q.value;
+      // v3.4: параллельно с текстом пишем SKU позиции (если артикул задан).
+      // Восстановление сначала ищет по SKU — снимок переживает переименование.
+      if(sec!=="svet"){const skr=fRow(gA(sec),c?c.value:"",v?v.value:"—",f?f.value:"—");if(skr&&sv(skr.sku)!=="")snap[sec+"sku"+i]=sv(skr.sku);}
     });
   });
   // Мойка
@@ -2947,6 +2969,14 @@ function applySnap(rec){
       const cats=[...new Set(arr.map(x=>x.cat))];
       d.innerHTML=`<div class="fr"><select id="${sec}c${i}" onchange="uC('${sec}',${i})">${cats.map(cat=>`<option value="${cat}">${cat}</option>`).join("")}</select><button class="db" title="Сравнить с другой фирмой" onclick="toggleCmp('${sec}',${i})">⚖</button><button class="db" onclick="$('${sec}r${i}').style.display='none';ST['${sec}'][${i}]=null;recalc()">✕</button></div><div class="fr" id="${sec}vf${i}"></div><div id="${sec}cmp${i}"></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="${sec}q${i}" placeholder="0" min="0" onchange="recalc()"><span class="fp" id="${sec}pp${i}">0₸</span></div>`;
       c.appendChild(d);
+      // v3.4: если в снимке есть SKU и позиция с ним жива в прайсе —
+      // берём её актуальные cat/vid/firm (позиция могла быть переименована).
+      // SKU нет или не найден — работаем по тексту, как раньше (старые снимки).
+      const sk=snap[sec+"sku"+i];
+      if(sk!==undefined&&sv(sk)!==""){
+        const bySku=arr.find(x=>sv(x.sku)===sv(sk));
+        if(bySku){snap[sec+"c"+i]=sv(bySku.cat);snap[sec+"v"+i]=sv(bySku.vid);snap[sec+"f"+i]=sv(bySku.firm);}
+      }
       if(snap[sec+"c"+i]!==undefined){const s=$(sec+"c"+i);if(s)s.value=snap[sec+"c"+i];}
       uC(sec,i);
       if(snap[sec+"v"+i]!==undefined){const s=$(sec+"v"+i);if(s)s.value=snap[sec+"v"+i];}
@@ -3053,3 +3083,95 @@ try{ _preReadDraft=JSON.parse(localStorage.getItem("mebeloff_draft")||"null"); }
 checkStorageAvailable();
 renderWorks();
 loadFromSheets().then(()=>restoreDraftOnLoad(_preReadDraft)).catch(()=>restoreDraftOnLoad(_preReadDraft));
+
+// ── Склад v3.6: чистая клиентская логика (без DOM) ──────────
+// stockMap: массив остатков сервера -> {ключ: {qty,unit,name}}.
+// Кол-во у сервера уже целое; тут только раскладываем в карту.
+function stockMap(stockArr){
+  var m={};
+  var arr=stockArr||[];
+  for(var i=0;i<arr.length;i++){
+    var s=arr[i];
+    if(!s||!s.key)continue;
+    m[String(s.key)]={qty:Number(s.qty)||0,unit:String(s.unit||''),name:String(s.name||'')};
+  }
+  return m;
+}
+
+// orderPurchase: снимок заказа + прайс (DB) + остатки склада -> список
+// закупщику. Делит на «со складским учётом» (есть стабильный Ключ) и
+// «без учёта». Ключ = SKU (фурнитура/кухня/шкаф) или имя материала
+// (ЛДСП/фасады). Листы: «докупить» = ceil(нужно) − есть (обрезки не
+// учитываем — безопасная закупка). Штуки: нужно округляем до целого.
+// dop/works/vit/moika — не складские (работы/сборки), в список не идут.
+function orderPurchase(snap,db,stockArr){
+  snap=snap||{};
+  db=db||{};
+  var map=stockMap(stockArr);
+  var need={};
+  var untr={};
+  var addNeed=function(key,name,unit,q,sheet){
+    if(!need[key])need[key]={key:key,name:name,unit:unit,need:0,sheet:sheet};
+    need[key].need+=q;
+    if(name)need[key].name=name;
+  };
+  var addUntr=function(name,q){
+    var k=name||'?';
+    if(!untr[k])untr[k]={n:name,q:0};
+    untr[k].q+=q;
+  };
+  // Фурнитура/Кухня/Шкаф/Свет: имя = категория+вид+фирма, кол-во в штуках
+  var catSecs=['furn','kuh','shk','svet'];
+  for(var s=0;s<catSecs.length;s++){
+    var sec=catSecs[s];
+    for(var i=0;i<300;i++){
+      if(snap[sec+'c'+i]===undefined&&snap[sec+'q'+i]===undefined)continue;
+      var q=Number(snap[sec+'q'+i])||0;
+      if(!q)continue;
+      var cat=snap[sec+'c'+i]||'';
+      var vid=snap[sec+'v'+i]||'\u2014';
+      var firm=snap[sec+'f'+i]||'\u2014';
+      var parts=[cat];
+      if(vid&&vid!=='\u2014')parts.push(vid);
+      if(firm&&firm!=='\u2014')parts.push(firm);
+      var nm=parts.join(' ');
+      var sku=snap[sec+'sku'+i];
+      if(sec!=='svet'&&sku)addNeed(String(sku),nm,'\u0448\u0442',q,false);
+      else addUntr(nm,q);
+    }
+  }
+  // Листовые материалы: Ключ = имя материала из прайса, единица = лист
+  var sheetSecs=[['ls','lq',db.ldsp],['fldsps','fldspq',db.ldsp],['fplens','fplenq',db.fas_plen],['fkrs','fkrq',db.fas_kr]];
+  for(var t=0;t<sheetSecs.length;t++){
+    var idxKey=sheetSecs[t][0];
+    var qKey=sheetSecs[t][1];
+    var arr=sheetSecs[t][2]||[];
+    for(var j=0;j<300;j++){
+      if(snap[idxKey+j]===undefined&&snap[qKey+j]===undefined)continue;
+      var qq=Number(snap[qKey+j])||0;
+      if(!qq)continue;
+      var idx=parseInt(snap[idxKey+j],10);
+      var row=arr[idx];
+      var mnm=row&&row.n?String(row.n):'';
+      if(!mnm)continue;
+      addNeed(mnm,mnm,'\u043b\u0438\u0441\u0442',qq,true);
+    }
+  }
+  var tracked=[];
+  Object.keys(need).forEach(function(k){
+    var it=need[k];
+    var have=map[k]?map[k].qty:0;
+    var buy;
+    if(it.sheet){
+      var nc=Math.ceil(it.need-1e-9);
+      buy=Math.max(0,nc-have);
+    }else{
+      var ni=Math.round(it.need);
+      buy=Math.max(0,ni-have);
+    }
+    tracked.push({key:it.key,name:it.name,unit:it.unit,need:it.need,have:have,buy:buy});
+  });
+  var untracked=[];
+  Object.keys(untr).forEach(function(k){untracked.push(untr[k]);});
+  return {tracked:tracked,untracked:untracked};
+}
