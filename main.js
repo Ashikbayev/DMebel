@@ -842,6 +842,7 @@ function recalc(){
   st("kacc-our", mBrk.our+kAcc.our);
   st("kacc-tot", vMoika+kAcc.total);
   const kWork=mBrk.work+kAcc.work, kDes=mBrk.des+kAcc.des;
+  C.kWork=kWork;C.kDes=kDes;
   function fB(pfx,B){
     st(pfx+"-b",B.base);st(pfx+"-a",B.aK);st(pfx+"-r",B.rabM+kWork+vWk);st(pfx+"-des",kDes);
     const se=$(pfx+"-s");if(se){const s=B.sk;se.textContent=(s===0?"0₸":(s>0?"+":"")+Math.round(s).toLocaleString("ru")+"₸");se.style.color=s<0?"#E24B4A":s>0?"#1D9E75":"#aaa";}
@@ -1291,10 +1292,13 @@ function generateDogovor() {
   if (w) { w.document.write(H); w.document.close(); }
   else { alert('\u0411\u0440\u0430\u0443\u0437\u0435\u0440 \u0437\u0430\u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u0430\u043b \u043e\u043a\u043d\u043e. \u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 \u0432\u0441\u043f\u043b\u044b\u0432\u0430\u044e\u0449\u0438\u0435 \u043e\u043a\u043d\u0430 \u0434\u043b\u044f \u044d\u0442\u043e\u0433\u043e \u0441\u0430\u0439\u0442\u0430.'); }
   if(window.crmDogovorSigned){
-    var baseTot = varV === 'P' ? C.BP.tot : (varV === 'K' ? C.BK.tot : C.BL.tot);
-    var baseInc = varV === 'P' ? C.BP.inc : (varV === 'K' ? C.BK.inc : C.BL.inc);
+    var baseB   = varV === 'P' ? C.BP : (varV === 'K' ? C.BK : C.BL);
+    var baseTot = baseB.tot;
+    var baseInc = baseB.inc;
     var margin = Math.round((baseInc||0) - (baseTot||0) + tot);
-    window.crmDogovorSigned({num:numVal,client:client,obj:obj,total:Math.round(tot),avans:p1,fullPay:fullPay,margin:margin});
+    var earnMaster = Math.round((baseB.rabM||0) + (C.kWork||0) + (C.vWk||0));
+    var earnDesigner = Math.round(C.kDes||0);
+    window.crmDogovorSigned({num:numVal,client:client,obj:obj,total:Math.round(tot),avans:p1,fullPay:fullPay,margin:margin,earnMaster:earnMaster,earnDesigner:earnDesigner});
   }
 }
 
@@ -2886,6 +2890,8 @@ function saveCalc(){
     client,obj,num,
     totL:C.BL?.tot||0,totP:C.BP?.tot||0,totK:C.BK?.tot||0,
     marginL:Math.round(C.BL?.inc||0),marginP:Math.round(C.BP?.inc||0),marginK:Math.round(C.BK?.inc||0),
+    emL:Math.round((C.BL?.rabM||0)+(C.kWork||0)+(C.vWk||0)),emP:Math.round((C.BP?.rabM||0)+(C.kWork||0)+(C.vWk||0)),emK:Math.round((C.BK?.rabM||0)+(C.kWork||0)+(C.vWk||0)),
+    edCalc:Math.round(C.kDes||0),
     ST:JSON.parse(JSON.stringify(ST)),
     snap:getSnap(),
     vitCount:ST.vit.filter(x=>x!==null).length,

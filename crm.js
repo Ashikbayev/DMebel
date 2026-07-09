@@ -121,6 +121,8 @@
       soglPrice: Math.round(info.total || 0),
       avans:     Math.round(info.avans || 0),
       margin:    Math.round(info.margin || 0),
+      earnMaster:   Math.round(info.earnMaster || 0),
+      earnDesigner: Math.round(info.earnDesigner || 0),
       client:    info.client || '',
       furn:      info.obj || '',
       fromDogovor: true
@@ -629,6 +631,11 @@
   var MONTH_SHORT = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
   var FIN = [];
   var FIN_LOADED = false;
+  var FIN_SUB = 'kassa';
+  var RECUR = [];
+  var RECUR_LOADED = false;
+  var EMP = [];
+  var EMP_LOADED = false;
   var STOCK = [];
   var STOCK_LOADED = false;
   var STOCK_MOVES = [];
@@ -636,6 +643,7 @@
   var STOCK_SUBVIEW = 'balance';
   var CAT_IN  = ['Доплата','Прочий приход'];
   var CAT_OUT = ['Материалы','Оплата мастеру','Оплата дизайнеру','Аренда','Реклама','Транспорт','Инструмент','Прочее'];
+  var RECUR_CAT = ['Аренда','Реклама','Связь/Интернет','Коммуналка','Транспорт','Прочее'];
 
   // ── Изменения к договору (лист "Изменения") ────────────────
   var CH = [];
@@ -666,6 +674,28 @@
       .then(function(r){ return r.json(); })
       .then(function(res){
         if(res && res.ok){ FIN = res.fin || []; FIN_LOADED = true; cb(null); }
+        else cb((res && res.error) || 'таблица вернула ошибку');
+      })
+      .catch(function(e){ cb(String(e && e.message || e)); });
+  }
+
+  function fetchRecur(cb){
+    if(!getToken()){ cb('__no_key__'); return; }
+    fetch(GS_URL + '?action=recur&token=' + encodeURIComponent(getToken()))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(res && res.ok){ RECUR = res.recur || []; RECUR_LOADED = true; cb(null); }
+        else cb((res && res.error) || 'таблица вернула ошибку');
+      })
+      .catch(function(e){ cb(String(e && e.message || e)); });
+  }
+
+  function fetchEmp(cb){
+    if(!getToken()){ cb('__no_key__'); return; }
+    fetch(GS_URL + '?action=employees&token=' + encodeURIComponent(getToken()))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(res && res.ok){ EMP = res.employees || []; EMP_LOADED = true; cb(null); }
         else cb((res && res.error) || 'таблица вернула ошибку');
       })
       .catch(function(e){ cb(String(e && e.message || e)); });
@@ -899,19 +929,403 @@
   }
 
   function renderFin(view){
+    // Переключатель подвкладок
+    var tabRow = document.createElement('div'); tabRow.className = 'crm-m-btns'; tabRow.style.marginBottom = '4px';
+    var subs = [['kassa','Касса'],['pay','Зарплаты'],['recur','Постоянные'],['sales','Продажи']];
+    subs.forEach(function(s){
+      var b = document.createElement('button');
+      b.className = 'crm-vbtn' + (FIN_SUB===s[0] ? ' on' : '');
+      b.textContent = s[1];
+      b.addEventListener('click', function(){ FIN_SUB = s[0]; renderAll(); });
+      tabRow.appendChild(b);
+    });
+    view.appendChild(tabRow);
+
+    if(FIN_SUB === 'kassa')      renderSubKassa(view);
+    else if(FIN_SUB === 'pay')   renderSubPay(view);
+    else if(FIN_SUB === 'recur') renderSubRecur(view);
+    else if(FIN_SUB === 'sales') renderSubSales(view);
+  }
+
+  // ── Подвкладка КАССА: месячный P&L + текущая касса ──────────
+  function renderSubKassa(view){
     if(!FIN_LOADED){
       var ld = document.createElement('div'); ld.className='crm-empty';
       ld.textContent = 'Загружаю операции...';
       view.appendChild(ld);
       fetchFin(function(err){
-        if(err){ ld.textContent = 'Операции не загрузились: ' + err; renderSales(view); return; }
+        if(err === '__no_key__'){ ld.textContent = 'Введи ключ доступа во вкладке заказов.'; return; }
+        if(err){ ld.textContent = 'Операции не загрузились: ' + err; return; }
         renderView();
       });
       return;
     }
+    renderMonthPnl(view);
     renderKassa(view);
+  }
+
+  // Месячный P&L: за выбранный месяц приход − расход = чистый доход.
+  function renderMonthPnl(view){
+    var nowKey = monthKey(new Date());
+    var inc = 0, exp = 0;
+    FIN.forEach(function(f){
+      if(monthKey(f.date) !== nowKey) return;
+      if(f.type === 'Приход') inc += Number(f.sum)||0; else exp += Number(f.sum)||0;
+    });
+    var net = inc - exp;
+    var t0 = document.createElement('div'); t0.className='crm-sec-t';
+    var mp = nowKey.split('-');
+    t0.textContent = 'Итог месяца — ' + (MONTH_NAMES[(+mp[1])-1] || mp[1]) + ' ' + mp[0];
+    view.appendChild(t0);
+    var sum = document.createElement('div'); sum.className='crm-sum';
+    function tile(v, k, cls){
+      var t = document.createElement('div'); t.className='crm-sum-t';
+      var ve = document.createElement('div'); ve.className='v'+(cls?(' '+cls):''); ve.textContent=v;
+      var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
+      t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
+    }
+    tile('+' + fm0(inc), 'приход за месяц');
+    tile('\u2212' + fm0(exp), 'расход за месяц', 'warn');
+    tile((net>=0?'+':'\u2212') + fm0(Math.abs(net)), 'чистый доход месяца', net<0 ? 'warn' : '');
+    view.appendChild(sum);
+    var note = document.createElement('div'); note.className='crm-fin-note';
+    note.textContent = 'Расход за месяц включает постоянные (аренда, оклады), если они начислены во вкладке «Постоянные». Начисляй в начале каждого месяца.';
+    view.appendChild(note);
+  }
+
+  // ── Подвкладка ПРОДАЖИ: воронка + договоры + изменения ─────
+  function renderSubSales(view){
+    if(!LOADED){
+      var ld = document.createElement('div'); ld.className='crm-empty';
+      ld.textContent = 'Загружаю заказы...';
+      view.appendChild(ld);
+      return;
+    }
+    renderFunnel(view);
     renderSales(view);
     renderChangesAgg(view);
+  }
+
+  // ── Подвкладка ПОСТОЯННЫЕ: шаблоны расходов + начисление ────
+  function renderSubRecur(view){
+    if(!RECUR_LOADED){
+      var ld = document.createElement('div'); ld.className='crm-empty';
+      ld.textContent = 'Загружаю постоянные...';
+      view.appendChild(ld);
+      fetchRecur(function(err){
+        if(err === '__no_key__'){ ld.textContent = 'Введи ключ доступа во вкладке заказов.'; return; }
+        if(err){ ld.textContent = 'Постоянные не загрузились: ' + err; return; }
+        renderView();
+      });
+      return;
+    }
+    var t0 = document.createElement('div'); t0.className='crm-sec-t';
+    t0.textContent = 'Постоянные расходы (кроме окладов)';
+    view.appendChild(t0);
+
+    var hint = document.createElement('div'); hint.className='crm-fin-note';
+    hint.textContent = 'Аренда офиса, цеха, реклама и т.п. Оклады сотрудников веди во вкладке «Зарплаты» — они начисляются оттуда. Кнопка «Начислить за месяц» создаёт реальные расходы в кассе за выбранный месяц (повторно тот же месяц не задваивается).';
+    view.appendChild(hint);
+
+    var btnRow = document.createElement('div'); btnRow.className='crm-m-btns';
+    var addB = document.createElement('button'); addB.className='crm-vbtn new'; addB.textContent='+ Постоянный расход';
+    addB.addEventListener('click', function(){ openRecurModal({}); });
+    btnRow.appendChild(addB);
+    view.appendChild(btnRow);
+
+    var active = RECUR.filter(function(x){ return x.active; });
+    var totMonth = 0;
+    active.forEach(function(x){ totMonth += Number(x.sum)||0; });
+
+    if(!RECUR.length){
+      var e = document.createElement('div'); e.className='crm-empty';
+      e.textContent = 'Постоянных расходов пока нет. Добавь аренду офиса, цеха и т.п.';
+      view.appendChild(e);
+    } else {
+      var tbl = document.createElement('table'); tbl.className='crm-ftbl';
+      var thead = document.createElement('tr');
+      ['Название','Категория','Сумма/мес','',''].forEach(function(t){ var th=document.createElement('th'); th.textContent=t; thead.appendChild(th); });
+      tbl.appendChild(thead);
+      RECUR.forEach(function(x){
+        var tr = document.createElement('tr');
+        if(!x.active) tr.style.opacity = '0.5';
+        var c1 = document.createElement('td'); c1.textContent = x.name; tr.appendChild(c1);
+        var c2 = document.createElement('td'); c2.textContent = x.cat || '\u2014'; tr.appendChild(c2);
+        var c3 = document.createElement('td'); c3.textContent = fm0(x.sum) + (x.active ? '' : ' (выкл.)'); tr.appendChild(c3);
+        var c4 = document.createElement('td');
+        var ed = document.createElement('button'); ed.className='crm-vbtn'; ed.style.padding='3px 8px'; ed.textContent='\u270E';
+        ed.addEventListener('click', function(){ openRecurModal(x); });
+        c4.appendChild(ed); tr.appendChild(c4);
+        var c5 = document.createElement('td');
+        var dl = document.createElement('button'); dl.className='crm-vbtn'; dl.style.padding='3px 8px'; dl.textContent='\u2715';
+        dl.addEventListener('click', function(){
+          if(!confirm('Удалить постоянный расход «'+x.name+'»? Уже начисленные проводки в кассе останутся.')) return;
+          post({ action:'delRecur', id:x.id }, function(){
+            RECUR = RECUR.filter(function(y){ return y.id !== x.id; });
+            renderAll(); toast('OK Удалено', '#1a5252');
+          }, function(err){ toast('\u26A0\uFE0F Не удалилось: '+err, '#BA7517'); });
+        });
+        c5.appendChild(dl); tr.appendChild(c5);
+        tbl.appendChild(tr);
+      });
+      view.appendChild(tbl);
+
+      var st = document.createElement('div'); st.className='crm-sum'; st.style.marginTop='10px';
+      var t = document.createElement('div'); t.className='crm-sum-t';
+      var ve = document.createElement('div'); ve.className='v'; ve.textContent = fm0(totMonth);
+      var ke = document.createElement('div'); ke.className='k'; ke.textContent = 'постоянных/мес (без окладов)';
+      t.appendChild(ve); t.appendChild(ke); st.appendChild(t);
+      view.appendChild(st);
+    }
+
+    renderAccrueBox(view);
+  }
+
+  // Блок начисления за месяц (общий для Постоянных и Зарплат)
+  function renderAccrueBox(view){
+    var t0 = document.createElement('div'); t0.className='crm-sec-t';
+    t0.textContent = 'Начислить за месяц';
+    view.appendChild(t0);
+    var wrap = document.createElement('div'); wrap.className='crm-m-btns';
+    var now = new Date();
+    var iM = document.createElement('input'); iM.type='month';
+    iM.value = now.getFullYear() + '-' + ('0'+(now.getMonth()+1)).slice(-2);
+    iM.style.cssText = 'font-size:12px;border:1px solid #ddd;border-radius:8px;padding:7px 10px';
+    var bAcc = document.createElement('button'); bAcc.className='crm-vbtn new'; bAcc.textContent='Начислить постоянные и оклады';
+    bAcc.addEventListener('click', function(){
+      var m = iM.value;
+      if(!m){ toast('\u26A0\uFE0F Выбери месяц', '#BA7517'); return; }
+      if(!confirm('Начислить постоянные расходы и оклады за '+m+'? Проводки уйдут в кассу. Повторно тот же месяц не задвоится.')) return;
+      bAcc.disabled = true; bAcc.textContent = 'Начисляю...';
+      post({ action:'accrueMonth', month:m }, function(res){
+        bAcc.disabled = false; bAcc.textContent = 'Начислить постоянные и оклады';
+        FIN_LOADED = false; // касса изменилась — перечитать
+        var msg = 'Начислено: ' + (res && res.created || 0);
+        if(res && res.skipped) msg += ', пропущено (уже было): ' + res.skipped;
+        toast('OK ' + msg, '#1a5252');
+        renderAll();
+      }, function(err){
+        bAcc.disabled = false; bAcc.textContent = 'Начислить постоянные и оклады';
+        toast('\u26A0\uFE0F Не начислилось: '+err, '#BA7517');
+      });
+    });
+    wrap.appendChild(iM); wrap.appendChild(bAcc);
+    view.appendChild(wrap);
+  }
+
+  function openRecurModal(pre){
+    pre = pre || {};
+    var bg = document.createElement('div'); bg.className='crm-modal-bg';
+    bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
+    var m = document.createElement('div'); m.className='crm-modal';
+    var h = document.createElement('div'); h.className='crm-m-h';
+    var title = document.createElement('b'); title.textContent = pre.id ? 'Постоянный расход' : 'Новый постоянный расход';
+    var x = document.createElement('button'); x.className='crm-m-x'; x.textContent='\u00D7';
+    x.addEventListener('click', function(){ document.body.removeChild(bg); });
+    h.appendChild(title); h.appendChild(x);
+    var b = document.createElement('div'); b.className='crm-m-b';
+
+    var iName = inp(pre.name || ''); iName.placeholder = 'Аренда офиса';
+    var selCat = document.createElement('select');
+    RECUR_CAT.forEach(function(c){ var op=document.createElement('option'); op.value=c; op.textContent=c; selCat.appendChild(op); });
+    selCat.value = pre.cat || 'Аренда';
+    var iSum = inp(pre.sum || '', 'number'); iSum.placeholder = '0';
+    var selAct = document.createElement('select');
+    [['да','Активна (начисляется)'],['нет','Выключена']].forEach(function(u){ var op=document.createElement('option'); op.value=u[0]; op.textContent=u[1]; selAct.appendChild(op); });
+    selAct.value = (pre.active === false) ? 'нет' : 'да';
+
+    b.appendChild(field('Название', iName));
+    var r1 = document.createElement('div'); r1.className='crm-2col';
+    r1.appendChild(field('Категория', selCat)); r1.appendChild(field('Сумма/мес, \u20B8', iSum));
+    b.appendChild(r1);
+    b.appendChild(field('Состояние', selAct));
+
+    var btns = document.createElement('div'); btns.className='crm-m-btns';
+    var bSave = document.createElement('button'); bSave.className='crm-m-btn save'; bSave.textContent='Сохранить';
+    bSave.addEventListener('click', function(){
+      var name = iName.value.trim();
+      if(!name){ toast('\u26A0\uFE0F Укажи название', '#BA7517'); return; }
+      var sum = Math.round(parseFloat(iSum.value)||0);
+      if(!(sum > 0)){ toast('\u26A0\uFE0F Сумма больше нуля', '#BA7517'); return; }
+      bSave.disabled = true; bSave.textContent = 'Сохраняю...';
+      var rec = { id: pre.id || '', name: name, cat: selCat.value, sum: sum, active: selAct.value !== 'нет' };
+      post({ action:'saveRecur', recur: rec }, function(res){
+        RECUR_LOADED = false;
+        document.body.removeChild(bg);
+        renderAll();
+        toast('OK Сохранено', '#1a5252');
+      }, function(err){
+        bSave.disabled = false; bSave.textContent = 'Сохранить';
+        toast('\u26A0\uFE0F Не сохранилось: '+err, '#BA7517');
+      });
+    });
+    btns.appendChild(bSave);
+    b.appendChild(btns);
+    m.appendChild(h); m.appendChild(b);
+    bg.appendChild(m);
+    document.body.appendChild(bg);
+    setTimeout(function(){ try{ iName.focus(); }catch(e){} }, 50);
+  }
+
+  // ── Подвкладка ЗАРПЛАТЫ: оклад + процент с заказов ──────────
+  function renderSubPay(view){
+    if(!EMP_LOADED){
+      var ld = document.createElement('div'); ld.className='crm-empty';
+      ld.textContent = 'Загружаю сотрудников...';
+      view.appendChild(ld);
+      fetchEmp(function(err){
+        if(err === '__no_key__'){ ld.textContent = 'Введи ключ доступа во вкладке заказов.'; return; }
+        if(err){ ld.textContent = 'Сотрудники не загрузились: ' + err; return; }
+        renderView();
+      });
+      return;
+    }
+    // Заработок с заказов за текущий месяц (по дате договора)
+    var nowKey = monthKey(new Date());
+    var earnMasterM = 0, earnDesignerM = 0;
+    if(LOADED){
+      ORDERS.forEach(function(o){
+        if(monthKey(o.dogDate) !== nowKey) return;
+        earnMasterM += Number(o.earnMaster)||0;
+        earnDesignerM += Number(o.earnDesigner)||0;
+      });
+    }
+
+    var t0 = document.createElement('div'); t0.className='crm-sec-t';
+    t0.textContent = 'Сотрудники — оклад';
+    view.appendChild(t0);
+
+    var hint = document.createElement('div'); hint.className='crm-fin-note';
+    hint.textContent = 'Оклад — фиксированная часть (как аренда), начисляется во вкладке «Постоянные» кнопкой «Начислить за месяц». Процент — то, что человек заработал с заказов этого месяца (по дате договора). Итого к выплате = оклад + процент.';
+    view.appendChild(hint);
+
+    var btnRow = document.createElement('div'); btnRow.className='crm-m-btns';
+    var addB = document.createElement('button'); addB.className='crm-vbtn new'; addB.textContent='+ Сотрудник';
+    addB.addEventListener('click', function(){ openEmpModal({}); });
+    btnRow.appendChild(addB);
+    view.appendChild(btnRow);
+
+    var masters = EMP.filter(function(e){ return e.role === 'Мастер'; });
+    var designers = EMP.filter(function(e){ return e.role === 'Дизайнер'; });
+    var nMasters = masters.filter(function(e){ return e.active; }).length || masters.length;
+    var nDesigners = designers.filter(function(e){ return e.active; }).length || designers.length;
+
+    if(!EMP.length){
+      var e = document.createElement('div'); e.className='crm-empty';
+      e.textContent = 'Сотрудников пока нет. Добавь мастеров и дизайнеров с окладом.';
+      view.appendChild(e);
+    } else {
+      var tbl = document.createElement('table'); tbl.className='crm-ftbl';
+      var thead = document.createElement('tr');
+      ['Имя','Роль','Оклад','Процент/мес','К выплате','',''].forEach(function(t){ var th=document.createElement('th'); th.textContent=t; thead.appendChild(th); });
+      tbl.appendChild(thead);
+      EMP.forEach(function(emp){
+        var tr = document.createElement('tr');
+        if(!emp.active) tr.style.opacity = '0.5';
+        // Процент делим поровну между активными сотрудниками той же роли
+        var pool = emp.role === 'Дизайнер' ? earnDesignerM : earnMasterM;
+        var cnt = emp.role === 'Дизайнер' ? nDesigners : nMasters;
+        var share = (emp.active && cnt > 0) ? Math.round(pool / cnt) : 0;
+        var payout = (Number(emp.salary)||0) + share;
+        var c1 = document.createElement('td'); c1.textContent = emp.name; tr.appendChild(c1);
+        var c2 = document.createElement('td'); c2.textContent = emp.role; tr.appendChild(c2);
+        var c3 = document.createElement('td'); c3.textContent = fm0(emp.salary); tr.appendChild(c3);
+        var c4 = document.createElement('td'); c4.textContent = share ? fm0(share) : '\u2014'; tr.appendChild(c4);
+        var c5 = document.createElement('td'); c5.textContent = fm0(payout); c5.className='crm-margin'; tr.appendChild(c5);
+        var c6 = document.createElement('td');
+        var ed = document.createElement('button'); ed.className='crm-vbtn'; ed.style.padding='3px 8px'; ed.textContent='\u270E';
+        ed.addEventListener('click', function(){ openEmpModal(emp); });
+        c6.appendChild(ed); tr.appendChild(c6);
+        var c7 = document.createElement('td');
+        var dl = document.createElement('button'); dl.className='crm-vbtn'; dl.style.padding='3px 8px'; dl.textContent='\u2715';
+        dl.addEventListener('click', function(){
+          if(!confirm('Удалить сотрудника «'+emp.name+'»? Уже начисленные оклады в кассе останутся.')) return;
+          post({ action:'delEmp', id:emp.id }, function(){
+            EMP = EMP.filter(function(y){ return y.id !== emp.id; });
+            renderAll(); toast('OK Удалено', '#1a5252');
+          }, function(err){ toast('\u26A0\uFE0F Не удалилось: '+err, '#BA7517'); });
+        });
+        c7.appendChild(dl); tr.appendChild(c7);
+        tbl.appendChild(tr);
+      });
+      view.appendChild(tbl);
+
+      // Итоги месяца по зарплатам
+      var salT = 0;
+      EMP.forEach(function(e){ if(e.active) salT += Number(e.salary)||0; });
+      var sum = document.createElement('div'); sum.className='crm-sum'; sum.style.marginTop='10px';
+      function tile(v, k){
+        var t = document.createElement('div'); t.className='crm-sum-t';
+        var ve = document.createElement('div'); ve.className='v'; ve.textContent=v;
+        var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
+        t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
+      }
+      tile(fm0(salT), 'окладов/мес всего');
+      tile(fm0(earnMasterM), 'заработок мастеров (мес)');
+      tile(fm0(earnDesignerM), 'заработок дизайнеров (мес)');
+      tile(fm0(salT + earnMasterM + earnDesignerM), 'фонд оплаты за месяц');
+      view.appendChild(sum);
+
+      if(!LOADED){
+        var wn = document.createElement('div'); wn.className='crm-fin-note';
+        wn.textContent = 'Заказы ещё грузятся — процент появится, когда подгрузятся данные по договорам месяца.';
+        view.appendChild(wn);
+      }
+    }
+  }
+
+  function openEmpModal(pre){
+    pre = pre || {};
+    var bg = document.createElement('div'); bg.className='crm-modal-bg';
+    bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
+    var m = document.createElement('div'); m.className='crm-modal';
+    var h = document.createElement('div'); h.className='crm-m-h';
+    var title = document.createElement('b'); title.textContent = pre.id ? 'Сотрудник' : 'Новый сотрудник';
+    var x = document.createElement('button'); x.className='crm-m-x'; x.textContent='\u00D7';
+    x.addEventListener('click', function(){ document.body.removeChild(bg); });
+    h.appendChild(title); h.appendChild(x);
+    var b = document.createElement('div'); b.className='crm-m-b';
+
+    var iName = inp(pre.name || ''); iName.placeholder = 'Имя';
+    var selRole = document.createElement('select');
+    ['Мастер','Дизайнер'].forEach(function(c){ var op=document.createElement('option'); op.value=c; op.textContent=c; selRole.appendChild(op); });
+    selRole.value = pre.role || 'Мастер';
+    var iSal = inp(pre.salary || '', 'number'); iSal.placeholder = '0';
+    var selAct = document.createElement('select');
+    [['да','Активен'],['нет','Уволен/пауза']].forEach(function(u){ var op=document.createElement('option'); op.value=u[0]; op.textContent=u[1]; selAct.appendChild(op); });
+    selAct.value = (pre.active === false) ? 'нет' : 'да';
+
+    b.appendChild(field('Имя', iName));
+    var r1 = document.createElement('div'); r1.className='crm-2col';
+    r1.appendChild(field('Роль', selRole)); r1.appendChild(field('Оклад/мес, \u20B8', iSal));
+    b.appendChild(r1);
+    b.appendChild(field('Состояние', selAct));
+
+    var btns = document.createElement('div'); btns.className='crm-m-btns';
+    var bSave = document.createElement('button'); bSave.className='crm-m-btn save'; bSave.textContent='Сохранить';
+    bSave.addEventListener('click', function(){
+      var name = iName.value.trim();
+      if(!name){ toast('\u26A0\uFE0F Укажи имя', '#BA7517'); return; }
+      var sal = Math.round(parseFloat(iSal.value)||0);
+      if(sal < 0){ toast('\u26A0\uFE0F Оклад не может быть отрицательным', '#BA7517'); return; }
+      bSave.disabled = true; bSave.textContent = 'Сохраняю...';
+      var emp = { id: pre.id || '', name: name, role: selRole.value, salary: sal, active: selAct.value !== 'нет' };
+      post({ action:'saveEmp', emp: emp }, function(res){
+        EMP_LOADED = false;
+        document.body.removeChild(bg);
+        renderAll();
+        toast('OK Сохранено', '#1a5252');
+      }, function(err){
+        bSave.disabled = false; bSave.textContent = 'Сохранить';
+        toast('\u26A0\uFE0F Не сохранилось: '+err, '#BA7517');
+      });
+    });
+    btns.appendChild(bSave);
+    b.appendChild(btns);
+    m.appendChild(h); m.appendChild(b);
+    bg.appendChild(m);
+    document.body.appendChild(bg);
+    setTimeout(function(){ try{ iName.focus(); }catch(e){} }, 50);
   }
 
   // Агрегат Изменений к договору (доп. соглашения) по всем заказам.
@@ -1186,7 +1600,6 @@
   }
 
   function renderSales(view){
-    renderFunnel(view);
     var t0 = document.createElement('div'); t0.className='crm-sec-t';
     t0.textContent = 'Продажи — по договорам';
     view.appendChild(t0);
