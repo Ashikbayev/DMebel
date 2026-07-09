@@ -704,6 +704,39 @@
     });
   }
 
+  // Список ключей для автоподстановки в приходе: артикулы из прайса
+  // (фурнитура/кухня/шкаф) + имена материалов (ЛДСП/фасады) + уже
+  // известные ключи склада. Возвращает {options:[{key,name,unit}], map}.
+  function stockKeyList(){
+    var opts = [];
+    var map = {};
+    var add = function(key, name, unit){
+      key = String(key || '').trim();
+      if(!key) return;
+      if(map[key]) return;
+      map[key] = { name: String(name || ''), unit: unit };
+      opts.push({ key: key, name: String(name || ''), unit: unit });
+    };
+    if(typeof DB !== 'undefined' && DB){
+      var joinN = function(row){
+        var parts = [row.cat];
+        if(row.vid && String(row.vid) !== '\u2014') parts.push(row.vid);
+        if(row.firm && String(row.firm) !== '\u2014') parts.push(row.firm);
+        return parts.join(' ');
+      };
+      ['furn','kuh','shk'].forEach(function(sec){
+        var rows = DB[sec] || [];
+        rows.forEach(function(row){ if(row && row.sku) add(row.sku, joinN(row), '\u0448\u0442'); });
+      });
+      var mats = (DB.ldsp || []).concat(DB.fas_plen || []).concat(DB.fas_kr || []);
+      mats.forEach(function(row){ if(row && row.n) add(row.n, row.n, '\u043b\u0438\u0441\u0442'); });
+    }
+    var st = STOCK || [];
+    st.forEach(function(s){ if(s && s.key) add(s.key, s.name || s.key, s.unit || '\u0448\u0442'); });
+    opts.sort(function(a,b){ return String(a.name||a.key).localeCompare(String(b.name||b.key), 'ru'); });
+    return { options: opts, map: map };
+  }
+
   function openStockModal(pre){
     pre = pre || {};
     var bg = document.createElement('div'); bg.className = 'crm-modal-bg';
@@ -725,6 +758,15 @@
 
     var iKey = inp(pre.key || ''); iKey.placeholder = 'SKU или имя материала';
     var iName = inp(pre.name || ''); iName.placeholder = 'Наименование (для чека)';
+    var keyData = stockKeyList();
+    var dlK = document.createElement('datalist'); dlK.id = 'crm-stock-keys';
+    keyData.options.forEach(function(op){ var oo=document.createElement('option'); oo.value=op.key; oo.textContent=op.name + ' · ' + op.unit; dlK.appendChild(oo); });
+    b.appendChild(dlK);
+    iKey.setAttribute('list', 'crm-stock-keys');
+    iKey.addEventListener('input', function(){
+      var hit = keyData.map[iKey.value.trim()];
+      if(hit){ if(!iName.value.trim()) iName.value = hit.name; selUnit.value = hit.unit; }
+    });
     var iQty = inp('', 'number'); iQty.placeholder = '0'; iQty.setAttribute('step','1'); iQty.setAttribute('min','1');
     var iNum = inp(pre.num || ''); iNum.placeholder = '\u2116 заказа (не обязательно)';
     var iCmt = inp(''); iCmt.placeholder = 'Комментарий';
