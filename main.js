@@ -780,7 +780,7 @@ function kitchenAccTotals(){
     total+=accTotal(k);
   });
   Object.keys(SIMPLE_CFG).forEach(k=>{total+=simpleTotal(k);});
-  return{cost,work,des,our,disc,total,income:des+our};
+  return{cost,work,des,our,disc,total,income:our};
 }
 function allKitchenAccItems(){
   let items=[];
@@ -799,7 +799,7 @@ function recalc(){
   const vMoika=mC(),mBrk=mBreak();
   const kAcc=kitchenAccTotals();
   const dfi=$("del-fi");if(dfi)dfi.textContent=fm(vFu+vKu+vSh);
-  const shared=vFu+vKu+vSh+vDel,extras=(vSM+vSI)+vVit.tot+vWk+vDp+vMoika+kAcc.total,eInc=vSI+vVit.inc+mBrk.des+mBrk.our+kAcc.income;
+  const shared=vFu+vKu+vSh+vDel,extras=(vSM+vSI)+vVit.tot+vWk+vDp+vMoika+kAcc.total,eInc=vSI+vVit.inc+mBrk.our+kAcc.income;
   // ── Сравнение фурнитуры: те же позиции/количества, но у отмеченных ⚖ строк — цена альтернативной фирмы ──
   const vFuCmp=cCmp("furn"),vKuCmp=cCmp("kuh"),vShCmp=cCmp("shk"),vSMCmp=cCmp("svet");
   const sharedCmp=vFuCmp+vKuCmp+vShCmp+vDel,extrasCmp=(vSMCmp+vSI)+vVit.tot+vWk+vDp+vMoika+kAcc.total;
@@ -1290,7 +1290,12 @@ function generateDogovor() {
   var w = window.open('','_blank');
   if (w) { w.document.write(H); w.document.close(); }
   else { alert('\u0411\u0440\u0430\u0443\u0437\u0435\u0440 \u0437\u0430\u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u0430\u043b \u043e\u043a\u043d\u043e. \u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 \u0432\u0441\u043f\u043b\u044b\u0432\u0430\u044e\u0449\u0438\u0435 \u043e\u043a\u043d\u0430 \u0434\u043b\u044f \u044d\u0442\u043e\u0433\u043e \u0441\u0430\u0439\u0442\u0430.'); }
-  if(window.crmDogovorSigned)window.crmDogovorSigned({num:numVal,client:client,obj:obj,total:Math.round(tot),avans:p1,fullPay:fullPay});
+  if(window.crmDogovorSigned){
+    var baseTot = varV === 'P' ? C.BP.tot : (varV === 'K' ? C.BK.tot : C.BL.tot);
+    var baseInc = varV === 'P' ? C.BP.inc : (varV === 'K' ? C.BK.inc : C.BL.inc);
+    var margin = Math.round((baseInc||0) - (baseTot||0) + tot);
+    window.crmDogovorSigned({num:numVal,client:client,obj:obj,total:Math.round(tot),avans:p1,fullPay:fullPay,margin:margin});
+  }
 }
 
 
@@ -2880,6 +2885,7 @@ function saveCalc(){
     date:new Date().toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"}),
     client,obj,num,
     totL:C.BL?.tot||0,totP:C.BP?.tot||0,totK:C.BK?.tot||0,
+    marginL:Math.round(C.BL?.inc||0),marginP:Math.round(C.BP?.inc||0),marginK:Math.round(C.BK?.inc||0),
     ST:JSON.parse(JSON.stringify(ST)),
     snap:getSnap(),
     vitCount:ST.vit.filter(x=>x!==null).length,

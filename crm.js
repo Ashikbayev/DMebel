@@ -91,6 +91,9 @@
       totL: Math.round(rec.totL || 0),
       totP: Math.round(rec.totP || 0),
       totK: Math.round(rec.totK || 0),
+      margL: Math.round(rec.marginL || 0),
+      margP: Math.round(rec.marginP || 0),
+      margK: Math.round(rec.marginK || 0),
       snap1: sn.parts[0], snap2: sn.parts[1], snap3: sn.parts[2]
     };
     post({ action: 'saveOrder', order: order }, function(res){
@@ -117,6 +120,7 @@
       status:    'Договор',
       soglPrice: Math.round(info.total || 0),
       avans:     Math.round(info.avans || 0),
+      margin:    Math.round(info.margin || 0),
       client:    info.client || '',
       furn:      info.obj || '',
       fromDogovor: true
@@ -187,6 +191,21 @@
     var s = Number(o.sogl)||0;
     if(!s) return 0;
     return s - (Number(o.avans)||0) - (Number(o.paid)||0);
+  }
+  // Маржа заказа. Договор подписан → авторитетная margin (зафиксирована при
+  // договоре). Ещё нет договора → черновая маржа по той же ветке, что и
+  // Предв. цена (первая ненулевая: Л→П→К). null, если данных нет.
+  function marginOf(o){
+    if(Number(o.sogl) > 0 && o.margin !== undefined && o.margin !== '' && o.margin !== null){
+      return Number(o.margin)||0;
+    }
+    if(Number(o.margin) > 0) return Number(o.margin)||0;
+    var mL = Number(o.margL)||0, mP = Number(o.margP)||0, mK = Number(o.margK)||0;
+    var tL = Number(o.totL)||0, tP = Number(o.totP)||0, tK = Number(o.totK)||0;
+    if(tL > 0) return mL;
+    if(tP > 0) return mP;
+    if(tK > 0) return mK;
+    return mL || mP || mK || 0;
   }
   function matches(o){
     if(!SEARCH) return true;
@@ -317,6 +336,7 @@
       '.crm-ch-row .prn{background:none;border:none;color:#bbb;cursor:pointer;font-size:13px;line-height:1;padding:2px}'+
       '.crm-ch-row .prn:hover{color:#BA7517}'+
       '.crm-over{color:#0F6E56}'+
+      '.crm-margin{color:#0F6E56;font-weight:600}'+
       '.crm-overpaid{color:#0F6E56;font-weight:600}';
     document.head.appendChild(st);
   }
@@ -891,6 +911,88 @@
     }
     renderKassa(view);
     renderSales(view);
+    renderChangesAgg(view);
+  }
+
+  // Агрегат Изменений к договору (доп. соглашения) по всем заказам.
+  // Плюс — добавили объём (цена вверх), минус — убрали/скидка (цена вниз).
+  // Показываем суммарный сдвиг цены и разбивку по месяцам.
+  function renderChangesAgg(view){
+    var t0 = document.createElement('div'); t0.className='crm-sec-t';
+    t0.textContent = 'Изменения к договорам';
+    view.appendChild(t0);
+    if(!CH_LOADED){
+      var ld = document.createElement('div'); ld.className='crm-empty';
+      ld.textContent = 'Загружаю изменения...';
+      view.appendChild(ld);
+      fetchChanges(function(err){
+        if(err === '__no_key__'){ ld.textContent = 'Введи ключ доступа во вкладке заказов.'; return; }
+        if(err){ ld.textContent = 'Изменения не загрузились: ' + err; return; }
+        renderView();
+      });
+      return;
+    }
+    if(!CH.length){
+      var e = document.createElement('div'); e.className='crm-empty';
+      e.textContent = 'Доп. соглашений пока нет. Изменения после договора добавляются в карточке заказа (± Изменение).';
+      view.appendChild(e);
+      return;
+    }
+    var plus = 0, minus = 0, net = 0;
+    CH.forEach(function(c){
+      var s = Number(c.sum)||0;
+      net += s;
+      if(s >= 0) plus += s; else minus += s;
+    });
+
+    var sum = document.createElement('div'); sum.className='crm-sum';
+    function tile(v, k, warn){
+      var t = document.createElement('div'); t.className='crm-sum-t';
+      var ve = document.createElement('div'); ve.className='v'+(warn?' warn':''); ve.textContent=v;
+      var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
+      t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
+    }
+    tile('+' + fm0(plus), 'добавлено (цена вверх)');
+    tile('\u2212' + fm0(Math.abs(minus)), 'убрано (цена вниз)', minus < 0);
+    tile((net >= 0 ? '+' : '\u2212') + fm0(Math.abs(net)), 'итоговый сдвиг цены', net < 0);
+    tile(String(CH.length), 'всего изменений');
+    view.appendChild(sum);
+
+    // помесячно по дате изменения
+    var byM = {};
+    CH.forEach(function(c){
+      var k = monthKey(c.date); if(!k) return;
+      if(!byM[k]) byM[k] = { plus:0, minus:0, count:0 };
+      var s = Number(c.sum)||0;
+      if(s >= 0) byM[k].plus += s; else byM[k].minus += s;
+      byM[k].count += 1;
+    });
+    var keys = Object.keys(byM).sort().reverse();
+    if(keys.length){
+      var tbl = document.createElement('table'); tbl.className='crm-ftbl';
+      var thead = document.createElement('tr');
+      ['Месяц','Изменений','Добавлено','Убрано','Итог'].forEach(function(t){
+        var th = document.createElement('th'); th.textContent = t; thead.appendChild(th);
+      });
+      tbl.appendChild(thead);
+      keys.forEach(function(k){
+        var m = byM[k];
+        var mnet = m.plus + m.minus;
+        var tr = document.createElement('tr');
+        function td(t, cls){ var c = document.createElement('td'); c.textContent = t; if(cls) c.className = cls; tr.appendChild(c); }
+        td(monthLabel(k));
+        td(String(m.count));
+        td(m.plus ? '+' + fm0(m.plus) : '\u2014');
+        td(m.minus ? '\u2212' + fm0(Math.abs(m.minus)) : '\u2014', m.minus ? 'debt' : '');
+        td((mnet >= 0 ? '+' : '\u2212') + fm0(Math.abs(mnet)), mnet < 0 ? 'debt' : '');
+        tbl.appendChild(tr);
+      });
+      view.appendChild(tbl);
+    }
+
+    var note = document.createElement('div'); note.className='crm-fin-note';
+    note.textContent = 'Изменения сдвигают согласованную цену и долг заказа. На движение денег (кассу) они не влияют — это изменение обязательства, а не оплата.';
+    view.appendChild(note);
   }
 
   function renderKassa(view){
@@ -1014,7 +1116,77 @@
     view.appendChild(ops);
   }
 
+  // Воронка: заказы ещё БЕЗ договора (sogl=0), но с предв. ценой.
+  // Показывает потенциальную выручку «в работе» — сколько денег в
+  // заявках, которые ещё не подписаны (Замер/Дизайн/Расчёт/Согласование).
+  // Отказ и Отложено исключаем — это не активная воронка.
+  function renderFunnel(view){
+    var funnel = ORDERS.filter(function(o){
+      return Number(o.sogl) <= 0 && ['Отказ','Отложено'].indexOf(o.status) < 0 && Number(o.pred) > 0;
+    });
+    var t0 = document.createElement('div'); t0.className='crm-sec-t';
+    t0.textContent = 'Воронка — заявки до договора';
+    view.appendChild(t0);
+    if(!funnel.length){
+      var e = document.createElement('div'); e.className='crm-empty';
+      e.textContent = 'Нет активных заявок с предв. ценой без договора.';
+      view.appendChild(e);
+      return;
+    }
+    var predT = 0;
+    funnel.forEach(function(o){ predT += Number(o.pred)||0; });
+    var avg = funnel.length ? predT / funnel.length : 0;
+
+    var sum = document.createElement('div'); sum.className='crm-sum';
+    function tile(v, k, warn){
+      var t = document.createElement('div'); t.className='crm-sum-t';
+      var ve = document.createElement('div'); ve.className='v'+(warn?' warn':''); ve.textContent=v;
+      var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
+      t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
+    }
+    tile(fm0(predT), 'предв. сумма в работе');
+    tile(String(funnel.length), 'заявок без договора');
+    tile(fm0(avg), 'средняя предв. цена');
+    view.appendChild(sum);
+
+    // разбивка по статусам (сколько заявок и на какую сумму на каждом этапе)
+    var byS = {};
+    funnel.forEach(function(o){
+      var s = o.status || '?';
+      if(!byS[s]) byS[s] = { count:0, pred:0 };
+      byS[s].count += 1;
+      byS[s].pred += Number(o.pred)||0;
+    });
+    var order = STATUSES.filter(function(s){ return byS[s]; });
+    var tbl = document.createElement('table'); tbl.className='crm-ftbl';
+    var thead = document.createElement('tr');
+    ['Этап','Заявок','Предв. сумма'].forEach(function(t){
+      var th = document.createElement('th'); th.textContent = t; thead.appendChild(th);
+    });
+    tbl.appendChild(thead);
+    order.forEach(function(s){
+      var m = byS[s];
+      var tr = document.createElement('tr');
+      var c1 = document.createElement('td');
+      var dot = document.createElement('span');
+      dot.style.display = 'inline-block'; dot.style.width = '8px'; dot.style.height = '8px';
+      dot.style.borderRadius = '50%'; dot.style.marginRight = '6px';
+      dot.style.background = ST_COLOR[s] || '#999';
+      c1.appendChild(dot); c1.appendChild(document.createTextNode(s));
+      tr.appendChild(c1);
+      var c2 = document.createElement('td'); c2.textContent = String(m.count); tr.appendChild(c2);
+      var c3 = document.createElement('td'); c3.textContent = fm0(m.pred); tr.appendChild(c3);
+      tbl.appendChild(tr);
+    });
+    view.appendChild(tbl);
+
+    var note = document.createElement('div'); note.className='crm-fin-note';
+    note.textContent = 'Предв. цена — грубая оценка расчёта до подписания. При формировании договора заявка переходит в «Продажи» с согласованной ценой.';
+    view.appendChild(note);
+  }
+
   function renderSales(view){
+    renderFunnel(view);
     var t0 = document.createElement('div'); t0.className='crm-sec-t';
     t0.textContent = 'Продажи — по договорам';
     view.appendChild(t0);
@@ -1027,6 +1199,12 @@
       var d = debtOf(o); if(d > 0) debtT += d;
     });
     var avg = withSogl.length ? revenue / withSogl.length : 0;
+    var margT = 0, margRev = 0, margCnt = 0;
+    withSogl.forEach(function(o){
+      var m = marginOf(o);
+      if(m > 0){ margT += m; margRev += Number(o.sogl)||0; margCnt += 1; }
+    });
+    var margPct = margRev > 0 ? Math.round(margT / margRev * 100) : 0;
 
     var sum = document.createElement('div'); sum.className='crm-sum';
     function tile(v, k, warn){
@@ -1040,6 +1218,26 @@
     tile(fm0(debtT), 'долг клиентов', debtT>0);
     tile(fm0(avg), 'средний чек (' + withSogl.length + ' догов.)');
     view.appendChild(sum);
+
+    if(margCnt){
+      var sum2 = document.createElement('div'); sum2.className='crm-sum';
+      function tile2(v, k, warn){
+        var t = document.createElement('div'); t.className='crm-sum-t';
+        var ve = document.createElement('div'); ve.className='v'+(warn?' warn':''); ve.textContent=v;
+        var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
+        t.appendChild(ve); t.appendChild(ke); sum2.appendChild(t);
+      }
+      tile2(fm0(margT), 'маржа по договорам');
+      tile2(fm0(margRev - margT), 'себестоимость');
+      tile2(margPct + '%', 'рентабельность');
+      tile2(String(margCnt) + ' из ' + withSogl.length, 'догов. с маржой');
+      view.appendChild(sum2);
+      if(margCnt < withSogl.length){
+        var mn = document.createElement('div'); mn.className='crm-fin-note';
+        mn.textContent = 'Маржа считается по ' + margCnt + ' договорам из ' + withSogl.length + ' — у остальных расчёт был сохранён до появления учёта маржи. Пересохрани расчёт заказа, чтобы маржа появилась.';
+        view.appendChild(mn);
+      }
+    }
 
     // помесячные данные по дате договора
     var byM = {};
@@ -1671,6 +1869,16 @@
       gRow('Итог ЛДСП', fm0(o.totL));
       gRow('Итог Плёнка', fm0(o.totP));
       gRow('Итог Краска', fm0(o.totK));
+      var marg = marginOf(o);
+      var priceForCost = Number(o.sogl) > 0 ? Number(o.sogl)||0 : (Number(o.pred)||0);
+      if(marg > 0 && priceForCost > 0){
+        var cost = priceForCost - marg;
+        var pct = Math.round(marg / priceForCost * 100);
+        var isDog = Number(o.sogl) > 0;
+        gRow(isDog ? 'Маржа (по договору)' : 'Маржа (предв.)', fm0(marg), 'crm-margin');
+        gRow('Себестоимость', fm0(cost));
+        gRow('Рентабельность', pct + '%');
+      }
       gRow('Договор от', o.dogDate ? fmtDate(o.dogDate) : '\u2014');
       moneyWrap.appendChild(g);
 
