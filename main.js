@@ -2331,6 +2331,20 @@ function fullReset(){
   recalc();tab("calc");
 }
 
+// Момент 4 (v3.8): заказ создан со звонка, снимка расчёта ещё нет.
+// Сбрасывает калькулятор в чистый лист и проставляет №/клиента/объект
+// (и телефон в форму договора, если поле есть) — чтобы дальнейшее
+// сохранение расчёта попало в ТОТ ЖЕ заказ и клиент совпал с
+// сохранённым в СРМ (иначе ложно срабатывает предупреждение о
+// перезаписи чужого клиента).
+function prefillCalcForOrder(num,client,obj,phone){
+  fullReset();
+  const nf=$("kp-num");if(nf)nf.value=num||"";
+  const cf=$("kp-client");if(cf)cf.value=client||"";
+  const of=$("kp-object");if(of)of.value=obj||"";
+  const pf=$("dog-phone");if(pf&&phone)pf.value=phone;
+}
+
 // ===== МОСТ: 3D Конфигуратор → Калькулятор =====
 let confInitialized = false;
 

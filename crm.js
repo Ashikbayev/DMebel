@@ -611,6 +611,9 @@
   var FIN_LOADED = false;
   var STOCK = [];
   var STOCK_LOADED = false;
+  var STOCK_MOVES = [];
+  var STOCK_MOVES_LOADED = false;
+  var STOCK_SUBVIEW = 'balance';
   var CAT_IN  = ['Доплата','Прочий приход'];
   var CAT_OUT = ['Материалы','Оплата мастеру','Оплата дизайнеру','Аренда','Реклама','Транспорт','Инструмент','Прочее'];
 
@@ -660,18 +663,42 @@
       .catch(function(e){ cb(String(e && e.message || e)); });
   }
 
+  function fetchStockMoves(cb){
+    if(!getToken()){ cb('__no_key__'); return; }
+    fetch(GS_URL + '?action=stockMoves&token=' + encodeURIComponent(getToken()))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(res && res.ok){ STOCK_MOVES = res.moves || []; STOCK_MOVES_LOADED = true; cb(null); }
+        else cb((res && res.error) || 'таблица вернула ошибку');
+      })
+      .catch(function(e){ cb(String(e && e.message || e)); });
+  }
+
   function renderStock(view){
     var wrap = document.createElement('div');
-    var t0 = document.createElement('b'); t0.textContent = 'Склад — остатки';
+    var t0 = document.createElement('b');
+    t0.textContent = STOCK_SUBVIEW === 'history' ? 'Склад — история движений' : 'Склад — остатки (текущие)';
     t0.style.display = 'block'; t0.style.marginBottom = '6px';
+    wrap.appendChild(t0);
+
+    var tabRow = document.createElement('div'); tabRow.className = 'crm-m-btns';
+    var bBal = document.createElement('button'); bBal.className = 'crm-vbtn' + (STOCK_SUBVIEW==='balance' ? ' on' : ''); bBal.textContent = 'Остатки';
+    bBal.addEventListener('click', function(){ STOCK_SUBVIEW='balance'; renderAll(); });
+    var bHist = document.createElement('button'); bHist.className = 'crm-vbtn' + (STOCK_SUBVIEW==='history' ? ' on' : ''); bHist.textContent = 'История';
+    bHist.addEventListener('click', function(){ STOCK_SUBVIEW='history'; renderAll(); });
+    tabRow.appendChild(bBal); tabRow.appendChild(bHist);
+    wrap.appendChild(tabRow);
+
     var btnRow = document.createElement('div'); btnRow.className = 'crm-m-btns';
     var bIn = document.createElement('button'); bIn.className = 'crm-vbtn on'; bIn.textContent = '+ Приход';
     bIn.addEventListener('click', function(){ openStockModal({ type:'Приход' }); });
     var bOut = document.createElement('button'); bOut.className = 'crm-vbtn'; bOut.textContent = '\u2212 Выдача';
     bOut.addEventListener('click', function(){ openStockModal({ type:'Расход' }); });
     btnRow.appendChild(bIn); btnRow.appendChild(bOut);
-    wrap.appendChild(t0); wrap.appendChild(btnRow);
+    wrap.appendChild(btnRow);
     view.appendChild(wrap);
+
+    if(STOCK_SUBVIEW === 'history'){ renderStockHistory(view); return; }
 
     var ld = document.createElement('div'); ld.className = 'crm-empty'; ld.textContent = 'Загружаю остатки...';
     view.appendChild(ld);
@@ -698,6 +725,43 @@
         var c4 = document.createElement('td'); c4.textContent = String(Math.round(Number(s.qty) || 0));
         if((Number(s.qty) || 0) <= 0){ c4.style.color = '#BA1B1B'; c4.style.fontWeight = '600'; }
         tr.appendChild(c4);
+        tbl.appendChild(tr);
+      });
+      view.appendChild(tbl);
+    });
+  }
+
+  // История движений (read-only): дата | тип | наименование | ключ | ед | кол-во | № заказа.
+  // Сортировка по дате — свежие сверху.
+  function renderStockHistory(view){
+    var ld = document.createElement('div'); ld.className = 'crm-empty'; ld.textContent = 'Загружаю историю...';
+    view.appendChild(ld);
+    fetchStockMoves(function(err){
+      if(err === '__no_key__'){ ld.textContent = 'Введи ключ доступа во вкладке заказов.'; return; }
+      if(err){ ld.textContent = 'История не загрузилась: ' + err; return; }
+      ld.style.display = 'none';
+      var rows = STOCK_MOVES.slice().filter(function(m){ return m && m.key; });
+      rows.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+      if(!rows.length){
+        var e = document.createElement('div'); e.className = 'crm-empty';
+        e.textContent = 'Движений пока нет.';
+        view.appendChild(e); return;
+      }
+      var tbl = document.createElement('table'); tbl.className = 'crm-ftbl';
+      var thead = document.createElement('tr');
+      ['Дата','Тип','Наименование','Ключ','Ед','Кол-во','\u2116 заказа'].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thead.appendChild(th); });
+      tbl.appendChild(thead);
+      rows.forEach(function(m){
+        var tr = document.createElement('tr');
+        var c1 = document.createElement('td'); c1.textContent = fmtDate(m.date); tr.appendChild(c1);
+        var c2 = document.createElement('td'); c2.textContent = String(m.type || '');
+        c2.style.color = m.type === 'Расход' ? '#BA1B1B' : '#1a5252';
+        tr.appendChild(c2);
+        var c3 = document.createElement('td'); c3.textContent = String(m.name || m.key); tr.appendChild(c3);
+        var c4 = document.createElement('td'); c4.textContent = String(m.key); c4.style.color = '#888'; tr.appendChild(c4);
+        var c5 = document.createElement('td'); c5.textContent = String(m.unit || ''); tr.appendChild(c5);
+        var c6 = document.createElement('td'); c6.textContent = String(Math.round(Number(m.qty) || 0)); tr.appendChild(c6);
+        var c7 = document.createElement('td'); c7.textContent = String(m.num || ''); tr.appendChild(c7);
         tbl.appendChild(tr);
       });
       view.appendChild(tbl);
@@ -763,9 +827,11 @@
     keyData.options.forEach(function(op){ var oo=document.createElement('option'); oo.value=op.key; oo.textContent=op.name + ' · ' + op.unit; dlK.appendChild(oo); });
     b.appendChild(dlK);
     iKey.setAttribute('list', 'crm-stock-keys');
+    var nameEdited = false;
+    iName.addEventListener('input', function(){ nameEdited = true; });
     iKey.addEventListener('input', function(){
       var hit = keyData.map[iKey.value.trim()];
-      if(hit){ if(!iName.value.trim()) iName.value = hit.name; selUnit.value = hit.unit; }
+      if(hit){ if(!nameEdited) iName.value = hit.name; selUnit.value = hit.unit; }
     });
     var iQty = inp('', 'number'); iQty.placeholder = '0'; iQty.setAttribute('step','1'); iQty.setAttribute('min','1');
     var iNum = inp(pre.num || ''); iNum.placeholder = '\u2116 заказа (не обязательно)';
@@ -1451,12 +1517,15 @@
     var selSt = document.createElement('select');
     STATUSES.forEach(function(s){ var op=document.createElement('option'); op.value=s; op.textContent=s; selSt.appendChild(op); });
     selSt.value = 'Замер';
+    var iNum = inp(''); iNum.placeholder = '\u2116 заказа';
     var iClient = inp(''), iPhone = inp(''), iCity = inp(''), iFurn = inp(''), iObj = inp('');
     iClient.placeholder = 'Имя клиента'; iPhone.placeholder = '+7 ...';
     iCity.placeholder = 'Сат / Жез'; iFurn.placeholder = 'Кухня / Шкаф / ...';
     var iNote = document.createElement('textarea'); iNote.rows=2;
 
-    b.appendChild(field('Статус', selSt));
+    var r0 = document.createElement('div'); r0.className = 'crm-2col';
+    r0.appendChild(field('Статус', selSt)); r0.appendChild(field('\u2116 заказа (пусто = авто)', iNum));
+    b.appendChild(r0);
     var r1 = document.createElement('div'); r1.className='crm-2col';
     r1.appendChild(field('Клиент', iClient)); r1.appendChild(field('Телефон', iPhone));
     b.appendChild(r1);
@@ -1483,6 +1552,8 @@
         obj: iObj.value.trim(),
         note: iNote.value.trim()
       };
+      var numVal = iNum.value.trim();
+      if(numVal) order.num = numVal;
       post({ action:'createOrder', order: order }, function(res){
         if(!res || !res.num){
           bSave.disabled=false; bSave.textContent='Создать заказ';
@@ -1737,10 +1808,11 @@
       var sure = confirm('Открыть расчёт заказа \u2116'+o.num+'? Текущий несохранённый расчёт в калькуляторе будет заменён.');
       if(!sure) return;
       bOpen.disabled = true; bOpen.textContent = 'Открываю...';
-      openCalcFromOrder(o.num, function(err){
+      openCalcFromOrder(o.num, o, function(err, prefilled){
         if(err){ toast('\u26A0\uFE0F '+err, '#BA7517'); bOpen.disabled=false; bOpen.textContent='\uD83D\uDCC2 Открыть расчёт'; return; }
         document.body.removeChild(bg);
-        toast('OK Заказ \u2116'+o.num+' открыт в калькуляторе', '#1a5252');
+        if(prefilled) toast('Новый расчёт для заказа \u2116'+o.num+' \u2014 заполни и сохрани', '#1a5252');
+        else toast('OK Заказ \u2116'+o.num+' открыт в калькуляторе', '#1a5252');
       });
     });
     var bSave = document.createElement('button'); bSave.className='crm-m-btn save'; bSave.textContent='\uD83D\uDCBE Сохранить';
@@ -2004,20 +2076,25 @@
     else { toast('\u26A0\uFE0F Браузер заблокировал окно — разреши всплывающие окна', '#BA7517'); }
   }
 
-  function openCalcFromOrder(num, done){
+  function openCalcFromOrder(num, orderInfo, done){
     fetch(GS_URL + '?action=order&num=' + encodeURIComponent(num) + '&token=' + encodeURIComponent(getToken()))
       .then(function(r){ return r.json(); })
       .then(function(res){
         if(!res || !res.ok){ done((res && res.error) || 'таблица вернула ошибку'); return; }
         var snap = res.order && res.order.snapshot;
-        if(!snap){ done('у заказа нет сохранённого снимка расчёта'); return; }
+        if(!snap){
+          if(typeof window.prefillCalcForOrder !== 'function'){ done('калькулятор ещё не загрузился'); return; }
+          window.prefillCalcForOrder(num, (orderInfo && orderInfo.client) || '', (orderInfo && orderInfo.obj) || '', (orderInfo && orderInfo.phone) || '');
+          done(null, true);
+          return;
+        }
         var rec;
         try{ rec = JSON.parse(snap); }
         catch(e){ done('снимок повреждён (возможно, был слишком большим при сохранении)'); return; }
         if(!rec || !rec.ST || !rec.snap){ done('снимок неполный'); return; }
         if(typeof window.applySnap !== 'function'){ done('калькулятор ещё не загрузился'); return; }
         window.applySnap(rec);
-        done(null);
+        done(null, false);
       })
       .catch(function(e){ done(String(e && e.message || e)); });
   }
