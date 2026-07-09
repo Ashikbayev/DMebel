@@ -1718,6 +1718,20 @@
         });
       });
     });
+    var bIssue = document.createElement('button'); bIssue.className='crm-m-btn'; bIssue.textContent='📦 Выдать по заказу';
+    bIssue.addEventListener('click', function(){
+      if(typeof orderPurchase !== 'function'){ toast('⚠️ Калькулятор ещё не загрузился', '#BA7517'); return; }
+      bIssue.disabled = true; bIssue.textContent = 'Считаю...';
+      loadOrderRec(o.num, function(err, rec){
+        if(err){ bIssue.disabled=false; bIssue.textContent='📦 Выдать по заказу'; toast('⚠️ '+err, '#BA7517'); return; }
+        fetchStock(function(serr){
+          bIssue.disabled=false; bIssue.textContent='📦 Выдать по заказу';
+          if(serr==='__no_key__'){ toast('⚠️ Введи ключ доступа', '#BA7517'); return; }
+          if(serr){ toast('⚠️ Остатки не загрузились: '+serr, '#BA7517'); return; }
+          openIssueModal(o, orderPurchase(rec.snap, DB, STOCK));
+        });
+      });
+    });
     var bOpen = document.createElement('button'); bOpen.className='crm-m-btn open'; bOpen.textContent='\uD83D\uDCC2 Открыть расчёт';
     bOpen.addEventListener('click', function(){
       var sure = confirm('Открыть расчёт заказа \u2116'+o.num+'? Текущий несохранённый расчёт в калькуляторе будет заменён.');
@@ -1754,7 +1768,7 @@
         toast('\u26A0\uFE0F Не сохранилось: '+err, '#BA7517');
       });
     });
-    btns.appendChild(bBuy); btns.appendChild(bOpen); btns.appendChild(bSave);
+    btns.appendChild(bBuy); btns.appendChild(bIssue); btns.appendChild(bOpen); btns.appendChild(bSave);
     b.appendChild(btns);
 
     m.appendChild(h); m.appendChild(b);
@@ -1855,6 +1869,139 @@
     m.appendChild(h); m.appendChild(b);
     bg.appendChild(m);
     document.body.appendChild(bg);
+  }
+
+  // ── Выдать по заказу (авто-Расход) + печать листа выдачи ──
+  function openIssueModal(o, pur){
+    var bg = document.createElement('div'); bg.className = 'crm-modal-bg';
+    bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
+    var m = document.createElement('div'); m.className = 'crm-modal';
+    var h = document.createElement('div'); h.className = 'crm-m-h';
+    var title = document.createElement('b'); title.textContent = 'Выдать по заказу \u2116' + o.num;
+    var x = document.createElement('button'); x.className = 'crm-m-x'; x.textContent = '\u00D7';
+    x.addEventListener('click', function(){ document.body.removeChild(bg); });
+    h.appendChild(title); h.appendChild(x);
+    var b = document.createElement('div'); b.className = 'crm-m-b';
+
+    var tracked = (pur && pur.tracked) || [];
+    var untracked = (pur && pur.untracked) || [];
+    tracked.sort(function(a,c){ return String(a.name||a.key).localeCompare(String(c.name||c.key), 'ru'); });
+
+    var lead = document.createElement('div'); lead.className = 'crm-empty';
+    lead.style.textAlign = 'left'; lead.style.padding = '4px 0'; lead.style.fontSize = '11px';
+    lead.textContent = 'Штуки предзаполнены, листы — целыми (подтверди сколько реально вскрыл). 0 — не выдавать.';
+    b.appendChild(lead);
+
+    var rows = [];
+    if(tracked.length){
+      var tbl = document.createElement('table'); tbl.className = 'crm-ftbl';
+      var thr = document.createElement('tr');
+      ['Наименование','Ед','Нужно','Есть','Выдать'].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thr.appendChild(th); });
+      tbl.appendChild(thr);
+      tracked.forEach(function(t){
+        var need = Number(t.need) || 0;
+        var def = t.unit === 'лист' ? Math.ceil(need - 1e-9) : Math.round(need);
+        var tr = document.createElement('tr');
+        var c1 = document.createElement('td'); c1.textContent = String(t.name || t.key); tr.appendChild(c1);
+        var c2 = document.createElement('td'); c2.textContent = String(t.unit || ''); tr.appendChild(c2);
+        var c3 = document.createElement('td'); c3.textContent = Number.isInteger(need) ? String(need) : need.toFixed(2); tr.appendChild(c3);
+        var c4 = document.createElement('td'); c4.textContent = String(t.have); tr.appendChild(c4);
+        var c5 = document.createElement('td');
+        var iq = document.createElement('input'); iq.type = 'number'; iq.min = '0'; iq.step = '1'; iq.value = String(def); iq.style.width = '58px';
+        c5.appendChild(iq); tr.appendChild(c5);
+        tbl.appendChild(tr);
+        rows.push({ key: t.key, name: t.name || t.key, unit: t.unit, have: t.have, input: iq });
+      });
+      b.appendChild(tbl);
+    } else {
+      var e0 = document.createElement('div'); e0.className = 'crm-empty'; e0.textContent = 'В заказе нет позиций со складским учётом.';
+      b.appendChild(e0);
+    }
+
+    if(untracked.length){
+      var un = document.createElement('div'); un.className = 'crm-empty';
+      un.style.textAlign = 'left'; un.style.fontSize = '11px'; un.style.padding = '6px 0 0';
+      un.textContent = 'Без артикула (в лист попадут, но со склада не списываются): ' + untracked.map(function(u){ return (u.n||'') + ' \u00D7' + u.q; }).join(', ');
+      b.appendChild(un);
+    }
+
+    var btns = document.createElement('div'); btns.className = 'crm-m-btns';
+    var bPrint = document.createElement('button'); bPrint.className = 'crm-m-btn'; bPrint.textContent = '\uD83D\uDDA8 Печать листа';
+    bPrint.addEventListener('click', function(){ printIssueSheet(o, rows, untracked); });
+    var bDo = document.createElement('button'); bDo.className = 'crm-m-btn save'; bDo.textContent = 'Выдать со склада';
+    bDo.addEventListener('click', function(){
+      var moves = [];
+      for(var i=0;i<rows.length;i++){
+        var q = Number(rows[i].input.value);
+        if(!q) continue;
+        if(!(q>0) || Math.round(q)!==q){ toast('\u26A0\uFE0F «Выдать» должно быть целым (' + rows[i].name + ')', '#BA7517'); return; }
+        moves.push({ type:'Расход', key:rows[i].key, name:rows[i].name, unit:rows[i].unit, qty:Math.round(q), num:String(o.num), comment:'выдача по заказу' });
+      }
+      if(!moves.length){ toast('\u26A0\uFE0F Нечего выдавать — проставь количества', '#BA7517'); return; }
+      bDo.disabled = true; bDo.textContent = 'Выдаю...';
+      post({ action:'stockMove', stock:{ moves: moves } }, function(){
+        document.body.removeChild(bg);
+        if(VIEW==='stock') renderAll();
+        toast('OK Выдано со склада: ' + moves.length + ' поз. по заказу \u2116' + o.num, '#1a5252');
+      }, function(err){
+        bDo.disabled = false; bDo.textContent = 'Выдать со склада';
+        toast('\u26A0\uFE0F Не выдалось: ' + err, '#BA7517');
+      });
+    });
+    btns.appendChild(bPrint); btns.appendChild(bDo);
+    b.appendChild(btns);
+
+    m.appendChild(h); m.appendChild(b);
+    bg.appendChild(m);
+    document.body.appendChild(bg);
+  }
+
+  function printIssueSheet(o, rows, untracked){
+    var d = new Date();
+    var dRu = ('0'+d.getDate()).slice(-2) + '.' + ('0'+(d.getMonth()+1)).slice(-2) + '.' + d.getFullYear();
+    var H = '<html><head><meta charset="utf-8"><title>Лист выдачи \u2116' + escHtml(o.num) + '</title>';
+    H += '<style>';
+    H += 'body{font-family:"Times New Roman",Times,serif;font-size:12pt;color:#000;background:#fff;margin:0;line-height:1.4}';
+    H += '.pg{max-width:210mm;margin:0 auto;padding:16mm 18mm;box-sizing:border-box}';
+    H += 'h1{text-align:center;font-size:15pt;margin:0 0 6px}';
+    H += '.meta{font-size:11pt;margin:0 0 8pt}';
+    H += 'table{width:100%;border-collapse:collapse;margin-top:6pt;font-size:11pt}';
+    H += 'th,td{border:1px solid #000;padding:4pt 6pt;text-align:left}';
+    H += 'th{background:#eee}';
+    H += 'td.n{text-align:center;width:34px}td.q{text-align:center;width:70px}td.u{text-align:center;width:56px}';
+    H += '.note{font-size:10pt;margin-top:8pt}';
+    H += '.sw{display:flex;gap:40px;margin-top:26pt;font-size:11pt}';
+    H += '.sl{border-top:1px solid #000;padding-top:3pt;flex:1}';
+    H += '.btn{position:fixed;top:14px;right:14px;background:#C9A96E;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-size:13px;cursor:pointer}';
+    H += '@media print{.btn{display:none!important}}';
+    H += '</style></head><body>';
+    H += '<button class="btn" onclick="window.print()">\uD83D\uDDA8 Печать / PDF</button>';
+    H += '<div class="pg">';
+    H += '<h1>Лист выдачи со склада</h1>';
+    H += '<div class="meta">Заказ \u2116<b>' + escHtml(o.num) + '</b>';
+    if(o.client) H += ' &nbsp; Клиент: ' + escHtml(o.client);
+    if(o.obj) H += ' &nbsp; Объект: ' + escHtml(o.obj);
+    H += '<br>Дата: ' + dRu + '</div>';
+    H += '<table><tr><th>\u2116</th><th>Наименование</th><th>Ед</th><th>Выдать</th></tr>';
+    var n = 0;
+    rows.forEach(function(r){
+      var q = Math.round(Number(r.input.value) || 0);
+      if(!q) return;
+      n++;
+      H += '<tr><td class="n">' + n + '</td><td>' + escHtml(r.name) + '</td><td class="u">' + escHtml(r.unit) + '</td><td class="q">' + q + '</td></tr>';
+    });
+    if(!n) H += '<tr><td colspan="4" style="text-align:center">\u2014</td></tr>';
+    H += '</table>';
+    if(untracked && untracked.length){
+      H += '<div class="note"><b>Без артикула (проверить вручную):</b> ';
+      H += untracked.map(function(u){ return escHtml(u.n||'') + ' \u00D7' + u.q; }).join(', ');
+      H += '</div>';
+    }
+    H += '<div class="sw"><div class="sl">Выдал (склад): ____________</div><div class="sl">Получил (сборщик): ____________</div></div>';
+    H += '</div></body></html>';
+    var w = window.open('','_blank');
+    if(w){ w.document.write(H); w.document.close(); }
+    else { toast('\u26A0\uFE0F Браузер заблокировал окно — разреши всплывающие окна', '#BA7517'); }
   }
 
   function openCalcFromOrder(num, done){
