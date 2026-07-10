@@ -219,6 +219,36 @@
     if(!s) return 0;
     return s - (Number(o.avans)||0) - (Number(o.paid)||0);
   }
+
+  // ── WhatsApp: телефон → формат wa.me + заготовка текста ──
+  // Казахстанская запись 8 7XX XXX XX XX приводится к 7 7XX...,
+  // 10 цифр без кода страны получают 7 спереди. Если из телефона
+  // не собирается полный международный номер — кнопка гаснет.
+  function waPhone(phone){
+    var d = String(phone || '').replace(/\D/g, '');
+    if(!d) return '';
+    if(d.length === 11 && d.charAt(0) === '8') d = '7' + d.slice(1);
+    else if(d.length === 10) d = '7' + d;
+    return d.length >= 11 ? d : '';
+  }
+
+  // Текст под статус заказа: подставится в поле ввода WhatsApp,
+  // перед отправкой его можно поправить. Ничего не уходит само.
+  function waText(o){
+    var first = String(o.client || '').trim().split(/\s+/)[0];
+    var t = 'Здравствуйте' + (first ? ', ' + first : '') + '! Это MebelOFF, по вашему заказу \u2116' + o.num + '.';
+    var s = String(o.status || '');
+    if(s === 'Замер') return t + ' Хотим согласовать удобное время замера.';
+    if(s === 'Согласование') return t + ' Отправили вам расчёт \u2014 будем рады обсудить.';
+    if(s === 'Контрольный замер') return t + ' Хотим согласовать время контрольного замера.';
+    if(s === 'Установка' || s === 'Доделки') return t + ' Готовы согласовать время установки.';
+    if(s === 'Готова'){
+      var d = debtOf(o);
+      if(d > 0) return t + ' Мебель готова! Остаток к оплате: ' + fm0(d) + '.';
+      return t + ' Мебель готова!';
+    }
+    return t;
+  }
   // Маржа заказа. Договор подписан → авторитетная margin (зафиксирована при
   // договоре). Ещё нет договора → черновая маржа той же ветки, что и
   // Предв. цена: сверяем o.pred с totals (pred сохраняется по ветке
@@ -658,7 +688,130 @@
         view.appendChild(w);
       }
     }
+    renderTodayWidget(view);
     if(VIEW === 'board') renderBoard(view, vis); else renderList(view, vis);
+  }
+
+  // ── Виджет «Сегодня»: операционная сводка над доской ──────
+  // Собирается из ВСЕХ заказов, не завися от фильтров месяца/города:
+  // установки на 7 дней (включая просроченные), долги, требующие
+  // внимания (Готова с долгом, либо договор старше 30 дней с долгом),
+  // заявки без движения 14+ дней. Клик по строке открывает карточку.
+  // Если внимания ничего не требует — виджет не показывается вовсе.
+  // Свёрнутость помнится в localStorage ('moff_today_fold').
+  function renderTodayWidget(view){
+    if(!LOADED || !ORDERS.length) return;
+    var today = new Date(); today.setHours(0,0,0,0);
+    var t0 = today.getTime(), DAY = 86400000;
+    var installs = [], debts = [], stale = [];
+    ORDERS.forEach(function(o){
+      if(isActive(o) && o.mountDate){
+        var d = new Date(o.mountDate);
+        if(!isNaN(d.getTime())){
+          d.setHours(0,0,0,0);
+          var diff = Math.round((d.getTime() - t0) / DAY);
+          if(diff <= 7) installs.push({ o:o, diff:diff });
+        }
+      }
+      var debt = debtOf(o);
+      if(debt > 0 && o.status !== 'Отказ'){
+        if(o.status === 'Готова') debts.push({ o:o, debt:debt, ready:true });
+        else if(o.dogDate){
+          var dg = new Date(o.dogDate);
+          if(!isNaN(dg.getTime()) && (t0 - dg.getTime()) / DAY > 30) debts.push({ o:o, debt:debt, ready:false });
+        }
+      }
+      if(isActive(o) && o.updated){
+        var u = new Date(o.updated);
+        if(!isNaN(u.getTime())){
+          var days = Math.floor((t0 - u.getTime()) / DAY);
+          if(days >= 14) stale.push({ o:o, days:days });
+        }
+      }
+    });
+    if(!installs.length && !debts.length && !stale.length) return;
+    installs.sort(function(a,b){ return a.diff - b.diff; });
+    debts.sort(function(a,b){ return b.debt - a.debt; });
+    stale.sort(function(a,b){ return b.days - a.days; });
+
+    var box = document.createElement('div');
+    box.style.cssText = 'border:1px solid #e5e5e0;border-radius:12px;padding:8px 12px;margin-bottom:12px;background:#fff';
+
+    function paint(){
+      box.innerHTML = '';
+      var folded = localStorage.getItem('moff_today_fold') === '1';
+      var hd = document.createElement('div');
+      hd.style.cssText = 'display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none';
+      var hb = document.createElement('b');
+      hb.style.fontSize = '13px';
+      hb.textContent = '\u2600\uFE0F Сегодня';
+      var sub = document.createElement('span');
+      sub.style.cssText = 'flex:1;font-size:11px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      var parts = [];
+      if(installs.length) parts.push('установок: ' + installs.length);
+      if(debts.length) parts.push('долгов: ' + debts.length);
+      if(stale.length) parts.push('без движения: ' + stale.length);
+      sub.textContent = parts.join(' \u00B7 ');
+      var fold = document.createElement('span');
+      fold.style.cssText = 'font-size:11px;color:#999;white-space:nowrap';
+      fold.textContent = folded ? '\u25B8 развернуть' : '\u25BE свернуть';
+      hd.appendChild(hb); hd.appendChild(sub); hd.appendChild(fold);
+      hd.addEventListener('click', function(){
+        localStorage.setItem('moff_today_fold', folded ? '0' : '1');
+        paint();
+      });
+      box.appendChild(hd);
+      if(folded) return;
+
+      function mkRow(o, midText, rightText, rightColor){
+        var r = document.createElement('div');
+        r.style.cssText = 'display:flex;gap:8px;align-items:baseline;padding:3px 0;cursor:pointer;font-size:12px;border-bottom:1px dashed #f2f2ee';
+        var a = document.createElement('b');
+        a.style.whiteSpace = 'nowrap';
+        a.textContent = '\u2116' + o.num;
+        var mid = document.createElement('span');
+        mid.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#555';
+        mid.textContent = midText;
+        var rt = document.createElement('span');
+        rt.style.cssText = 'white-space:nowrap;font-weight:700' + (rightColor ? ';color:' + rightColor : '');
+        rt.textContent = rightText;
+        r.appendChild(a); r.appendChild(mid); r.appendChild(rt);
+        r.addEventListener('click', function(){ openCard(o.num); });
+        return r;
+      }
+      function group(title, arr, rowFn){
+        if(!arr.length) return;
+        var gt = document.createElement('div');
+        gt.style.cssText = 'font-size:11px;color:#999;margin-top:8px';
+        gt.textContent = title;
+        box.appendChild(gt);
+        var MAX = 5;
+        arr.slice(0, MAX).forEach(function(it){ box.appendChild(rowFn(it)); });
+        if(arr.length > MAX){
+          var more = document.createElement('div');
+          more.style.cssText = 'font-size:11px;color:#999;padding:2px 0';
+          more.textContent = '\u2026и ещё ' + (arr.length - MAX);
+          box.appendChild(more);
+        }
+      }
+      group('\uD83D\uDD27 Установки \u2014 ближайшие 7 дней', installs, function(it){
+        var right, color = '';
+        if(it.diff < 0){ right = 'просрочено, ' + fmtDate(it.o.mountDate); color = '#BA7517'; }
+        else if(it.diff === 0){ right = 'сегодня'; color = '#BA7517'; }
+        else if(it.diff === 1){ right = 'завтра'; }
+        else { right = fmtDate(it.o.mountDate); }
+        return mkRow(it.o, (it.o.client || '') + (it.o.furn ? ' \u00B7 ' + it.o.furn : ''), right, color);
+      });
+      group('\uD83D\uDCB0 Долги, требующие внимания', debts, function(it){
+        var mid = (it.o.client || '') + (it.ready ? ' \u00B7 мебель готова' : ' \u00B7 договор от ' + fmtDate(it.o.dogDate));
+        return mkRow(it.o, mid, fm0(it.debt), it.ready ? '#BA7517' : '');
+      });
+      group('\uD83D\uDCA4 Без движения 14+ дней', stale, function(it){
+        return mkRow(it.o, (it.o.client || '') + ' \u00B7 ' + (it.o.status || ''), it.days + ' дн.', '');
+      });
+    }
+    paint();
+    view.appendChild(box);
   }
 
   var MONTH_SHORT = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
@@ -2349,6 +2502,21 @@
     telBtn.href = o.phone ? 'tel:' + String(o.phone).replace(/[^+\d]/g,'') : '#';
     if(!o.phone) telBtn.style.opacity = '.35';
     phoneWrap.appendChild(telBtn);
+    var waBtn = document.createElement('a');
+    waBtn.textContent = '\uD83D\uDCAC';
+    waBtn.title = 'Написать в WhatsApp \u2014 текст под статус уже подставлен, поправь и отправь';
+    waBtn.style.cssText = 'text-decoration:none;font-size:16px;border:1px solid #ddd;border-radius:8px;padding:5px 8px';
+    var waP = waPhone(o.phone);
+    if(waP){
+      waBtn.href = 'https://wa.me/' + waP + '?text=' + encodeURIComponent(waText(o));
+      waBtn.target = '_blank';
+      waBtn.rel = 'noopener';
+    } else {
+      waBtn.href = '#';
+      waBtn.style.opacity = '.35';
+      waBtn.addEventListener('click', function(e){ e.preventDefault(); });
+    }
+    phoneWrap.appendChild(waBtn);
     r1.appendChild(field('Телефон', phoneWrap));
     b.appendChild(r1);
     var r2 = document.createElement('div'); r2.className='crm-2col';
