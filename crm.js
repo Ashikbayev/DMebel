@@ -702,6 +702,59 @@
     return out;
   }
 
+  // ── Вложения (лист "Вложения"): фото и заметки к заказам ──
+  var ATT = [];
+  var ATT_LOADED = false;
+
+  function fetchAttach(cb){
+    if(!getToken()){ cb('__no_key__'); return; }
+    fetch(GS_URL + '?action=attach&token=' + encodeURIComponent(getToken()))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(res && res.ok){ ATT = res.attach || []; ATT_LOADED = true; cb(null); }
+        else cb((res && res.error) || 'таблица вернула ошибку');
+      })
+      .catch(function(e){ cb(String(e && e.message || e)); });
+  }
+
+  function attachOf(num){
+    var out = [];
+    for(var i=0;i<ATT.length;i++){
+      if(String(ATT[i].num) === String(num)) out.push(ATT[i]);
+    }
+    return out;
+  }
+
+  // Сжатие фото в браузере перед отправкой: до 1600px по длинной
+  // стороне, JPEG 0.8 — телефонное фото 4-8 МБ превращается в
+  // ~200-400 КБ. Это и скорость загрузки, и экономия Диска.
+  // cb(base64 без префикса data:) либо cb(null), если файл не читается.
+  function compressImage(file, cb){
+    var reader = new FileReader();
+    reader.onload = function(){
+      var img = new Image();
+      img.onload = function(){
+        var maxSide = 1600;
+        var w = img.width, h = img.height;
+        if(w > maxSide || h > maxSide){
+          if(w > h){ h = Math.round(h * maxSide / w); w = maxSide; }
+          else { w = Math.round(w * maxSide / h); h = maxSide; }
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        var b64 = dataUrl.split(',')[1];
+        cb(b64 || null);
+      };
+      img.onerror = function(){ cb(null); };
+      img.src = reader.result;
+    };
+    reader.onerror = function(){ cb(null); };
+    reader.readAsDataURL(file);
+  }
+
   function fetchFin(cb){
     if(!getToken()){ cb('__no_key__'); return; }
     fetch(GS_URL + '?action=fin&token=' + encodeURIComponent(getToken()))
@@ -2409,6 +2462,163 @@
       fetchChanges(function(err){ if(!err) renderMoney(); });
     }
     b.appendChild(moneyWrap);
+
+    // ── Фото и заметки ──────────────────────────────────────
+    var attWrap = document.createElement('div');
+    function renderAttach(){
+      attWrap.innerHTML = '';
+      var box = document.createElement('div'); box.className='crm-ch-box';
+      var bh = document.createElement('div'); bh.className='crm-ch-h';
+      var bt = document.createElement('b'); bt.textContent = 'Фото и заметки';
+      bh.appendChild(bt);
+      box.appendChild(bh);
+
+      var items = ATT_LOADED ? attachOf(o.num) : [];
+      var files = items.filter(function(a){ return a.kind === 'файл' && a.fileId; });
+      var notes = items.filter(function(a){ return a.kind !== 'файл'; });
+
+      if(!ATT_LOADED){
+        var ld = document.createElement('div'); ld.className='crm-ch-row';
+        ld.textContent = 'Загружаю...';
+        box.appendChild(ld);
+      } else {
+        if(files.length){
+          var grid = document.createElement('div');
+          grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;padding:8px 0';
+          files.forEach(function(a){
+            var cell = document.createElement('div');
+            cell.style.cssText = 'position:relative;width:86px';
+            var lnk = document.createElement('a');
+            lnk.href = 'https://drive.google.com/file/d/' + a.fileId + '/view';
+            lnk.target = '_blank'; lnk.rel = 'noopener';
+            var im = document.createElement('img');
+            im.src = 'https://drive.google.com/thumbnail?id=' + a.fileId + '&sz=w400';
+            im.alt = a.name || 'фото';
+            im.loading = 'lazy';
+            im.style.cssText = 'width:86px;height:86px;object-fit:cover;border-radius:8px;border:1px solid #e5e5e0;display:block;background:#f6f6f4';
+            lnk.appendChild(im);
+            cell.appendChild(lnk);
+            var del = document.createElement('button');
+            del.textContent = '\u2715';
+            del.title = 'Удалить фото';
+            del.style.cssText = 'position:absolute;top:2px;right:2px;width:20px;height:20px;border:none;border-radius:50%;background:rgba(20,20,20,.55);color:#fff;font-size:10px;cursor:pointer;line-height:1;padding:0';
+            del.addEventListener('click', function(){
+              if(!confirm('Удалить фото' + (a.comment ? ' \u00AB' + a.comment + '\u00BB' : '') + '? Файл уйдёт в корзину Диска.')) return;
+              post({ action:'delAttach', id: a.id }, function(){
+                ATT = ATT.filter(function(x){ return x.id !== a.id; });
+                renderAttach();
+                toast('OK Фото удалено', '#1a5252');
+              }, function(err){
+                toast('\u26A0\uFE0F Не удалилось: ' + err, '#BA7517');
+              });
+            });
+            cell.appendChild(del);
+            if(a.comment){
+              var cap = document.createElement('div');
+              cap.textContent = a.comment;
+              cap.title = a.comment;
+              cap.style.cssText = 'font-size:10px;color:#888;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+              cell.appendChild(cap);
+            }
+            grid.appendChild(cell);
+          });
+          box.appendChild(grid);
+        }
+        notes.forEach(function(a){
+          var r = document.createElement('div'); r.className='crm-ch-row';
+          var dt = document.createElement('span'); dt.className='dt'; dt.textContent = fmtDate(a.created);
+          var ds = document.createElement('span'); ds.className='ds'; ds.textContent = a.comment;
+          var del = document.createElement('button'); del.className='del'; del.textContent='\u2715';
+          del.title = 'Удалить заметку';
+          del.addEventListener('click', function(){
+            if(!confirm('Удалить заметку \u00AB' + a.comment + '\u00BB?')) return;
+            post({ action:'delAttach', id: a.id }, function(){
+              ATT = ATT.filter(function(x){ return x.id !== a.id; });
+              renderAttach();
+              toast('OK Заметка удалена', '#1a5252');
+            }, function(err){
+              toast('\u26A0\uFE0F Не удалилось: ' + err, '#BA7517');
+            });
+          });
+          r.appendChild(dt); r.appendChild(ds); r.appendChild(del);
+          box.appendChild(r);
+        });
+        if(!files.length && !notes.length){
+          var em = document.createElement('div'); em.className='crm-ch-row';
+          em.style.color = '#999';
+          em.textContent = 'Фото с замера, производства, установки и рабочие заметки \u2014 всё по заказу в одном месте.';
+          box.appendChild(em);
+        }
+      }
+
+      var addRow = document.createElement('div');
+      addRow.style.cssText = 'display:flex;gap:6px;align-items:center;padding-top:8px;flex-wrap:wrap';
+      var fileInp = document.createElement('input');
+      fileInp.type = 'file';
+      fileInp.accept = 'image/*';
+      fileInp.multiple = true;
+      fileInp.style.display = 'none';
+      var bPhoto = document.createElement('button'); bPhoto.className='crm-vbtn new';
+      bPhoto.textContent = '\uD83D\uDCF7 Фото';
+      bPhoto.title = 'Прикрепить фото (на телефоне откроется камера или галерея). Текст в поле справа станет подписью.';
+      bPhoto.addEventListener('click', function(){ fileInp.value = ''; fileInp.click(); });
+      var noteInp = document.createElement('input');
+      noteInp.type = 'text';
+      noteInp.placeholder = 'Заметка или подпись к фото...';
+      noteInp.style.cssText = 'flex:1;min-width:140px';
+      var bNote = document.createElement('button'); bNote.className='crm-vbtn';
+      bNote.textContent = '+ Заметка';
+      bNote.addEventListener('click', function(){
+        var txt = noteInp.value.trim();
+        if(!txt){ toast('\u26A0\uFE0F Напиши текст заметки', '#BA7517'); return; }
+        bNote.disabled = true;
+        post({ action:'addAttach', attach: { num: String(o.num), kind: 'коммент', comment: txt } }, function(res){
+          ATT.push({ id: res.id, num: String(o.num), kind: 'коммент', name: '', fileId: '', comment: txt, created: new Date().toISOString() });
+          renderAttach();
+          toast('OK Заметка добавлена', '#1a5252');
+        }, function(err){
+          bNote.disabled = false;
+          toast('\u26A0\uFE0F Не сохранилось: ' + err, '#BA7517');
+        });
+      });
+      fileInp.addEventListener('change', function(){
+        var list = [];
+        for(var fi = 0; fi < fileInp.files.length; fi++) list.push(fileInp.files[fi]);
+        if(!list.length) return;
+        var cap = noteInp.value.trim();
+        var done = 0, fail = 0;
+        bPhoto.disabled = true; bNote.disabled = true;
+        function next(){
+          if(!list.length){
+            renderAttach();
+            if(done) toast('OK Загружено фото: ' + done + (fail ? ', не загрузилось: ' + fail : ''), '#1a5252');
+            else toast('\u26A0\uFE0F Фото не загрузились \u2014 проверь интернет и попробуй ещё раз', '#BA7517');
+            return;
+          }
+          var f = list.shift();
+          bPhoto.textContent = 'Гружу... (' + (done + fail + 1) + ')';
+          compressImage(f, function(b64){
+            if(!b64){ fail++; next(); return; }
+            var nm = String(f.name || 'фото.jpg').replace(/\.[^.]+$/, '') + '.jpg';
+            post({ action:'addAttach', attach: { num: String(o.num), kind: 'файл', name: nm, mime: 'image/jpeg', dataB64: b64, comment: cap } }, function(res){
+              ATT.push({ id: res.id, num: String(o.num), kind: 'файл', name: nm, fileId: res.fileId, comment: cap, created: new Date().toISOString() });
+              done++;
+              next();
+            }, function(){ fail++; next(); });
+          });
+        }
+        next();
+      });
+      addRow.appendChild(bPhoto); addRow.appendChild(noteInp); addRow.appendChild(bNote);
+      box.appendChild(addRow);
+
+      attWrap.appendChild(box);
+    }
+    renderAttach();
+    if(!ATT_LOADED){
+      fetchAttach(function(err){ if(!err) renderAttach(); });
+    }
+    b.appendChild(attWrap);
 
     var btns = document.createElement('div'); btns.className='crm-m-btns';
     var bDel = document.createElement('button'); bDel.className='crm-m-btn danger'; bDel.textContent='\uD83D\uDDD1';
