@@ -170,6 +170,7 @@
   var ORDERS = [];
   var LOADED = false;
   var VIEW = localStorage.getItem('moff_crm_view') || 'board';
+  var CAL_MONTH = monthKey(new Date());
   var FILTER = 'all';
   var SEARCH = '';
   var CITY_FILTER = 'all';
@@ -248,6 +249,20 @@
       return t + ' Мебель готова!';
     }
     return t;
+  }
+
+  // ── Повторный клиент: все заказы с тем же телефоном ──────
+  // Сравнение через waPhone-нормализацию: 8 7XX и +7 7XX — один номер.
+  function ordersByPhone(phone, exceptNum){
+    var me = waPhone(phone);
+    if(!me) return [];
+    var out = [];
+    for(var i=0;i<ORDERS.length;i++){
+      var o = ORDERS[i];
+      if(exceptNum !== undefined && String(o.num) === String(exceptNum)) continue;
+      if(waPhone(o.phone) === me) out.push(o);
+    }
+    return out;
   }
   // Маржа заказа. Договор подписан → авторитетная margin (зафиксирована при
   // договоре). Ещё нет договора → черновая маржа той же ветки, что и
@@ -587,8 +602,13 @@
     bStock.className = 'crm-vbtn' + (VIEW==='stock' ? ' on' : '');
     bStock.textContent = 'Склад';
     bStock.addEventListener('click', function(){ VIEW='stock'; localStorage.setItem('moff_crm_view','stock'); renderAll(); });
-    tools.appendChild(bBoard); tools.appendChild(bList); tools.appendChild(bFin); tools.appendChild(bStock);
-    if(VIEW !== 'fin' && VIEW !== 'stock'){
+    var bCal = document.createElement('button');
+    bCal.className = 'crm-vbtn' + (VIEW==='cal' ? ' on' : '');
+    bCal.textContent = '\uD83D\uDCC5';
+    bCal.title = 'Календарь установок';
+    bCal.addEventListener('click', function(){ VIEW='cal'; localStorage.setItem('moff_crm_view','cal'); renderAll(); });
+    tools.appendChild(bBoard); tools.appendChild(bList); tools.appendChild(bCal); tools.appendChild(bFin); tools.appendChild(bStock);
+    if(VIEW !== 'fin' && VIEW !== 'stock' && VIEW !== 'cal'){
     var search = document.createElement('input');
     search.type = 'search'; search.placeholder = 'Поиск: №, клиент, телефон, город...';
     search.value = SEARCH; search.style.flex = '1'; search.style.minWidth = '140px';
@@ -674,6 +694,11 @@
     if(VIEW === 'fin'){
       if(cnt) cnt.textContent = '';
       renderFin(view);
+      return;
+    }
+    if(VIEW === 'cal'){
+      if(cnt) cnt.textContent = '';
+      renderCalendar(view);
       return;
     }
     if(cnt) cnt.textContent = vis.length + ' из ' + ORDERS.length;
@@ -812,6 +837,96 @@
     }
     paint();
     view.appendChild(box);
+  }
+
+  // ── Календарь установок: месяц сеткой по «Дата установки» ──
+  // Показывает ВСЕ заказы месяца (поиск и фильтры не применяются),
+  // цвет плашки = цвет статуса на доске. Клик по плашке — карточка.
+  function renderCalendar(view){
+    var nav = document.createElement('div');
+    nav.className = 'crm-m-btns';
+    nav.style.cssText = 'align-items:center;margin-bottom:8px';
+    var curKey = monthKey(new Date());
+    var bPrev = document.createElement('button'); bPrev.className='crm-vbtn'; bPrev.style.padding='3px 10px';
+    bPrev.textContent = '\u2039';
+    bPrev.addEventListener('click', function(){ CAL_MONTH = shiftMonthKey(CAL_MONTH, -1); renderView(); });
+    var lbl = document.createElement('span');
+    lbl.style.cssText = 'font-size:13px;font-weight:700;padding:0 8px';
+    lbl.textContent = monthLabel(CAL_MONTH);
+    var bNext = document.createElement('button'); bNext.className='crm-vbtn'; bNext.style.padding='3px 10px';
+    bNext.textContent = '\u203a';
+    bNext.addEventListener('click', function(){ CAL_MONTH = shiftMonthKey(CAL_MONTH, 1); renderView(); });
+    nav.appendChild(bPrev); nav.appendChild(lbl); nav.appendChild(bNext);
+    if(CAL_MONTH !== curKey){
+      var bNow = document.createElement('button'); bNow.className='crm-vbtn'; bNow.style.padding='3px 8px'; bNow.style.marginLeft='6px';
+      bNow.textContent = 'Сегодня';
+      bNow.addEventListener('click', function(){ CAL_MONTH = curKey; renderView(); });
+      nav.appendChild(bNow);
+    }
+    view.appendChild(nav);
+
+    var p = CAL_MONTH.split('-');
+    var y = +p[0], mIdx = +p[1] - 1;
+    var startDow = (new Date(y, mIdx, 1).getDay() + 6) % 7;
+    var daysIn = new Date(y, mIdx + 1, 0).getDate();
+
+    var byDay = {};
+    var total = 0;
+    ORDERS.forEach(function(o){
+      if(!o.mountDate) return;
+      if(monthKey(o.mountDate) !== CAL_MONTH) return;
+      var d = new Date(o.mountDate);
+      if(isNaN(d.getTime())) return;
+      var dd = d.getDate();
+      if(!byDay[dd]) byDay[dd] = [];
+      byDay[dd].push(o);
+      total++;
+    });
+
+    var grid = document.createElement('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:4px';
+    var DOW = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+    DOW.forEach(function(dn, di){
+      var hh = document.createElement('div');
+      hh.textContent = dn;
+      hh.style.cssText = 'font-size:10px;text-align:center;padding:2px 0;color:' + (di >= 5 ? '#c07a7a' : '#999');
+      grid.appendChild(hh);
+    });
+    for(var e = 0; e < startDow; e++) grid.appendChild(document.createElement('div'));
+    var nowD = new Date();
+    var isThisMonth = monthKey(nowD) === CAL_MONTH;
+    for(var day = 1; day <= daysIn; day++){
+      var isToday = isThisMonth && nowD.getDate() === day;
+      var cell = document.createElement('div');
+      cell.style.cssText = 'min-height:56px;border:1px solid ' + (isToday ? '#1a5252' : '#eee') + ';border-radius:8px;padding:3px 4px;background:#fff;overflow:hidden';
+      var dnum = document.createElement('div');
+      dnum.textContent = day;
+      dnum.style.cssText = 'font-size:10px;font-weight:700;color:' + (isToday ? '#1a5252' : '#bbb');
+      cell.appendChild(dnum);
+      var arr = byDay[day] || [];
+      arr.slice(0, 3).forEach(function(o){
+        var col = ST_COLOR[o.status] || '#888780';
+        var chip = document.createElement('div');
+        chip.textContent = '\u2116' + o.num + (o.client ? ' ' + o.client : '');
+        chip.title = '\u2116' + o.num + ' ' + (o.client || '') + ' \u2014 ' + (o.status || '') + (o.furn ? ' \u00B7 ' + o.furn : '');
+        chip.style.cssText = 'font-size:10px;line-height:1.4;margin-top:2px;padding:1px 4px;border-radius:6px;cursor:pointer;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:' + col + '1f;color:' + col;
+        chip.addEventListener('click', function(){ openCard(o.num); });
+        cell.appendChild(chip);
+      });
+      if(arr.length > 3){
+        var more = document.createElement('div');
+        more.textContent = '+' + (arr.length - 3) + ' ещё';
+        more.style.cssText = 'font-size:10px;color:#999;margin-top:2px';
+        cell.appendChild(more);
+      }
+      grid.appendChild(cell);
+    }
+    view.appendChild(grid);
+
+    var foot = document.createElement('div');
+    foot.style.cssText = 'font-size:11px;color:#999;margin-top:6px';
+    foot.textContent = total ? 'Установок в месяце: ' + total : 'В этом месяце дат установки нет \u2014 заполняй поле «Дата установки» в карточке, и заказы появятся здесь.';
+    view.appendChild(foot);
   }
 
   var MONTH_SHORT = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
@@ -2400,6 +2515,17 @@
     var r1 = document.createElement('div'); r1.className='crm-2col';
     r1.appendChild(field('Клиент', iClient)); r1.appendChild(field('Телефон', iPhone));
     b.appendChild(r1);
+    var repHint = document.createElement('div');
+    repHint.style.cssText = 'display:none;font-size:11px;color:#1a5252;margin:2px 0 6px';
+    b.appendChild(repHint);
+    iPhone.addEventListener('input', function(){
+      var found = ordersByPhone(iPhone.value);
+      if(!found.length){ repHint.style.display = 'none'; repHint.textContent = ''; return; }
+      var nums = found.slice(0, 5).map(function(oo){ return '\u2116' + oo.num; }).join(', ');
+      repHint.textContent = '\u2B50 Этот телефон уже есть в заказах: ' + nums + (found.length > 5 ? '\u2026' : '') + ' \u2014 повторный клиент!';
+      repHint.style.display = 'block';
+      if(found[0] && found[0].client && !iClient.value.trim()) iClient.value = found[0].client;
+    });
     var r2 = document.createElement('div'); r2.className='crm-2col';
     r2.appendChild(field('Город', iCity)); r2.appendChild(field('Тип мебели', iFurn));
     b.appendChild(r2);
@@ -2519,6 +2645,33 @@
     phoneWrap.appendChild(waBtn);
     r1.appendChild(field('Телефон', phoneWrap));
     b.appendChild(r1);
+    var sameCli = ordersByPhone(o.phone, o.num);
+    if(sameCli.length){
+      var rep = document.createElement('div');
+      rep.style.cssText = 'font-size:11px;color:#1a5252;margin:2px 0 6px';
+      var repT = document.createElement('span');
+      repT.textContent = '\u2B50 Повторный клиент \u2014 другие заказы: ';
+      rep.appendChild(repT);
+      sameCli.slice(0, 6).forEach(function(oo){
+        var lnk = document.createElement('a');
+        lnk.href = '#';
+        lnk.textContent = '\u2116' + oo.num + ' (' + (oo.status || '') + ')';
+        lnk.style.cssText = 'color:#1a5252;font-weight:700;margin-right:8px';
+        lnk.addEventListener('click', function(e){
+          e.preventDefault();
+          document.body.removeChild(bg);
+          openCard(oo.num);
+        });
+        rep.appendChild(lnk);
+      });
+      if(sameCli.length > 6){
+        var repMore = document.createElement('span');
+        repMore.style.color = '#999';
+        repMore.textContent = '\u2026и ещё ' + (sameCli.length - 6);
+        rep.appendChild(repMore);
+      }
+      b.appendChild(rep);
+    }
     var r2 = document.createElement('div'); r2.className='crm-2col';
     r2.appendChild(field('Город', iCity)); r2.appendChild(field('Тип мебели', iFurn));
     b.appendChild(r2);
