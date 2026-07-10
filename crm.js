@@ -79,15 +79,35 @@
     return { parts: parts, tooBig: false };
   }
 
+  // Сколько непустых (не null/undefined) позиций в разделе ST.
+  function nonNullCount(arr){
+    if (!arr) return 0;
+    var n = 0;
+    for (var i = 0; i < arr.length; i++) { if (arr[i] !== null && arr[i] !== undefined) n++; }
+    return n;
+  }
+  // Ветка фасада по факту заполнения (ST.fldsp/fplen/fkr), а не по сумме —
+  // корпус и общие расходы попадают во все три totL/P/K одинаково, поэтому
+  // totL почти всегда >0, даже если фасад реально заполнен в Плёнке/Краске.
+  function facadeBranch(ST){
+    ST = ST || {};
+    if (nonNullCount(ST.fldsp) > 0) return 'L';
+    if (nonNullCount(ST.fplen) > 0) return 'P';
+    if (nonNullCount(ST.fkr) > 0) return 'K';
+    return null;
+  }
+
   // ── Сохранение расчёта → заказ в таблице ──────────────────
   window.crmPushOrder = function(rec){
     if (!rec) return;
     var sn = splitSnap({ ST: rec.ST, snap: rec.snap });
+    var br = facadeBranch(rec.ST);
+    var predBase = br === 'L' ? rec.totL : (br === 'P' ? rec.totP : (br === 'K' ? rec.totK : (rec.totL || rec.totP || rec.totK)));
     var order = {
       num:    String(rec.num || ''),
       client: rec.client || '',
       furn:   rec.obj || '',
-      predPrice: Math.round(rec.totL || rec.totP || rec.totK || 0),
+      predPrice: Math.round(predBase || 0),
       totL: Math.round(rec.totL || 0),
       totP: Math.round(rec.totP || 0),
       totK: Math.round(rec.totK || 0),
@@ -166,6 +186,11 @@
     var p = key.split('-');
     return (MONTH_NAMES[(+p[1])-1] || p[1]) + ' ' + p[0];
   }
+  function shiftMonthKey(key, delta){
+    var p = key.split('-');
+    var d = new Date(+p[0], (+p[1]-1)+delta, 1);
+    return monthKey(d);
+  }
   function isActive(o){
     return ['Готова','Отказ','Отложено'].indexOf(o.status) < 0;
   }
@@ -195,8 +220,10 @@
     return s - (Number(o.avans)||0) - (Number(o.paid)||0);
   }
   // Маржа заказа. Договор подписан → авторитетная margin (зафиксирована при
-  // договоре). Ещё нет договора → черновая маржа по той же ветке, что и
-  // Предв. цена (первая ненулевая: Л→П→К). null, если данных нет.
+  // договоре). Ещё нет договора → черновая маржа той же ветки, что и
+  // Предв. цена: сверяем o.pred с totals (pred сохраняется по ветке
+  // реально заполненного фасада, см. facadeBranch). Для заказов, сохранённых
+  // до этого фикса — fallback на старую эвристику (первая ненулевая ветка).
   function marginOf(o){
     if(Number(o.sogl) > 0 && o.margin !== undefined && o.margin !== '' && o.margin !== null){
       return Number(o.margin)||0;
@@ -204,6 +231,12 @@
     if(Number(o.margin) > 0) return Number(o.margin)||0;
     var mL = Number(o.margL)||0, mP = Number(o.margP)||0, mK = Number(o.margK)||0;
     var tL = Number(o.totL)||0, tP = Number(o.totP)||0, tK = Number(o.totK)||0;
+    var pred = Number(o.pred)||0;
+    if(pred > 0){
+      if(tL === pred) return mL;
+      if(tP === pred) return mP;
+      if(tK === pred) return mK;
+    }
     if(tL > 0) return mL;
     if(tP > 0) return mP;
     if(tK > 0) return mK;
@@ -632,6 +665,7 @@
   var FIN = [];
   var FIN_LOADED = false;
   var FIN_SUB = 'kassa';
+  var FIN_MONTH = monthKey(new Date());
   var RECUR = [];
   var RECUR_LOADED = false;
   var EMP = [];
@@ -964,18 +998,41 @@
     renderKassa(view);
   }
 
+  // Переключатель месяца для подвкладок Касса/Зарплаты — общий FIN_MONTH.
+  function renderMonthNav(view){
+    var curKey = monthKey(new Date());
+    var row = document.createElement('div'); row.className = 'crm-m-btns';
+    row.style.alignItems = 'center'; row.style.marginBottom = '6px';
+    var bPrev = document.createElement('button'); bPrev.className='crm-vbtn'; bPrev.style.padding='3px 10px';
+    bPrev.textContent = '\u2039';
+    bPrev.addEventListener('click', function(){ FIN_MONTH = shiftMonthKey(FIN_MONTH, -1); renderAll(); });
+    var lbl = document.createElement('span'); lbl.style.fontSize='12px'; lbl.style.fontWeight='700'; lbl.style.padding='0 8px';
+    lbl.textContent = monthLabel(FIN_MONTH);
+    var bNext = document.createElement('button'); bNext.className='crm-vbtn'; bNext.style.padding='3px 10px';
+    bNext.textContent = '\u203a';
+    if(FIN_MONTH >= curKey) bNext.disabled = true;
+    bNext.addEventListener('click', function(){ if(FIN_MONTH < curKey){ FIN_MONTH = shiftMonthKey(FIN_MONTH, 1); renderAll(); } });
+    row.appendChild(bPrev); row.appendChild(lbl); row.appendChild(bNext);
+    if(FIN_MONTH !== curKey){
+      var bNow = document.createElement('button'); bNow.className='crm-vbtn'; bNow.style.padding='3px 8px'; bNow.style.marginLeft='6px';
+      bNow.textContent = 'Сегодня';
+      bNow.addEventListener('click', function(){ FIN_MONTH = curKey; renderAll(); });
+      row.appendChild(bNow);
+    }
+    view.appendChild(row);
+  }
+
   // Месячный P&L: за выбранный месяц приход − расход = чистый доход.
   function renderMonthPnl(view){
-    var nowKey = monthKey(new Date());
+    renderMonthNav(view);
     var inc = 0, exp = 0;
     FIN.forEach(function(f){
-      if(monthKey(f.date) !== nowKey) return;
+      if(monthKey(f.date) !== FIN_MONTH) return;
       if(f.type === 'Приход') inc += Number(f.sum)||0; else exp += Number(f.sum)||0;
     });
     var net = inc - exp;
     var t0 = document.createElement('div'); t0.className='crm-sec-t';
-    var mp = nowKey.split('-');
-    t0.textContent = 'Итог месяца — ' + (MONTH_NAMES[(+mp[1])-1] || mp[1]) + ' ' + mp[0];
+    t0.textContent = 'Итог месяца';
     view.appendChild(t0);
     var sum = document.createElement('div'); sum.className='crm-sum';
     function tile(v, k, cls){
@@ -1180,23 +1237,24 @@
       });
       return;
     }
-    // Заработок с заказов за текущий месяц (по дате договора)
-    var nowKey = monthKey(new Date());
+    // Заработок с заказов за выбранный месяц (по дате договора)
     var earnMasterM = 0, earnDesignerM = 0;
     if(LOADED){
       ORDERS.forEach(function(o){
-        if(monthKey(o.dogDate) !== nowKey) return;
+        if(monthKey(o.dogDate) !== FIN_MONTH) return;
         earnMasterM += Number(o.earnMaster)||0;
         earnDesignerM += Number(o.earnDesigner)||0;
       });
     }
+
+    renderMonthNav(view);
 
     var t0 = document.createElement('div'); t0.className='crm-sec-t';
     t0.textContent = 'Сотрудники — оклад';
     view.appendChild(t0);
 
     var hint = document.createElement('div'); hint.className='crm-fin-note';
-    hint.textContent = 'Оклад — фиксированная часть (как аренда), начисляется во вкладке «Постоянные» кнопкой «Начислить за месяц». Процент — то, что человек заработал с заказов этого месяца (по дате договора). Итого к выплате = оклад + процент.';
+    hint.textContent = 'Оклад — фиксированная часть (как аренда), начисляется во вкладке «Постоянные» кнопкой «Начислить за месяц». Процент — то, что человек заработал с заказов выбранного месяца (по дате договора). Итого к выплате = оклад + процент.';
     view.appendChild(hint);
 
     var btnRow = document.createElement('div'); btnRow.className='crm-m-btns';
@@ -1410,12 +1468,9 @@
   }
 
   function renderKassa(view){
-    var inc = 0, exp = 0, mInc = 0, mExp = 0;
-    var nowKey = monthKey(new Date());
+    var inc = 0, exp = 0;
     FIN.forEach(function(f){
-      var isIn = f.type === 'Приход';
-      if(isIn) inc += f.sum; else exp += f.sum;
-      if(monthKey(f.date) === nowKey){ if(isIn) mInc += f.sum; else mExp += f.sum; }
+      if(f.type === 'Приход') inc += f.sum; else exp += f.sum;
     });
     var t0 = document.createElement('div'); t0.className='crm-sec-t';
     t0.textContent = 'Касса — фактические деньги';
@@ -1430,7 +1485,6 @@
     tile(fm0(inc), 'приход, всего');
     tile(fm0(exp), 'расход, всего', exp > inc);
     tile(fm0(inc - exp), 'итог (приход − расход)', inc - exp < 0);
-    tile('+' + fm0(mInc) + ' / −' + fm0(mExp), 'этот месяц');
     view.appendChild(sum);
 
     // график приход/расход по месяцам
