@@ -74,6 +74,11 @@
   .drow .k { color: #999; }
   .drow .v { font-weight: 700; }
   .note { font-size: 11px; color: #b5b2ac; margin-top: 14px; line-height: 1.5; }
+  .ph-t { font-size: 12px; color: #999; margin: 14px 0 8px; border-top: 1px solid #f0ede8; padding-top: 12px; }
+  .ph-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .ph-cell { display: block; text-decoration: none; }
+  .ph-cell img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 10px; display: block; background: #f2efe9; }
+  .ph-cap { font-size: 10px; color: #999; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .foot { text-align: center; font-size: 11px; color: #b5b2ac; padding-bottom: 26px; }
   .err {
     text-align: center; padding: 26px 10px; font-size: 14px; color: #8a4b1a; line-height: 1.6;
@@ -190,6 +195,26 @@
       dts.appendChild(r2); has = true;
     }
     if(has) card.appendChild(dts);
+
+    if(o.photos && o.photos.length){
+      card.appendChild(el('div', 'ph-t', 'Фотографии вашего заказа'));
+      var g = el('div', 'ph-grid');
+      for(var pi = 0; pi < o.photos.length; pi++){
+        var ph = o.photos[pi];
+        var pa = document.createElement('a');
+        pa.href = 'https://drive.google.com/file/d/' + ph.fileId + '/view';
+        pa.target = '_blank'; pa.rel = 'noopener';
+        pa.className = 'ph-cell';
+        var im = document.createElement('img');
+        im.src = 'https://drive.google.com/thumbnail?id=' + ph.fileId + '&sz=w400';
+        im.alt = 'фото заказа';
+        im.loading = 'lazy';
+        pa.appendChild(im);
+        if(ph.comment) pa.appendChild(el('div', 'ph-cap', ph.comment));
+        g.appendChild(pa);
+      }
+      card.appendChild(g);
+    }
 
     card.appendChild(el('div', 'note',
       'Страница показывает актуальное состояние вашего заказа. ' +

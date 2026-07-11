@@ -2834,6 +2834,23 @@
               });
             });
             cell.appendChild(del);
+            var eye = document.createElement('button');
+            eye.textContent = '\uD83D\uDC41';
+            eye.title = a.pub ? 'Видно клиенту на странице статуса \u2014 нажми, чтобы скрыть' : 'Скрыто от клиента \u2014 нажми, чтобы показать на странице статуса (вместе с подписью)';
+            eye.style.cssText = 'position:absolute;top:2px;left:2px;width:22px;height:20px;border:none;border-radius:6px;cursor:pointer;font-size:11px;line-height:1;padding:0;' + (a.pub ? 'background:#1a5252;color:#fff' : 'background:rgba(20,20,20,.45);color:#fff;opacity:.75');
+            eye.addEventListener('click', function(){
+              var next = !a.pub;
+              eye.disabled = true;
+              post({ action:'pubAttach', id: a.id, pub: next }, function(){
+                a.pub = next;
+                renderAttach();
+                toast(next ? 'OK Фото видно клиенту на странице статуса' : 'OK Фото скрыто с клиентской страницы', '#1a5252');
+              }, function(err){
+                eye.disabled = false;
+                toast('\u26A0\uFE0F Не сохранилось: ' + err, '#BA7517');
+              });
+            });
+            cell.appendChild(eye);
             if(a.comment){
               var cap = document.createElement('div');
               cap.textContent = a.comment;
@@ -2894,7 +2911,7 @@
         if(!txt){ toast('\u26A0\uFE0F Напиши текст заметки', '#BA7517'); return; }
         bNote.disabled = true;
         post({ action:'addAttach', attach: { num: String(o.num), kind: 'коммент', comment: txt } }, function(res){
-          ATT.push({ id: res.id, num: String(o.num), kind: 'коммент', name: '', fileId: '', comment: txt, created: new Date().toISOString() });
+          ATT.push({ id: res.id, num: String(o.num), kind: 'коммент', name: '', fileId: '', comment: txt, created: new Date().toISOString(), pub: false });
           renderAttach();
           toast('OK Заметка добавлена', '#1a5252');
         }, function(err){
@@ -2922,7 +2939,7 @@
             if(!b64){ fail++; next(); return; }
             var nm = String(f.name || 'фото.jpg').replace(/\.[^.]+$/, '') + '.jpg';
             post({ action:'addAttach', attach: { num: String(o.num), kind: 'файл', name: nm, mime: 'image/jpeg', dataB64: b64, comment: cap } }, function(res){
-              ATT.push({ id: res.id, num: String(o.num), kind: 'файл', name: nm, fileId: res.fileId, comment: cap, created: new Date().toISOString() });
+              ATT.push({ id: res.id, num: String(o.num), kind: 'файл', name: nm, fileId: res.fileId, comment: cap, created: new Date().toISOString(), pub: false });
               done++;
               next();
             }, function(){ fail++; next(); });

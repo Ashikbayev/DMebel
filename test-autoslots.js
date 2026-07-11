@@ -669,9 +669,28 @@ function waitReady(dom, tries){
       };
     }
   };
+  var cliAttRows = [];
+  var cliAttSheet = {
+    getLastRow: function(){ return cliAttRows.length + 1; },
+    setFrozenRows: function(){},
+    deleteRow: function(row){ cliAttRows.splice(row - 2, 1); },
+    getRange: function(row, col, numRows, numCols){
+      return {
+        setValue: function(v){ var r = row - 2; while(cliAttRows.length <= r) cliAttRows.push([]); cliAttRows[r][col - 1] = v; return this; },
+        getValue: function(){ var r = cliAttRows[row - 2] || []; return r[col - 1] === undefined ? '' : r[col - 1]; },
+        getValues: function(){ var out = []; for(var i = 0; i < (numRows || 1); i++){ var src = cliAttRows[row - 2 + i] || []; var line = []; for(var j = 0; j < (numCols || 1); j++) line.push(src[col - 1 + j] === undefined ? '' : src[col - 1 + j]); out.push(line); } return out; },
+        setValues: function(){ return this; },
+        setFontWeight: function(){ return this; }
+      };
+    }
+  };
   gsCtx.__ordSS = {
-    getSheetByName: function(n){ return n === 'Заказы' ? ordSheet : null; },
-    insertSheet: function(){ return ordSheet; }
+    getSheetByName: function(n){
+      if(n === 'Заказы') return ordSheet;
+      if(n === 'Вложения') return cliAttSheet;
+      return null;
+    },
+    insertSheet: function(n){ return n === 'Вложения' ? cliAttSheet : ordSheet; }
   };
 
   var cl1 = att("clientLink_(__ordSS, '999')");
@@ -684,11 +703,28 @@ function waitReady(dom, tries){
   var cs1 = att("clientStatus_(__ordSS, '77', '" + cl2.key + "')");
   ok(cs1.ok === true && cs1.order.status === 'Сборка' && cs1.order.furn === 'Кухня', 'верный ключ: статус и тип мебели отдаются');
   var csKeys = Object.keys(cs1.order).sort().join(',');
-  ok(csKeys === 'dogDate,furn,mountDate,num,status', 'срез безопасен: только num/status/furn/даты, без телефона, имени и денег');
+  ok(csKeys === 'dogDate,furn,mountDate,num,photos,status', 'срез безопасен: только num/status/furn/даты/фото, без телефона, имени и денег');
   var cs2 = att("clientStatus_(__ordSS, '77', 'wrong-key')");
   ok(cs2.ok === false, 'неверный ключ отклонён');
   var cs3 = att("clientStatus_(__ordSS, '78', 'anything')");
   ok(cs3.ok === false, 'заказ без выданного ключа недоступен (пустой ключ не совпадает ни с чем)');
+
+  // Фото на клиентской странице: флаг «Клиенту» (pubAttach_)
+  var pA = att("addAttach_(__ordSS, { num:'77', kind:'файл', name:'zamer.jpg', mime:'image/jpeg', dataB64:'aGVsbG8=', comment:'Фото замера' })");
+  var pB = att("addAttach_(__ordSS, { num:'77', kind:'файл', name:'work.jpg', mime:'image/jpeg', dataB64:'aGVsbG8=', comment:'внутреннее' })");
+  var pC = att("addAttach_(__ordSS, { num:'78', kind:'файл', name:'other.jpg', mime:'image/jpeg', dataB64:'aGVsbG8=' })");
+  var pl0 = att("attachList_(__ordSS)");
+  ok(pl0.attach.length === 3 && pl0.attach[0].pub === false && pl0.attach[2].pub === false, 'новое фото по умолчанию скрыто от клиента');
+  ok(att("pubAttach_(__ordSS, 'нет-такого', true)").ok === false, 'переключение флага по неверному id отклонено');
+  var pt = att("pubAttach_(__ordSS, '" + pA.id + "', true)");
+  var pl1 = att("attachList_(__ordSS)");
+  ok(pt.ok === true && pl1.attach[0].pub === true && pl1.attach[1].pub === false, 'флаг «Клиенту» переключается и сохраняется');
+  att("pubAttach_(__ordSS, '" + pC.id + "', true)");
+  var cs4 = att("clientStatus_(__ordSS, '77', '" + cl2.key + "')");
+  ok(cs4.ok === true && cs4.order.photos.length === 1 && cs4.order.photos[0].fileId === pA.fileId && cs4.order.photos[0].comment === 'Фото замера', 'клиент видит ТОЛЬКО помеченные фото СВОЕГО заказа (с подписью)');
+  var pt2 = att("pubAttach_(__ordSS, '" + pA.id + "', false)");
+  var cs5 = att("clientStatus_(__ordSS, '77', '" + cl2.key + "')");
+  ok(pt2.ok === true && cs5.order.photos.length === 0, 'снятие флага убирает фото со страницы клиента');
 
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');
