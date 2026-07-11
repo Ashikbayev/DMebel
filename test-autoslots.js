@@ -766,6 +766,69 @@ function waitReady(dom, tries){
   ok(cs6.ok === true && !!cs6.order.history && !!cs6.order.history['Доделки'], 'история переходов отдаётся клиентской странице');
   ok(cs6.order.history['Договор'] === '2026-06-15', 'дата Договора для старого заказа берётся из карточки (фолбэк)');
 
+  // ─────────────────────────────────────────────────────────────
+  // v4.0: Склад — stockMove_/delStockMove_/saveStockMin_ (Code.gs)
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.0: Склад — движения, удаление, минимумы ──');
+  var stRows = [];
+  var stSheet = {
+    getLastRow: function(){ return stRows.length + 1; },
+    setFrozenRows: function(){},
+    deleteRow: function(row){ stRows.splice(row - 2, 1); },
+    getRange: function(row, col, numRows, numCols){
+      return {
+        setValue: function(v){ var r = row - 2; while(stRows.length <= r) stRows.push([]); stRows[r][col - 1] = v; return this; },
+        getValue: function(){ var r = stRows[row - 2] || []; return r[col - 1] === undefined ? '' : r[col - 1]; },
+        getValues: function(){ var out = []; for(var i = 0; i < (numRows || 1); i++){ var src = stRows[row - 2 + i] || []; var line = []; for(var j = 0; j < (numCols || 1); j++) line.push(src[col - 1 + j] === undefined ? '' : src[col - 1 + j]); out.push(line); } return out; },
+        setValues: function(){ return this; },
+        setFontWeight: function(){ return this; }
+      };
+    }
+  };
+  var smRows = [];
+  var smSheet = {
+    getLastRow: function(){ return smRows.length + 1; },
+    setFrozenRows: function(){},
+    deleteRow: function(row){ smRows.splice(row - 2, 1); },
+    getRange: function(row, col, numRows, numCols){
+      return {
+        setValue: function(v){ var r = row - 2; while(smRows.length <= r) smRows.push([]); smRows[r][col - 1] = v; return this; },
+        getValue: function(){ var r = smRows[row - 2] || []; return r[col - 1] === undefined ? '' : r[col - 1]; },
+        getValues: function(){ var out = []; for(var i = 0; i < (numRows || 1); i++){ var src = smRows[row - 2 + i] || []; var line = []; for(var j = 0; j < (numCols || 1); j++) line.push(src[col - 1 + j] === undefined ? '' : src[col - 1 + j]); out.push(line); } return out; },
+        setValues: function(){ return this; },
+        setFontWeight: function(){ return this; }
+      };
+    }
+  };
+  gsCtx.__stSS = {
+    getSheetByName: function(n){
+      if(n === 'Склад') return stSheet;
+      if(n === 'СкладМин') return smSheet;
+      return null;
+    },
+    insertSheet: function(n){ return n === 'СкладМин' ? smSheet : stSheet; }
+  };
+
+  var sm1 = att("stockMove_(__stSS, { moves: [ { type:'Приход', key:'PET-01', name:'Петля Boyard', unit:'шт', qty:50 }, { type:'Расход', key:'PET-01', name:'Петля Boyard', unit:'шт', qty:10 } ] })");
+  ok(sm1.ok === true && sm1.ids.length === 2, 'батч из двух движений записан');
+  var snap1 = att("stockSnapshot_(__stSS)");
+  ok(snap1.ok === true && snap1.stock.length === 1 && snap1.stock[0].qty === 40, 'остаток после прихода 50 и расхода 10 = 40');
+  var dm1 = att("delStockMove_(__stSS, '" + sm1.ids[1] + "')");
+  var snap2 = att("stockSnapshot_(__stSS)");
+  ok(dm1.ok === true && snap2.stock[0].qty === 50, 'удаление расхода пересчитало остаток обратно в 50');
+  ok(att("delStockMove_(__stSS, 'нет-такого')").ok === false, 'удаление несуществующего движения отклонено');
+
+  ok(att("saveStockMin_(__stSS, { key:'', min:5 })").ok === false, 'минимум без ключа отклонён');
+  ok(att("saveStockMin_(__stSS, { key:'PET-01', min:20 })").ok === true, 'минимум 20 сохранён');
+  var ml1 = att("stockMinList_(__stSS)");
+  ok(ml1.ok === true && ml1.mins.length === 1 && ml1.mins[0].key === 'PET-01' && ml1.mins[0].min === 20, 'список минимумов отдаётся');
+  att("saveStockMin_(__stSS, { key:'PET-01', min:30 })");
+  var ml2 = att("stockMinList_(__stSS)");
+  ok(ml2.mins.length === 1 && ml2.mins[0].min === 30, 'минимум обновляется без дубля строки');
+  att("saveStockMin_(__stSS, { key:'PET-01', min:0 })");
+  var ml3 = att("stockMinList_(__stSS)");
+  ok(ml3.mins.length === 0, 'нулевой минимум удаляет строку (минимум снят)');
+
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');
   process.exit(FAIL ? 1 : 0);

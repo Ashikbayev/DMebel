@@ -754,7 +754,16 @@
         }
       }
     });
-    if(!installs.length && !debts.length && !stale.length) return;
+    if(!TODAY_STOCK_TRIED && (!STOCK_LOADED || !SMIN_LOADED)){
+      TODAY_STOCK_TRIED = true;
+      fetchStock(function(e1){
+        fetchStockMin(function(e2){
+          if(!e1 && !e2 && (VIEW === 'board' || VIEW === 'list')) renderAll();
+        });
+      });
+    }
+    var deficit = (STOCK_LOADED && SMIN_LOADED) ? stockDeficitList() : [];
+    if(!installs.length && !debts.length && !stale.length && !deficit.length) return;
     installs.sort(function(a,b){ return a.diff - b.diff; });
     debts.sort(function(a,b){ return b.debt - a.debt; });
     stale.sort(function(a,b){ return b.days - a.days; });
@@ -776,6 +785,7 @@
       if(installs.length) parts.push('установок: ' + installs.length);
       if(debts.length) parts.push('долгов: ' + debts.length);
       if(stale.length) parts.push('без движения: ' + stale.length);
+      if(deficit.length) parts.push('докупить: ' + deficit.length);
       sub.textContent = parts.join(' \u00B7 ');
       var fold = document.createElement('span');
       fold.style.cssText = 'font-size:11px;color:#999;white-space:nowrap';
@@ -834,6 +844,35 @@
       group('\uD83D\uDCA4 Без движения 14+ дней', stale, function(it){
         return mkRow(it.o, (it.o.client || '') + ' \u00B7 ' + (it.o.status || ''), it.days + ' дн.', '');
       });
+      if(deficit.length){
+        var gt2 = document.createElement('div');
+        gt2.style.cssText = 'font-size:11px;color:#999;margin-top:8px';
+        gt2.textContent = '\uD83E\uDDF0 Пора докупить';
+        box.appendChild(gt2);
+        deficit.slice(0, 5).forEach(function(d){
+          var r = document.createElement('div');
+          r.style.cssText = 'display:flex;gap:8px;align-items:baseline;padding:3px 0;cursor:pointer;font-size:12px;border-bottom:1px dashed #f2f2ee';
+          var nm = document.createElement('span');
+          nm.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#555';
+          nm.textContent = d.name;
+          var rt = document.createElement('span');
+          rt.style.cssText = 'white-space:nowrap;font-weight:700;color:' + (d.qty <= 0 ? '#BA1B1B' : '#BA7517');
+          rt.textContent = d.qty <= 0 ? 'закончилось' : d.qty + ' / мин ' + d.min;
+          r.appendChild(nm); r.appendChild(rt);
+          r.addEventListener('click', function(){
+            VIEW = 'stock'; STOCK_SUBVIEW = 'balance'; STOCK_DEF_ONLY = true;
+            localStorage.setItem('moff_crm_view', 'stock');
+            renderAll();
+          });
+          box.appendChild(r);
+        });
+        if(deficit.length > 5){
+          var dmore = document.createElement('div');
+          dmore.style.cssText = 'font-size:11px;color:#999;padding:2px 0';
+          dmore.textContent = '\u2026и ещё ' + (deficit.length - 5);
+          box.appendChild(dmore);
+        }
+      }
     }
     paint();
     view.appendChild(box);
@@ -943,6 +982,13 @@
   var STOCK_MOVES = [];
   var STOCK_MOVES_LOADED = false;
   var STOCK_SUBVIEW = 'balance';
+  var STOCK_SEARCH = '';
+  var STOCK_HSEARCH = '';
+  var STOCK_SORT = 'name';
+  var STOCK_DEF_ONLY = false;
+  var SMIN = {};
+  var SMIN_LOADED = false;
+  var TODAY_STOCK_TRIED = false;
   var CAT_IN  = ['Доплата','Прочий приход'];
   var CAT_OUT = ['Материалы','Оплата мастеру','Оплата дизайнеру','Аренда','Реклама','Транспорт','Инструмент','Прочее'];
   var RECUR_CAT = ['Аренда','Реклама','Связь/Интернет','Коммуналка','Транспорт','Прочее'];
@@ -1103,6 +1149,54 @@
       .catch(function(e){ cb(String(e && e.message || e)); });
   }
 
+  function fetchStockMin(cb){
+    if(!getToken()){ cb('__no_key__'); return; }
+    fetch(GS_URL + '?action=stockMin&token=' + encodeURIComponent(getToken()))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(res && res.ok){
+          SMIN = {};
+          var arr = res.mins || [];
+          arr.forEach(function(m){ if(m && m.key && Number(m.min) > 0) SMIN[m.key] = Math.round(Number(m.min)); });
+          SMIN_LOADED = true;
+          cb(null);
+        }
+        else cb((res && res.error) || 'таблица вернула ошибку');
+      })
+      .catch(function(e){ cb(String(e && e.message || e)); });
+  }
+
+  function minOf(key){ return Number(SMIN[key]) || 0; }
+
+  // Цены позиций для «Склада в деньгах»: артикулы фурнитуры/кухни/шкафа
+  // и имена материалов из прайса калькулятора (DB). Позиции без цены
+  // в прайсе просто не входят в сумму — это честно показывается.
+  function stockPriceMap(){
+    var map = {};
+    if(typeof DB !== 'undefined' && DB){
+      ['furn','kuh','shk'].forEach(function(sec){
+        var rows = DB[sec] || [];
+        rows.forEach(function(row){ if(row && row.sku && Number(row.p) > 0 && !map[row.sku]) map[row.sku] = Number(row.p); });
+      });
+      var mats = (DB.ldsp || []).concat(DB.fas_plen || []).concat(DB.fas_kr || []);
+      mats.forEach(function(row){ if(row && row.n && Number(row.p) > 0 && !map[row.n]) map[row.n] = Number(row.p); });
+    }
+    return map;
+  }
+
+  function stockDeficitList(){
+    var out = [];
+    var st = STOCK || [];
+    st.forEach(function(s){
+      if(!s || !s.key) return;
+      var q = Math.round(Number(s.qty) || 0);
+      var mn = minOf(s.key);
+      if(q <= 0 || (mn > 0 && q < mn)) out.push({ key: s.key, name: s.name || s.key, unit: s.unit || '', qty: q, min: mn });
+    });
+    out.sort(function(a,b){ return (a.qty - a.min) - (b.qty - b.min); });
+    return out;
+  }
+
   function renderStock(view){
     var wrap = document.createElement('div');
     var t0 = document.createElement('b');
@@ -1123,7 +1217,10 @@
     bIn.addEventListener('click', function(){ openStockModal({ type:'Приход' }); });
     var bOut = document.createElement('button'); bOut.className = 'crm-vbtn'; bOut.textContent = '\u2212 Выдача';
     bOut.addEventListener('click', function(){ openStockModal({ type:'Расход' }); });
-    btnRow.appendChild(bIn); btnRow.appendChild(bOut);
+    var bInv = document.createElement('button'); bInv.className = 'crm-vbtn'; bInv.textContent = '\uD83D\uDCCB Инвентаризация';
+    bInv.title = 'Пересчёт: вводишь фактические остатки, разница спишется/оприходуется сама';
+    bInv.addEventListener('click', function(){ openInventoryModal(); });
+    btnRow.appendChild(bIn); btnRow.appendChild(bOut); btnRow.appendChild(bInv);
     wrap.appendChild(btnRow);
     view.appendChild(wrap);
 
@@ -1134,34 +1231,171 @@
     fetchStock(function(err){
       if(err === '__no_key__'){ ld.textContent = 'Введи ключ доступа во вкладке заказов.'; return; }
       if(err){ ld.textContent = 'Остатки не загрузились: ' + err; return; }
-      ld.style.display = 'none';
-      var rows = STOCK.slice().filter(function(s){ return s && s.key; });
-      rows.sort(function(a,b){ return String(a.name||a.key).localeCompare(String(b.name||b.key), 'ru'); });
+      fetchStockMin(function(){
+        ld.style.display = 'none';
+        buildBalance(view);
+      });
+    });
+  }
+
+  // Балансовая вкладка: «Пора докупить», склад в деньгах, поиск,
+  // сортировка, фильтр дефицита, минимумы и быстрые ± по строке.
+  function buildBalance(view){
+    var all = STOCK.slice().filter(function(s){ return s && s.key; });
+    if(!all.length){
+      var e0 = document.createElement('div'); e0.className = 'crm-empty';
+      e0.textContent = 'Склад пуст. Нажми «+ Приход», чтобы оприходовать материалы и фурнитуру.';
+      view.appendChild(e0); return;
+    }
+    var prices = stockPriceMap();
+
+    var deficit = stockDeficitList();
+    if(deficit.length){
+      var dt = document.createElement('div'); dt.className = 'crm-sec-t';
+      dt.textContent = '\uD83E\uDDF0 Пора докупить';
+      view.appendChild(dt);
+      var dbox = document.createElement('div');
+      dbox.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px';
+      deficit.slice(0, 12).forEach(function(d){
+        var chip = document.createElement('span');
+        var zero = d.qty <= 0;
+        var chipCol = zero ? 'background:#BA1B1B1f;color:#BA1B1B' : 'background:#BA75171f;color:#BA7517';
+        chip.style.cssText = 'font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px;cursor:default;' + chipCol;
+        chip.textContent = d.name + ' \u2014 ' + (zero ? 'закончилось' : d.qty + ' / мин ' + d.min);
+        dbox.appendChild(chip);
+      });
+      if(deficit.length > 12){
+        var dm = document.createElement('span');
+        dm.style.cssText = 'font-size:11px;color:#999;align-self:center';
+        dm.textContent = '\u2026и ещё ' + (deficit.length - 12);
+        dbox.appendChild(dm);
+      }
+      view.appendChild(dbox);
+    }
+
+    var totalVal = 0, priced = 0, positive = 0;
+    all.forEach(function(s){
+      var q = Math.round(Number(s.qty) || 0);
+      if(q <= 0) return;
+      positive++;
+      var pr = prices[s.key];
+      if(pr > 0){ totalVal += q * pr; priced++; }
+    });
+    if(priced > 0){
+      var money = document.createElement('div');
+      money.style.cssText = 'font-size:12px;color:#555;margin-bottom:10px';
+      var covNote = priced < positive ? ' (цены нашлись для ' + priced + ' из ' + positive + ' позиций)' : '';
+      money.textContent = '\uD83D\uDCB0 Склад в деньгах: ' + fm0(totalVal) + covNote;
+      view.appendChild(money);
+    }
+
+    var ctrl = document.createElement('div');
+    ctrl.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px';
+    var iSearch = document.createElement('input');
+    iSearch.type = 'search';
+    iSearch.placeholder = 'Поиск по названию или ключу...';
+    iSearch.value = STOCK_SEARCH;
+    iSearch.style.cssText = 'flex:1;min-width:150px';
+    var bSortN = document.createElement('button');
+    var bSortQ = document.createElement('button');
+    var bDef = document.createElement('button');
+    bDef.title = 'Показать только закончившееся и ниже минимума';
+    function paintCtrl(){
+      bSortN.className = 'crm-vbtn' + (STOCK_SORT === 'name' ? ' on' : '');
+      bSortN.textContent = 'А\u2013Я';
+      bSortQ.className = 'crm-vbtn' + (STOCK_SORT !== 'name' ? ' on' : '');
+      bSortQ.textContent = 'Остаток ' + (STOCK_SORT === 'qty_desc' ? '\u2193' : '\u2191');
+      bDef.className = 'crm-vbtn' + (STOCK_DEF_ONLY ? ' on' : '');
+      bDef.textContent = 'Только дефицит';
+    }
+    iSearch.addEventListener('input', function(){ STOCK_SEARCH = iSearch.value; paintList(); });
+    bSortN.addEventListener('click', function(){ STOCK_SORT = 'name'; paintCtrl(); paintList(); });
+    bSortQ.addEventListener('click', function(){ STOCK_SORT = STOCK_SORT === 'qty' ? 'qty_desc' : 'qty'; paintCtrl(); paintList(); });
+    bDef.addEventListener('click', function(){ STOCK_DEF_ONLY = !STOCK_DEF_ONLY; paintCtrl(); paintList(); });
+    paintCtrl();
+    ctrl.appendChild(iSearch); ctrl.appendChild(bSortN); ctrl.appendChild(bSortQ); ctrl.appendChild(bDef);
+    view.appendChild(ctrl);
+
+    var listWrap = document.createElement('div');
+    view.appendChild(listWrap);
+
+    function paintList(){
+      listWrap.innerHTML = '';
+      var q = STOCK_SEARCH.trim().toLowerCase();
+      var rows = all.filter(function(s){
+        if(STOCK_DEF_ONLY){
+          var qq = Math.round(Number(s.qty) || 0);
+          var mn0 = minOf(s.key);
+          if(!(qq <= 0 || (mn0 > 0 && qq < mn0))) return false;
+        }
+        if(!q) return true;
+        return String(s.name || '').toLowerCase().indexOf(q) >= 0 || String(s.key || '').toLowerCase().indexOf(q) >= 0;
+      });
+      if(STOCK_SORT === 'name') rows.sort(function(a,b){ return String(a.name||a.key).localeCompare(String(b.name||b.key), 'ru'); });
+      else if(STOCK_SORT === 'qty') rows.sort(function(a,b){ return (Number(a.qty)||0) - (Number(b.qty)||0); });
+      else rows.sort(function(a,b){ return (Number(b.qty)||0) - (Number(a.qty)||0); });
       if(!rows.length){
-        var e = document.createElement('div'); e.className = 'crm-empty';
-        e.textContent = 'Склад пуст. Нажми «+ Приход», чтобы оприходовать материалы и фурнитуру.';
-        view.appendChild(e); return;
+        var em = document.createElement('div'); em.className = 'crm-empty';
+        em.textContent = 'Ничего не нашлось под поиск/фильтр.';
+        listWrap.appendChild(em); return;
       }
       var tbl = document.createElement('table'); tbl.className = 'crm-ftbl';
       var thead = document.createElement('tr');
-      ['Наименование','Ключ','Ед','Остаток'].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thead.appendChild(th); });
+      ['Наименование','Ключ','Ед','Мин','Остаток','Сумма',''].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thead.appendChild(th); });
       tbl.appendChild(thead);
       rows.forEach(function(s){
+        var qty = Math.round(Number(s.qty) || 0);
+        var mn = minOf(s.key);
         var tr = document.createElement('tr');
         var c1 = document.createElement('td'); c1.textContent = String(s.name || s.key); tr.appendChild(c1);
         var c2 = document.createElement('td'); c2.textContent = String(s.key); c2.style.color = '#888'; tr.appendChild(c2);
         var c3 = document.createElement('td'); c3.textContent = String(s.unit || ''); tr.appendChild(c3);
-        var c4 = document.createElement('td'); c4.textContent = String(Math.round(Number(s.qty) || 0));
-        if((Number(s.qty) || 0) <= 0){ c4.style.color = '#BA1B1B'; c4.style.fontWeight = '600'; }
+        var c4 = document.createElement('td');
+        c4.textContent = mn > 0 ? String(mn) : '\u2014';
+        c4.style.cssText = 'color:#999;cursor:pointer';
+        c4.title = 'Задать минимальный остаток (0 — снять)';
+        c4.addEventListener('click', function(){
+          var v = prompt('Минимальный остаток для \u00AB' + (s.name || s.key) + '\u00BB (0 — снять):', mn || '');
+          if(v === null) return;
+          var nv = Math.round(Number(v));
+          if(isNaN(nv) || nv < 0){ toast('\u26A0\uFE0F Нужно целое число не меньше нуля', '#BA7517'); return; }
+          post({ action:'saveStockMin', smin:{ key: s.key, min: nv } }, function(){
+            if(nv > 0) SMIN[s.key] = nv; else delete SMIN[s.key];
+            if(VIEW === 'stock') renderAll();
+            toast(nv > 0 ? 'OK Минимум: ' + nv : 'OK Минимум снят', '#1a5252');
+          }, function(err){ toast('\u26A0\uFE0F Не сохранилось: ' + err, '#BA7517'); });
+        });
         tr.appendChild(c4);
+        var c5 = document.createElement('td'); c5.textContent = String(qty);
+        if(qty <= 0){ c5.style.color = '#BA1B1B'; c5.style.fontWeight = '600'; }
+        else if(mn > 0 && qty < mn){ c5.style.color = '#BA7517'; c5.style.fontWeight = '600'; }
+        tr.appendChild(c5);
+        var c6 = document.createElement('td');
+        var pr = prices[s.key];
+        c6.textContent = (qty > 0 && pr > 0) ? fm0(qty * pr) : '';
+        c6.style.color = '#888';
+        tr.appendChild(c6);
+        var c7 = document.createElement('td');
+        c7.style.whiteSpace = 'nowrap';
+        var bP = document.createElement('button'); bP.className = 'crm-vbtn'; bP.textContent = '+';
+        bP.title = 'Приход этой позиции';
+        bP.style.padding = '2px 8px';
+        bP.addEventListener('click', function(){ openStockModal({ type:'Приход', key: s.key, name: s.name, unit: s.unit }); });
+        var bM = document.createElement('button'); bM.className = 'crm-vbtn'; bM.textContent = '\u2212';
+        bM.title = 'Выдача этой позиции';
+        bM.style.cssText = 'padding:2px 8px;margin-left:4px';
+        bM.addEventListener('click', function(){ openStockModal({ type:'Расход', key: s.key, name: s.name, unit: s.unit }); });
+        c7.appendChild(bP); c7.appendChild(bM);
+        tr.appendChild(c7);
         tbl.appendChild(tr);
       });
-      view.appendChild(tbl);
-    });
+      listWrap.appendChild(tbl);
+    }
+    paintList();
   }
 
-  // История движений (read-only): дата | тип | наименование | ключ | ед | кол-во | № заказа.
-  // Сортировка по дате — свежие сверху.
+  // История движений: поиск + удаление ошибочной строки (остаток
+  // пересчитается сам — он всегда вычисляется из журнала).
   function renderStockHistory(view){
     var ld = document.createElement('div'); ld.className = 'crm-empty'; ld.textContent = 'Загружаю историю...';
     view.appendChild(ld);
@@ -1169,32 +1403,165 @@
       if(err === '__no_key__'){ ld.textContent = 'Введи ключ доступа во вкладке заказов.'; return; }
       if(err){ ld.textContent = 'История не загрузилась: ' + err; return; }
       ld.style.display = 'none';
-      var rows = STOCK_MOVES.slice().filter(function(m){ return m && m.key; });
-      rows.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
-      if(!rows.length){
-        var e = document.createElement('div'); e.className = 'crm-empty';
-        e.textContent = 'Движений пока нет.';
-        view.appendChild(e); return;
+
+      var iSearch = document.createElement('input');
+      iSearch.type = 'search';
+      iSearch.placeholder = 'Поиск: название, ключ или \u2116 заказа...';
+      iSearch.value = STOCK_HSEARCH;
+      iSearch.style.cssText = 'width:100%;box-sizing:border-box;margin-bottom:8px';
+      view.appendChild(iSearch);
+      var listWrap = document.createElement('div');
+      view.appendChild(listWrap);
+      iSearch.addEventListener('input', function(){ STOCK_HSEARCH = iSearch.value; paintHist(); });
+
+      function paintHist(){
+        listWrap.innerHTML = '';
+        var q = STOCK_HSEARCH.trim().toLowerCase();
+        var rows = STOCK_MOVES.slice().filter(function(m){
+          if(!m || !m.key) return false;
+          if(!q) return true;
+          return String(m.name || '').toLowerCase().indexOf(q) >= 0 ||
+                 String(m.key || '').toLowerCase().indexOf(q) >= 0 ||
+                 String(m.num || '').toLowerCase().indexOf(q) >= 0;
+        });
+        rows.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+        if(!rows.length){
+          var e = document.createElement('div'); e.className = 'crm-empty';
+          e.textContent = q ? 'Ничего не нашлось под поиск.' : 'Движений пока нет.';
+          listWrap.appendChild(e); return;
+        }
+        var tbl = document.createElement('table'); tbl.className = 'crm-ftbl';
+        var thead = document.createElement('tr');
+        ['Дата','Тип','Наименование','Ключ','Ед','Кол-во','\u2116 заказа',''].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thead.appendChild(th); });
+        tbl.appendChild(thead);
+        rows.forEach(function(m){
+          var tr = document.createElement('tr');
+          var c1 = document.createElement('td'); c1.textContent = fmtDate(m.date); tr.appendChild(c1);
+          var c2 = document.createElement('td'); c2.textContent = String(m.type || '');
+          c2.style.color = m.type === 'Расход' ? '#BA1B1B' : '#1a5252';
+          tr.appendChild(c2);
+          var c3 = document.createElement('td'); c3.textContent = String(m.name || m.key); tr.appendChild(c3);
+          var c4 = document.createElement('td'); c4.textContent = String(m.key); c4.style.color = '#888'; tr.appendChild(c4);
+          var c5 = document.createElement('td'); c5.textContent = String(m.unit || ''); tr.appendChild(c5);
+          var c6 = document.createElement('td'); c6.textContent = String(Math.round(Number(m.qty) || 0)); tr.appendChild(c6);
+          var c7 = document.createElement('td'); c7.textContent = String(m.num || ''); tr.appendChild(c7);
+          var c8 = document.createElement('td');
+          var del = document.createElement('button'); del.className = 'crm-vbtn'; del.textContent = '\u2715';
+          del.title = 'Удалить движение (остаток пересчитается)';
+          del.style.padding = '2px 8px';
+          del.addEventListener('click', function(){
+            var label = m.type + ' ' + Math.round(Number(m.qty)||0) + ' ' + (m.unit||'') + ' \u00AB' + (m.name || m.key) + '\u00BB от ' + fmtDate(m.date);
+            if(!confirm('Удалить движение: ' + label + '? Остаток по позиции пересчитается.')) return;
+            del.disabled = true;
+            post({ action:'delStockMove', id: m.id }, function(){
+              STOCK_MOVES = STOCK_MOVES.filter(function(x){ return x.id !== m.id; });
+              STOCK_LOADED = false;
+              paintHist();
+              toast('OK Движение удалено, остаток пересчитан', '#1a5252');
+            }, function(err2){
+              del.disabled = false;
+              toast('\u26A0\uFE0F Не удалилось: ' + err2, '#BA7517');
+            });
+          });
+          c8.appendChild(del);
+          tr.appendChild(c8);
+          tbl.appendChild(tr);
+        });
+        listWrap.appendChild(tbl);
       }
-      var tbl = document.createElement('table'); tbl.className = 'crm-ftbl';
-      var thead = document.createElement('tr');
-      ['Дата','Тип','Наименование','Ключ','Ед','Кол-во','\u2116 заказа'].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thead.appendChild(th); });
-      tbl.appendChild(thead);
-      rows.forEach(function(m){
-        var tr = document.createElement('tr');
-        var c1 = document.createElement('td'); c1.textContent = fmtDate(m.date); tr.appendChild(c1);
-        var c2 = document.createElement('td'); c2.textContent = String(m.type || '');
-        c2.style.color = m.type === 'Расход' ? '#BA1B1B' : '#1a5252';
-        tr.appendChild(c2);
-        var c3 = document.createElement('td'); c3.textContent = String(m.name || m.key); tr.appendChild(c3);
-        var c4 = document.createElement('td'); c4.textContent = String(m.key); c4.style.color = '#888'; tr.appendChild(c4);
-        var c5 = document.createElement('td'); c5.textContent = String(m.unit || ''); tr.appendChild(c5);
-        var c6 = document.createElement('td'); c6.textContent = String(Math.round(Number(m.qty) || 0)); tr.appendChild(c6);
-        var c7 = document.createElement('td'); c7.textContent = String(m.num || ''); tr.appendChild(c7);
-        tbl.appendChild(tr);
-      });
-      view.appendChild(tbl);
+      paintHist();
     });
+  }
+
+  // Инвентаризация: вводишь фактические остатки, разница превращается
+  // в корректирующие приход/расход одним батчем (сервер уже умеет).
+  // Пустое поле = позицию не трогаем.
+  function openInventoryModal(){
+    if(!STOCK_LOADED || !STOCK.length){
+      toast('\u26A0\uFE0F Сначала открой Остатки \u2014 нужен текущий список позиций', '#BA7517');
+      return;
+    }
+    var items = STOCK.slice().filter(function(s){ return s && s.key; });
+    items.sort(function(a,b){ return String(a.name||a.key).localeCompare(String(b.name||b.key), 'ru'); });
+    var bg = document.createElement('div'); bg.className = 'crm-modal-bg';
+    bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
+    var m = document.createElement('div'); m.className = 'crm-modal';
+    var h = document.createElement('div'); h.className = 'crm-m-h';
+    var title = document.createElement('b'); title.textContent = '\uD83D\uDCCB Инвентаризация';
+    var x = document.createElement('button'); x.className = 'crm-m-x'; x.textContent = '\u00D7';
+    x.addEventListener('click', function(){ document.body.removeChild(bg); });
+    h.appendChild(title); h.appendChild(x);
+    var b = document.createElement('div'); b.className = 'crm-m-b';
+    var hint = document.createElement('div'); hint.className = 'crm-empty';
+    hint.style.cssText = 'text-align:left;font-size:11px;padding:4px 0';
+    hint.textContent = 'Пройди по цеху и впиши фактическое количество. Пустое поле — позицию не трогаем. «Провести» создаст корректирующие движения на разницу.';
+    b.appendChild(hint);
+    var tbl = document.createElement('table'); tbl.className = 'crm-ftbl';
+    var thead = document.createElement('tr');
+    ['Наименование','Ед','Учёт','Факт'].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thead.appendChild(th); });
+    tbl.appendChild(thead);
+    var inputs = [];
+    items.forEach(function(s){
+      var qty = Math.round(Number(s.qty) || 0);
+      var tr = document.createElement('tr');
+      var c1 = document.createElement('td'); c1.textContent = String(s.name || s.key); tr.appendChild(c1);
+      var c2 = document.createElement('td'); c2.textContent = String(s.unit || ''); tr.appendChild(c2);
+      var c3 = document.createElement('td'); c3.textContent = String(qty); c3.style.color = '#888'; tr.appendChild(c3);
+      var c4 = document.createElement('td');
+      var inpF = document.createElement('input');
+      inpF.type = 'number'; inpF.setAttribute('min','0'); inpF.setAttribute('step','1');
+      inpF.placeholder = String(qty);
+      inpF.style.width = '72px';
+      c4.appendChild(inpF);
+      tr.appendChild(c4);
+      tbl.appendChild(tr);
+      inputs.push({ s: s, qty: qty, inp: inpF });
+    });
+    b.appendChild(tbl);
+    var btns = document.createElement('div'); btns.className = 'crm-m-btns';
+    var bGo = document.createElement('button'); bGo.className = 'crm-m-btn save'; bGo.textContent = 'Провести инвентаризацию';
+    bGo.addEventListener('click', function(){
+      var moves = [];
+      var tag = '[Инвентаризация ' + fmtDate(new Date()) + ']';
+      for(var i = 0; i < inputs.length; i++){
+        var it = inputs[i];
+        var v = it.inp.value.trim();
+        if(v === '') continue;
+        var n = Math.round(Number(v));
+        if(isNaN(n) || n < 0){
+          toast('\u26A0\uFE0F \u00AB' + (it.s.name || it.s.key) + '\u00BB: факт должен быть целым числом не меньше нуля', '#BA7517');
+          return;
+        }
+        var diff = n - it.qty;
+        if(!diff) continue;
+        moves.push({
+          type: diff > 0 ? 'Приход' : 'Расход',
+          key: it.s.key, name: it.s.name || it.s.key, unit: it.s.unit || 'шт',
+          qty: Math.abs(diff), num: '', comment: tag
+        });
+      }
+      if(!moves.length){
+        toast('OK Расхождений нет \u2014 склад сходится с фактом!', '#1a5252');
+        document.body.removeChild(bg);
+        return;
+      }
+      if(!confirm('Расхождения по ' + moves.length + ' позициям. Создать корректирующие движения?')) return;
+      bGo.disabled = true; bGo.textContent = 'Провожу...';
+      post({ action:'stockMove', stock:{ moves: moves } }, function(){
+        document.body.removeChild(bg);
+        STOCK_LOADED = false; STOCK_MOVES_LOADED = false;
+        if(VIEW === 'stock') renderAll();
+        toast('OK Инвентаризация проведена: скорректировано позиций \u2014 ' + moves.length, '#1a5252');
+      }, function(err){
+        bGo.disabled = false; bGo.textContent = 'Провести инвентаризацию';
+        toast('\u26A0\uFE0F Не провелось: ' + err, '#BA7517');
+      });
+    });
+    btns.appendChild(bGo);
+    b.appendChild(btns);
+    m.appendChild(h); m.appendChild(b);
+    bg.appendChild(m);
+    document.body.appendChild(bg);
   }
 
   // Список ключей для автоподстановки в приходе: артикулы из прайса
