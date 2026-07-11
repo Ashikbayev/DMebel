@@ -83,6 +83,11 @@
   .ph-cell { display: block; text-decoration: none; }
   .ph-cell img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 10px; display: block; background: #f2efe9; }
   .ph-cap { font-size: 10px; color: #999; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wa-btn {
+    display: block; text-align: center; margin-top: 16px; padding: 12px;
+    border-radius: 12px; background: #25D366; color: #fff;
+    font-weight: 700; font-size: 14px; text-decoration: none;
+  }
   .foot { text-align: center; font-size: 11px; color: #b5b2ac; padding-bottom: 26px; }
   .err {
     text-align: center; padding: 26px 10px; font-size: 14px; color: #8a4b1a; line-height: 1.6;
@@ -107,6 +112,10 @@
   // ⚠️ АДРЕС APPS SCRIPT — тот же, что в настройках калькулятора.
   // Если сервер передеплоен с новым адресом, обнови и здесь.
   var GS_URL = 'https://script.google.com/macros/s/AKfycbxDa66S-OSeSR1B6B2EoS0h5R6X2jW22zccdJP8HtbiGwEh-IGzqf5BsmXNRTeTWN78/exec';
+
+  // ⚠️ РАБОЧИЙ WHATSAPP ФИРМЫ — международный формат, только цифры,
+  // без «+» (например '77071234567'). Пусто — кнопки на странице нет.
+  var WA_PHONE = '';
 
   // Основная цепочка статусов (как на доске СРМ, без Отказ/Отложено)
   var CHAIN = ['Замер','Дизайн','Расчет','Согласование','Договор','Контрольный замер',
@@ -223,6 +232,15 @@
         g.appendChild(pa);
       }
       card.appendChild(g);
+    }
+
+    if(WA_PHONE){
+      var wa = document.createElement('a');
+      wa.className = 'wa-btn';
+      wa.href = 'https://wa.me/' + WA_PHONE + '?text=' + encodeURIComponent('Здравствуйте! Пишу по заказу \u2116' + o.num + '.');
+      wa.target = '_blank'; wa.rel = 'noopener';
+      wa.textContent = 'Написать нам в WhatsApp';
+      card.appendChild(wa);
     }
 
     card.appendChild(el('div', 'note',
