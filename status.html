@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>MebelOFF — статус заказа</title>
+<!-- ============================================================
+  MebelOFF — страница статуса заказа для клиента.
+  Открывается по личной ссылке: status.html?o=НОМЕР&k=КЛЮЧ
+  Показывает ТОЛЬКО статус, тип мебели и даты. Без цен, телефонов,
+  адресов и прочих данных СРМ.
+
+  ⚠️ ПЕРЕД ЗАЛИВКОЙ: проверь константу GS_URL ниже — она должна
+  БУКВА В БУКВУ совпадать с адресом Apps Script из настроек
+  калькулятора (поле «Адрес таблицы» / gs-url).
+============================================================ -->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    background: #f4f3f0;
+    color: #232323;
+    min-height: 100vh;
+  }
+  .hdr {
+    background: #232323;
+    color: #fff;
+    padding: 18px 16px 46px;
+    text-align: center;
+  }
+  .hdr .logo { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+  .hdr .logo span { color: #BA7517; }
+  .hdr .sub { font-size: 11px; color: #999; margin-top: 4px; letter-spacing: 2px; text-transform: uppercase; }
+  .card {
+    max-width: 460px;
+    margin: -30px auto 24px;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.10);
+    padding: 20px 22px;
+  }
+  .ord-t { font-size: 12px; color: #999; }
+  .ord-n { font-size: 20px; font-weight: 800; margin: 2px 0 14px; }
+  .status-big {
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    background: #f2efe9;
+    color: #232323;
+    border-left: 4px solid #BA7517;
+  }
+  .status-big.done { background: #e9f2ee; border-left-color: #1a5252; color: #1a5252; }
+  .status-big.paused { background: #f4f4f4; border-left-color: #999; color: #666; }
+  .steps { margin: 6px 0 14px; }
+  .step { display: flex; align-items: flex-start; gap: 10px; }
+  .step .rail { display: flex; flex-direction: column; align-items: center; width: 18px; }
+  .step .dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid #d9d6d0; background: #fff; flex: none; margin-top: 2px;
+  }
+  .step.past .dot { background: #1a5252; border-color: #1a5252; }
+  .step.now .dot { background: #fff; border-color: #BA7517; box-shadow: 0 0 0 3px rgba(186,117,23,.25); }
+  .step .line { width: 2px; flex: 1; min-height: 14px; background: #e3e0da; }
+  .step.past .line { background: #1a5252; }
+  .step:last-child .line { display: none; }
+  .step .lbl { font-size: 13px; color: #b5b2ac; padding: 1px 0 12px; }
+  .step.past .lbl { color: #1a5252; }
+  .step.now .lbl { color: #232323; font-weight: 700; }
+  .dates { border-top: 1px solid #f0ede8; padding-top: 12px; }
+  .drow { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+  .drow .k { color: #999; }
+  .drow .v { font-weight: 700; }
+  .note { font-size: 11px; color: #b5b2ac; margin-top: 14px; line-height: 1.5; }
+  .foot { text-align: center; font-size: 11px; color: #b5b2ac; padding-bottom: 26px; }
+  .err {
+    text-align: center; padding: 26px 10px; font-size: 14px; color: #8a4b1a; line-height: 1.6;
+  }
+  .load { text-align: center; padding: 30px 10px; font-size: 13px; color: #999; }
+</style>
+</head>
+<body>
+  <div class="hdr">
+    <div class="logo">Mebel<span>OFF</span></div>
+    <div class="sub">мебель на заказ · Сатпаев</div>
+  </div>
+  <div class="card" id="card">
+    <div class="load">Загружаю информацию о заказе...</div>
+  </div>
+  <div class="foot">MebelOFF · страница обновляется автоматически при каждом открытии</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ⚠️ АДРЕС APPS SCRIPT — тот же, что в настройках калькулятора.
+  // Если сервер передеплоен с новым адресом, обнови и здесь.
+  var GS_URL = 'https://script.google.com/macros/s/AKfycbxONvblIcQPE-SaLhTqS-uWjtQXZY4pRvDMsCAfbBeXy7EC6ITXJdKzEVvL7ryR2wHo8g/exec';
+
+  // Основная цепочка статусов (как на доске СРМ, без Отказ/Отложено)
+  var CHAIN = ['Замер','Дизайн','Расчет','Согласование','Договор','Контрольный замер',
+               'Закупка','Сборка','Установка','Доделки','Готова'];
+  // Подписи понятнее для клиента (внутренние названия слева)
+  var LABELS = {
+    'Замер': 'Замер',
+    'Дизайн': 'Дизайн-проект',
+    'Расчет': 'Расчёт стоимости',
+    'Согласование': 'Согласование',
+    'Договор': 'Договор подписан',
+    'Контрольный замер': 'Контрольный замер',
+    'Закупка': 'Закупка материалов',
+    'Сборка': 'Изготовление',
+    'Установка': 'Установка',
+    'Доделки': 'Финальные штрихи',
+    'Готова': 'Заказ выполнен'
+  };
+
+  function qs(name){
+    var m = new RegExp('[?&]' + name + '=([^&]*)').exec(location.search);
+    return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : '';
+  }
+  function fmtDate(v){
+    if(!v) return '';
+    var d = new Date(v);
+    if(isNaN(d.getTime())) return String(v);
+    var dd = d.getDate() < 10 ? '0' + d.getDate() : '' + d.getDate();
+    var mm = (d.getMonth() + 1) < 10 ? '0' + (d.getMonth() + 1) : '' + (d.getMonth() + 1);
+    return dd + '.' + mm + '.' + d.getFullYear();
+  }
+  function el(tag, cls, text){
+    var e = document.createElement(tag);
+    if(cls) e.className = cls;
+    if(text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function showError(msg){
+    var card = document.getElementById('card');
+    card.innerHTML = '';
+    card.appendChild(el('div', 'err', msg));
+  }
+
+  function render(o){
+    var card = document.getElementById('card');
+    card.innerHTML = '';
+    card.appendChild(el('div', 'ord-t', 'Ваш заказ'));
+    card.appendChild(el('div', 'ord-n', '\u2116' + o.num + (o.furn ? ' \u2014 ' + o.furn : '')));
+
+    var st = String(o.status || '');
+    var idx = CHAIN.indexOf(st);
+
+    if(st === 'Отказ' || st === 'Отложено'){
+      var pb = el('div', 'status-big paused',
+        st === 'Отложено' ? 'Заказ временно приостановлен' : 'Заказ закрыт');
+      card.appendChild(pb);
+    } else {
+      var big = el('div', 'status-big' + (st === 'Готова' ? ' done' : ''),
+        st === 'Готова' ? '\u2713 ' + (LABELS[st] || st) : 'Сейчас: ' + (LABELS[st] || st || '\u2014'));
+      card.appendChild(big);
+      if(idx >= 0){
+        var steps = el('div', 'steps');
+        for(var i = 0; i < CHAIN.length; i++){
+          var cls = 'step' + (i < idx ? ' past' : (i === idx ? (st === 'Готова' ? ' past' : ' now') : ''));
+          var s = el('div', cls);
+          var rail = el('div', 'rail');
+          rail.appendChild(el('div', 'dot'));
+          rail.appendChild(el('div', 'line'));
+          s.appendChild(rail);
+          s.appendChild(el('div', 'lbl', LABELS[CHAIN[i]] || CHAIN[i]));
+          steps.appendChild(s);
+        }
+        card.appendChild(steps);
+      }
+    }
+
+    var dts = el('div', 'dates');
+    var has = false;
+    if(o.dogDate){
+      var r1 = el('div', 'drow');
+      r1.appendChild(el('span', 'k', 'Договор подписан'));
+      r1.appendChild(el('span', 'v', fmtDate(o.dogDate)));
+      dts.appendChild(r1); has = true;
+    }
+    if(o.mountDate){
+      var r2 = el('div', 'drow');
+      r2.appendChild(el('span', 'k', st === 'Готова' ? 'Установка' : 'Планируемая установка'));
+      r2.appendChild(el('span', 'v', fmtDate(o.mountDate)));
+      dts.appendChild(r2); has = true;
+    }
+    if(has) card.appendChild(dts);
+
+    card.appendChild(el('div', 'note',
+      'Страница показывает актуальное состояние вашего заказа. ' +
+      'Если есть вопросы \u2014 напишите нам в WhatsApp или позвоните.'));
+  }
+
+  var num = qs('o'), key = qs('k');
+  if(!num || !key){
+    showError('Ссылка неполная. Запросите у менеджера MebelOFF новую ссылку на ваш заказ.');
+    return;
+  }
+  fetch(GS_URL + '?action=clientStatus&o=' + encodeURIComponent(num) + '&k=' + encodeURIComponent(key))
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if(res && res.ok && res.order) render(res.order);
+      else showError('Ссылка недействительна или заказ не найден. Запросите у менеджера MebelOFF новую ссылку.');
+    })
+    .catch(function(){
+      showError('Не получилось загрузить данные. Проверьте интернет и обновите страницу.');
+    });
+})();
+</script>
+</body>
+</html>

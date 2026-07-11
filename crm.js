@@ -2980,6 +2980,29 @@
       });
     });
     btns.appendChild(bDel);
+    var bLink = document.createElement('button'); bLink.className='crm-m-btn'; bLink.textContent='\uD83D\uDD17 Ссылка клиенту';
+    bLink.title = 'Страница статуса для клиента: только статус и даты, без цен, телефонов и адресов';
+    bLink.addEventListener('click', function(){
+      bLink.disabled = true;
+      post({ action:'clientLink', num: String(o.num) }, function(res){
+        bLink.disabled = false;
+        if(!res || !res.key){ toast('\u26A0\uFE0F Таблица не вернула ключ', '#BA7517'); return; }
+        var base = location.origin + location.pathname.replace(/[^\/]*$/, '');
+        var url = base + 'status.html?o=' + encodeURIComponent(String(o.num)) + '&k=' + encodeURIComponent(res.key);
+        function fallbackShow(){ prompt('Скопируй ссылку для клиента:', url); }
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(url).then(function(){
+            toast('OK Ссылка скопирована \u2014 отправь клиенту, например в WhatsApp', '#1a5252');
+          }, fallbackShow);
+        } else {
+          fallbackShow();
+        }
+      }, function(err){
+        bLink.disabled = false;
+        toast('\u26A0\uFE0F Не получилось: ' + err, '#BA7517');
+      });
+    });
+    btns.appendChild(bLink);
     var bBuy = document.createElement('button'); bBuy.className='crm-m-btn'; bBuy.textContent='🛒 Список закупщику';
     bBuy.addEventListener('click', function(){
       if(typeof orderPurchase !== 'function'){ toast('⚠️ Калькулятор ещё не загрузился — открой вкладку расчёта', '#BA7517'); return; }
