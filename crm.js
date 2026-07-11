@@ -1023,6 +1023,30 @@
     reader.readAsDataURL(file);
   }
 
+  // ── Журнал статусов (лист "Статусы"): путь заказа по этапам ──
+  var SL = [];
+  var SL_LOADED = false;
+
+  function fetchStatusLog(cb){
+    if(!getToken()){ cb('__no_key__'); return; }
+    fetch(GS_URL + '?action=statusLog&token=' + encodeURIComponent(getToken()))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(res && res.ok){ SL = res.slog || []; SL_LOADED = true; cb(null); }
+        else cb((res && res.error) || 'таблица вернула ошибку');
+      })
+      .catch(function(e){ cb(String(e && e.message || e)); });
+  }
+
+  function slogOf(num){
+    var out = [];
+    for(var i=0;i<SL.length;i++){
+      if(String(SL[i].num) === String(num)) out.push(SL[i]);
+    }
+    out.sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
+    return out;
+  }
+
   function fetchFin(cb){
     if(!getToken()){ cb('__no_key__'); return; }
     fetch(GS_URL + '?action=fin&token=' + encodeURIComponent(getToken()))
@@ -1380,8 +1404,73 @@
       return;
     }
     renderFunnel(view);
+    renderStageTimes(view);
     renderSales(view);
     renderChangesAgg(view);
+  }
+
+  // ── Сроки этапов: сколько дней заказы проводят на каждом статусе ──
+  // Считается по журналу «Статусы»: время между соседними переходами
+  // заказа приписывается более раннему этапу. Средние по всем заказам.
+  // Журнал копится с момента обновления — по старым заказам данных нет.
+  function renderStageTimes(view){
+    var t0 = document.createElement('div'); t0.className='crm-sec-t';
+    t0.textContent = '\u23F1 Сроки этапов';
+    view.appendChild(t0);
+    var box = document.createElement('div');
+    box.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px';
+    view.appendChild(box);
+    function paintStages(){
+      box.innerHTML = '';
+      if(!SL_LOADED){
+        var ld = document.createElement('span');
+        ld.style.cssText = 'font-size:11px;color:#999';
+        ld.textContent = 'Загружаю журнал...';
+        box.appendChild(ld);
+        return;
+      }
+      var byNum = {};
+      SL.forEach(function(e){
+        if(!byNum[e.num]) byNum[e.num] = [];
+        byNum[e.num].push(e);
+      });
+      var sums = {}, cnts = {};
+      Object.keys(byNum).forEach(function(n){
+        var arr = byNum[n];
+        arr.sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
+        for(var i = 0; i < arr.length - 1; i++){
+          var d1 = new Date(arr[i].date), d2 = new Date(arr[i+1].date);
+          if(isNaN(d1.getTime()) || isNaN(d2.getTime())) continue;
+          var days = (d2.getTime() - d1.getTime()) / 86400000;
+          if(days < 0) continue;
+          var st = arr[i].status;
+          sums[st] = (sums[st] || 0) + days;
+          cnts[st] = (cnts[st] || 0) + 1;
+        }
+      });
+      var shown = 0;
+      STATUSES.forEach(function(st){
+        if(!cnts[st]) return;
+        var avg = sums[st] / cnts[st];
+        var chip = document.createElement('span');
+        var col = ST_COLOR[st] || '#888780';
+        chip.style.cssText = 'font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px;background:' + col + '1f;color:' + col;
+        chip.title = 'Среднее по ' + cnts[st] + ' перех.';
+        chip.textContent = st + ' \u2014 ' + (avg < 1 ? '<1' : String(Math.round(avg))) + ' дн.';
+        box.appendChild(chip);
+        shown++;
+      });
+      if(!shown){
+        var em = document.createElement('span');
+        em.style.cssText = 'font-size:11px;color:#999';
+        em.textContent = 'Журнал переходов только начал копиться \u2014 цифры появятся по мере движения заказов по этапам.';
+        box.appendChild(em);
+      }
+    }
+    paintStages();
+    if(!SL_LOADED){
+      fetchStatusLog(function(err){ if(!err) paintStages(); });
+    }
   }
 
   // ── Подвкладка ПОСТОЯННЫЕ: шаблоны расходов + начисление ────
@@ -2616,6 +2705,28 @@
     payWrap.appendChild(iPaid); payWrap.appendChild(payBtn);
 
     b.appendChild(field('Статус', selSt));
+    var slWrap = document.createElement('div');
+    function renderSlog(){
+      slWrap.innerHTML = '';
+      if(!SL_LOADED) return;
+      var items = slogOf(o.num);
+      if(!items.length) return;
+      var parts = [];
+      for(var si = 0; si < items.length; si++){
+        parts.push(items[si].status + ' ' + fmtDate(items[si].date));
+      }
+      var lastD = new Date(items[items.length - 1].date);
+      var inDays = isNaN(lastD.getTime()) ? null : Math.floor((Date.now() - lastD.getTime()) / 86400000);
+      var line = document.createElement('div');
+      line.style.cssText = 'font-size:11px;color:#999;margin:2px 0 6px;line-height:1.6';
+      line.textContent = '\u23F1 ' + parts.join(' \u2192 ') + (inDays !== null && inDays > 0 ? ' \u00B7 на этапе ' + inDays + ' дн.' : '');
+      slWrap.appendChild(line);
+    }
+    renderSlog();
+    if(!SL_LOADED){
+      fetchStatusLog(function(err){ if(!err) renderSlog(); });
+    }
+    b.appendChild(slWrap);
     var r1 = document.createElement('div'); r1.className='crm-2col';
     r1.appendChild(field('Клиент', iClient));
     var phoneWrap = document.createElement('div');

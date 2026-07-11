@@ -684,13 +684,33 @@ function waitReady(dom, tries){
       };
     }
   };
+  var cliSlogRows = [];
+  var cliSlogSheet = {
+    getLastRow: function(){ return cliSlogRows.length + 1; },
+    setFrozenRows: function(){},
+    deleteRow: function(row){ cliSlogRows.splice(row - 2, 1); },
+    getRange: function(row, col, numRows, numCols){
+      return {
+        setValue: function(v){ var r = row - 2; while(cliSlogRows.length <= r) cliSlogRows.push([]); cliSlogRows[r][col - 1] = v; return this; },
+        getValue: function(){ var r = cliSlogRows[row - 2] || []; return r[col - 1] === undefined ? '' : r[col - 1]; },
+        getValues: function(){ var out = []; for(var i = 0; i < (numRows || 1); i++){ var src = cliSlogRows[row - 2 + i] || []; var line = []; for(var j = 0; j < (numCols || 1); j++) line.push(src[col - 1 + j] === undefined ? '' : src[col - 1 + j]); out.push(line); } return out; },
+        setValues: function(){ return this; },
+        setFontWeight: function(){ return this; }
+      };
+    }
+  };
   gsCtx.__ordSS = {
     getSheetByName: function(n){
       if(n === 'Заказы') return ordSheet;
       if(n === 'Вложения') return cliAttSheet;
+      if(n === 'Статусы') return cliSlogSheet;
       return null;
     },
-    insertSheet: function(n){ return n === 'Вложения' ? cliAttSheet : ordSheet; }
+    insertSheet: function(n){
+      if(n === 'Вложения') return cliAttSheet;
+      if(n === 'Статусы') return cliSlogSheet;
+      return ordSheet;
+    }
   };
 
   var cl1 = att("clientLink_(__ordSS, '999')");
@@ -703,7 +723,7 @@ function waitReady(dom, tries){
   var cs1 = att("clientStatus_(__ordSS, '77', '" + cl2.key + "')");
   ok(cs1.ok === true && cs1.order.status === 'Сборка' && cs1.order.furn === 'Кухня', 'верный ключ: статус и тип мебели отдаются');
   var csKeys = Object.keys(cs1.order).sort().join(',');
-  ok(csKeys === 'dogDate,furn,mountDate,num,photos,status', 'срез безопасен: только num/status/furn/даты/фото, без телефона, имени и денег');
+  ok(csKeys === 'dogDate,furn,history,mountDate,num,photos,status', 'срез безопасен: только num/status/furn/даты/фото/история, без телефона, имени и денег');
   var cs2 = att("clientStatus_(__ordSS, '77', 'wrong-key')");
   ok(cs2.ok === false, 'неверный ключ отклонён');
   var cs3 = att("clientStatus_(__ordSS, '78', 'anything')");
@@ -725,6 +745,26 @@ function waitReady(dom, tries){
   var pt2 = att("pubAttach_(__ordSS, '" + pA.id + "', false)");
   var cs5 = att("clientStatus_(__ordSS, '77', '" + cl2.key + "')");
   ok(pt2.ok === true && cs5.order.photos.length === 0, 'снятие флага убирает фото со страницы клиента');
+
+  // Журнал статусов (logStatus_/statusLogList_ + интеграция updateOrder_)
+  var run = function(expr){ vm.runInContext(expr, gsCtx); };
+  run("logStatus_(__ordSS, '77', 'Сборка')");
+  run("logStatus_(__ordSS, '77', 'Сборка')");
+  var sl0 = att("statusLogList_(__ordSS)");
+  ok(sl0.ok === true && sl0.slog.length === 1, 'повторный тот же статус НЕ дублируется в журнале');
+  run("logStatus_(__ordSS, '77', 'Установка')");
+  run("logStatus_(__ordSS, '77', 'Сборка')");
+  var sl1 = att("statusLogList_(__ordSS)");
+  ok(sl1.slog.length === 3 && sl1.slog[2].status === 'Сборка', 'возврат на прежний этап (А→Б→А) логируется честно');
+  var uo = att("updateOrder_(__ordSS, { num:'77', status:'Доделки' })");
+  var sl2 = att("statusLogList_(__ordSS)");
+  ok(uo.ok === true && sl2.slog.length === 4 && sl2.slog[3].status === 'Доделки', 'updateOrder_ со сменой статуса пишет переход в журнал');
+  att("updateOrder_(__ordSS, { num:'77', status:'Доделки' })");
+  var sl3 = att("statusLogList_(__ordSS)");
+  ok(sl3.slog.length === 4, 'updateOrder_ с тем же статусом журнал не мусорит');
+  var cs6 = att("clientStatus_(__ordSS, '77', '" + cl2.key + "')");
+  ok(cs6.ok === true && !!cs6.order.history && !!cs6.order.history['Доделки'], 'история переходов отдаётся клиентской странице');
+  ok(cs6.order.history['Договор'] === '2026-06-15', 'дата Договора для старого заказа берётся из карточки (фолбэк)');
 
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');

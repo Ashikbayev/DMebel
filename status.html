@@ -66,9 +66,13 @@
   .step .line { width: 2px; flex: 1; min-height: 14px; background: #e3e0da; }
   .step.past .line { background: #1a5252; }
   .step:last-child .line { display: none; }
+  .step .srow { display: flex; flex: 1; align-items: baseline; gap: 8px; justify-content: space-between; min-width: 0; }
   .step .lbl { font-size: 13px; color: #b5b2ac; padding: 1px 0 12px; }
   .step.past .lbl { color: #1a5252; }
   .step.now .lbl { color: #232323; font-weight: 700; }
+  .step .dt { font-size: 11px; color: #cfccc6; white-space: nowrap; }
+  .step.past .dt { color: #7fa8a0; }
+  .step.now .dt { color: #BA7517; font-weight: 700; }
   .dates { border-top: 1px solid #f0ede8; padding-top: 12px; }
   .drow { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
   .drow .k { color: #999; }
@@ -166,6 +170,7 @@
       card.appendChild(big);
       if(idx >= 0){
         var steps = el('div', 'steps');
+        var hist = o.history || {};
         for(var i = 0; i < CHAIN.length; i++){
           var cls = 'step' + (i < idx ? ' past' : (i === idx ? (st === 'Готова' ? ' past' : ' now') : ''));
           var s = el('div', cls);
@@ -173,7 +178,11 @@
           rail.appendChild(el('div', 'dot'));
           rail.appendChild(el('div', 'line'));
           s.appendChild(rail);
-          s.appendChild(el('div', 'lbl', LABELS[CHAIN[i]] || CHAIN[i]));
+          var srow = el('div', 'srow');
+          srow.appendChild(el('div', 'lbl', LABELS[CHAIN[i]] || CHAIN[i]));
+          var hd = hist[CHAIN[i]];
+          if(hd && i <= idx) srow.appendChild(el('div', 'dt', fmtDate(hd)));
+          s.appendChild(srow);
           steps.appendChild(s);
         }
         card.appendChild(steps);
