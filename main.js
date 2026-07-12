@@ -3201,3 +3201,51 @@ function orderPurchase(snap,db,stockArr){
   Object.keys(untr).forEach(function(k){untracked.push(untr[k]);});
   return {tracked:tracked,untracked:untracked};
 }
+
+// aggregatePurchase: массив снимков заказов + прайс + остатки склада ->
+// сводный список закупщику (Момент H). Нужно СУММИРУЕТСЯ по каждой
+// позиции через orderPurchase().tracked[].need (это поле не зависит от
+// остатков), а вычитание остатка делается ОДИН РАЗ из общей суммы —
+// иначе один и тот же остаток вычитался бы из каждого заказа отдельно
+// и дефицит считался бы завышенным.
+function aggregatePurchase(snaps,db,stockArr){
+  snaps=snaps||[];
+  db=db||{};
+  var needMap={};
+  var untrMap={};
+  for(var i=0;i<snaps.length;i++){
+    var pur=orderPurchase(snaps[i],db,[]);
+    var trk=pur.tracked;
+    var unt=pur.untracked;
+    for(var j=0;j<trk.length;j++){
+      var t=trk[j];
+      if(!needMap[t.key])needMap[t.key]={key:t.key,name:t.name,unit:t.unit,need:0};
+      needMap[t.key].need+=t.need;
+      if(t.name)needMap[t.key].name=t.name;
+    }
+    for(var k=0;k<unt.length;k++){
+      var u=unt[k];
+      var uk=u.n||'?';
+      if(!untrMap[uk])untrMap[uk]={n:u.n,q:0};
+      untrMap[uk].q+=u.q;
+    }
+  }
+  var map=stockMap(stockArr);
+  var tracked=[];
+  Object.keys(needMap).forEach(function(kk){
+    var it=needMap[kk];
+    var have=map[kk]?map[kk].qty:0;
+    var buy;
+    if(it.unit==='\u043b\u0438\u0441\u0442'){
+      var nc=Math.ceil(it.need-1e-9);
+      buy=Math.max(0,nc-have);
+    }else{
+      var ni=Math.round(it.need);
+      buy=Math.max(0,ni-have);
+    }
+    tracked.push({key:it.key,name:it.name,unit:it.unit,need:it.need,have:have,buy:buy});
+  });
+  var untracked=[];
+  Object.keys(untrMap).forEach(function(kk){untracked.push(untrMap[kk]);});
+  return {tracked:tracked,untracked:untracked};
+}
