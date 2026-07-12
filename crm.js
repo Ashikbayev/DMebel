@@ -1024,6 +1024,7 @@
   var EMP_LOADED = false;
   var STOCK = [];
   var STOCK_LOADED = false;
+  var AGG_MANUAL = []; // сводная закупка: позиции, добавленные вручную (только в модалке, не сохраняются)
   var STOCK_MOVES = [];
   var STOCK_MOVES_LOADED = false;
   var STOCK_SUBVIEW = 'balance';
@@ -1310,7 +1311,10 @@
     var bInv = document.createElement('button'); bInv.className = 'crm-vbtn'; bInv.textContent = '\uD83D\uDCCB Инвентаризация';
     bInv.title = 'Пересчёт: вводишь фактические остатки, разница спишется/оприходуется сама';
     bInv.addEventListener('click', function(){ openInventoryModal(); });
-    btnRow.appendChild(bIn); btnRow.appendChild(bOut); btnRow.appendChild(bInv);
+    var bAgg = document.createElement('button'); bAgg.className = 'crm-vbtn'; bAgg.textContent = '\uD83D\uDED2 Сводная закупка';
+    bAgg.title = 'Список закупщику сразу по нескольким заказам после договора';
+    bAgg.addEventListener('click', function(){ openAggPurchaseModal(); });
+    btnRow.appendChild(bIn); btnRow.appendChild(bOut); btnRow.appendChild(bInv); btnRow.appendChild(bAgg);
     wrap.appendChild(btnRow);
     view.appendChild(wrap);
 
@@ -1767,7 +1771,7 @@
   function renderFin(view){
     // Переключатель подвкладок
     var tabRow = document.createElement('div'); tabRow.className = 'crm-m-btns'; tabRow.style.marginBottom = '4px';
-    var subs = [['kassa','Касса'],['pay','Зарплаты'],['recur','Постоянные'],['sales','Продажи']];
+    var subs = [['kassa','Касса'],['pay','Зарплаты'],['recur','Постоянные'],['sales','Продажи'],['analytics','Аналитика']];
     subs.forEach(function(s){
       var b = document.createElement('button');
       b.className = 'crm-vbtn' + (FIN_SUB===s[0] ? ' on' : '');
@@ -1781,6 +1785,7 @@
     else if(FIN_SUB === 'pay')   renderSubPay(view);
     else if(FIN_SUB === 'recur') renderSubRecur(view);
     else if(FIN_SUB === 'sales') renderSubSales(view);
+    else if(FIN_SUB === 'analytics') renderSubAnalytics(view);
   }
 
   // ── Подвкладка КАССА: месячный P&L + текущая касса ──────────
@@ -1928,6 +1933,133 @@
     if(!SL_LOADED){
       fetchStatusLog(function(err){ if(!err) paintStages(); });
     }
+  }
+
+  // ── Подвкладка АНАЛИТИКА: воронка по месяцам (Момент D) ────
+  // Конверсия Замер→Договор — по месяцу, когда заказ ВПЕРВЫЕ попал в
+  // статус «Замер» (Журнал Статусов, копится с v4.0 — у заказов старше
+  // этой версии данных не будет, это ожидаемо). Средний чек и срок
+  // Договор→Установка — по месяцу подписания договора (dogDate), как и
+  // остальные денежные метрики в «Продажи».
+  function renderSubAnalytics(view){
+    if(!LOADED){
+      var ld0 = document.createElement('div'); ld0.className='crm-empty';
+      ld0.textContent = 'Загружаю заказы...';
+      view.appendChild(ld0);
+      return;
+    }
+    var t0 = document.createElement('div'); t0.className='crm-sec-t';
+    t0.textContent = '\uD83D\uDCCA Воронка по месяцам';
+    view.appendChild(t0);
+    var hint = document.createElement('div'); hint.className='crm-fin-note';
+    hint.textContent = 'Конверсия \u2014 по месяцу первого попадания в статус «Замер» (журнал копится с v4.0, у старых заказов данных не будет). Средний чек и срок Договор\u2192Установка \u2014 по месяцу подписания договора.';
+    view.appendChild(hint);
+
+    var box = document.createElement('div');
+    view.appendChild(box);
+
+    function paint(){
+      box.innerHTML = '';
+      if(!SL_LOADED){
+        var ld = document.createElement('div'); ld.className='crm-empty';
+        ld.textContent = 'Загружаю журнал статусов...';
+        box.appendChild(ld);
+        return;
+      }
+      var byNum = {};
+      ORDERS.forEach(function(o){ byNum[o.num] = o; });
+
+      // Первое попадание в «Замер» по заказу -> месяц
+      var zamerMonth = {};
+      var zamerSeen = {};
+      SL.forEach(function(e){
+        if(e.status !== '\u0417\u0430\u043c\u0435\u0440') return;
+        var mk = monthKey(e.date);
+        if(!mk) return;
+        var t = new Date(e.date).getTime();
+        if(!zamerSeen[e.num] || t < zamerSeen[e.num]){ zamerSeen[e.num] = t; zamerMonth[e.num] = mk; }
+      });
+
+      var conv = {};
+      Object.keys(zamerMonth).forEach(function(num){
+        var mk = zamerMonth[num];
+        if(!conv[mk]) conv[mk] = { total:0, won:0 };
+        conv[mk].total++;
+        var o = byNum[num];
+        if(o && o.dogDate) conv[mk].won++;
+      });
+
+      var sales = {}, lead = {};
+      ORDERS.forEach(function(o){
+        if(!o.dogDate) return;
+        var mk = monthKey(o.dogDate);
+        if(!mk) return;
+        if(!sales[mk]) sales[mk] = { sum:0, cnt:0 };
+        sales[mk].sum += Number(o.sogl) || 0;
+        sales[mk].cnt++;
+        if(!o.mountDate) return;
+        var d1 = new Date(o.dogDate), d2 = new Date(o.mountDate);
+        if(isNaN(d1.getTime()) || isNaN(d2.getTime())) return;
+        var days = (d2.getTime() - d1.getTime()) / 86400000;
+        if(days < 0) return;
+        if(!lead[mk]) lead[mk] = { sum:0, cnt:0 };
+        lead[mk].sum += days;
+        lead[mk].cnt++;
+      });
+
+      var months = {};
+      Object.keys(conv).forEach(function(k){ months[k] = true; });
+      Object.keys(sales).forEach(function(k){ months[k] = true; });
+      var mkeys = Object.keys(months).sort().reverse();
+
+      if(!mkeys.length){
+        var e0 = document.createElement('div'); e0.className='crm-empty';
+        e0.textContent = 'Пока нет данных для воронки \u2014 появятся по мере движения заказов.';
+        box.appendChild(e0);
+        return;
+      }
+
+      var totZamer=0, totWon=0, totSalesSum=0, totSalesCnt=0, totLeadSum=0, totLeadCnt=0;
+      Object.keys(conv).forEach(function(k){ totZamer += conv[k].total; totWon += conv[k].won; });
+      Object.keys(sales).forEach(function(k){ totSalesSum += sales[k].sum; totSalesCnt += sales[k].cnt; });
+      Object.keys(lead).forEach(function(k){ totLeadSum += lead[k].sum; totLeadCnt += lead[k].cnt; });
+
+      var sum = document.createElement('div'); sum.className='crm-sum';
+      function tile(v, k){
+        var t = document.createElement('div'); t.className='crm-sum-t';
+        var ve = document.createElement('div'); ve.className='v'; ve.textContent=v;
+        var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
+        t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
+      }
+      tile(totZamer ? Math.round(totWon/totZamer*100) + '%' : '\u2014', 'конверсия Замер\u2192Договор');
+      tile(totSalesCnt ? fm0(totSalesSum/totSalesCnt) : '\u2014', 'средний чек');
+      tile(totLeadCnt ? Math.round(totLeadSum/totLeadCnt) + ' дн.' : '\u2014', 'Ø Договор\u2192Установка');
+      tile(String(totSalesCnt), 'договоров всего');
+      box.appendChild(sum);
+
+      var tbl = document.createElement('table'); tbl.className='crm-ftbl';
+      var thead = document.createElement('tr');
+      ['Месяц','Замеров','Конверсия','Договоров','Средний чек','Ø дней до установки'].forEach(function(t){
+        var th = document.createElement('th'); th.textContent = t; thead.appendChild(th);
+      });
+      tbl.appendChild(thead);
+      mkeys.forEach(function(k){
+        var c = conv[k], s = sales[k], l = lead[k];
+        var tr = document.createElement('tr');
+        function td(t, cls){ var cc = document.createElement('td'); cc.textContent = t; if(cls) cc.className = cls; tr.appendChild(cc); }
+        td(monthLabel(k));
+        td(c ? String(c.total) : '\u2014');
+        td(c && c.total ? Math.round(c.won/c.total*100) + '%' : '\u2014');
+        td(s ? String(s.cnt) : '\u2014');
+        td(s && s.cnt ? fm0(s.sum/s.cnt) : '\u2014');
+        td(l && l.cnt ? Math.round(l.sum/l.cnt) + ' дн.' : '\u2014');
+        tbl.appendChild(tr);
+      });
+      box.appendChild(tbl);
+    }
+
+    paint();
+    if(!SL_LOADED){ fetchStatusLog(function(err){ if(!err) paint(); }); }
   }
 
   // ── Подвкладка ПОСТОЯННЫЕ: шаблоны расходов + начисление ────
@@ -4231,6 +4363,225 @@
     var w = window.open('','_blank');
     if(w){ w.document.write(H); w.document.close(); }
     else { toast('\u26A0\uFE0F Браузер заблокировал окно — разреши всплывающие окна', '#BA7517'); }
+  }
+
+  // ── Сводная закупка по нескольким заказам (Момент H) ──────
+  // Заказы: после договора (dogDate есть), кроме Готова/Отказ/Отложено.
+  // Нужно суммируется по каждому заказу через orderPurchase() (поле
+  // need — оно НЕ зависит от остатков склада), остаток вычитается ОДИН
+  // РАЗ из общей суммы — иначе при делении по заказам дефицит считался
+  // бы неверно (один и тот же остаток вычитался бы из каждого заказа).
+  function openAggPurchaseModal(){
+    if(typeof orderPurchase !== 'function' || typeof stockMap !== 'function' || typeof aggregatePurchase !== 'function'){
+      toast('\u26A0\uFE0F Калькулятор ещё не загрузился \u2014 открой вкладку расчёта', '#BA7517');
+      return;
+    }
+    var skip = ['Готова','Отказ','Отложено'];
+    var all = ORDERS.slice();
+    var candidates = all.filter(function(o){ return o.dogDate && skip.indexOf(o.status) === -1; });
+    candidates.sort(function(a,c){ return String(a.num).localeCompare(String(c.num), 'ru', { numeric:true }); });
+
+    var bg = document.createElement('div'); bg.className = 'crm-modal-bg';
+    bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
+    var m = document.createElement('div'); m.className = 'crm-modal';
+    var h = document.createElement('div'); h.className = 'crm-m-h';
+    var title = document.createElement('b'); title.textContent = 'Сводная закупка по заказам';
+    var x = document.createElement('button'); x.className = 'crm-m-x'; x.textContent = '\u00D7';
+    x.addEventListener('click', function(){ document.body.removeChild(bg); });
+    h.appendChild(title); h.appendChild(x);
+    var b = document.createElement('div'); b.className = 'crm-m-b';
+
+    if(!candidates.length){
+      var e0 = document.createElement('div'); e0.className = 'crm-empty';
+      e0.textContent = 'Нет заказов после договора (кроме Готова/Отказ/Отложено).';
+      b.appendChild(e0);
+      m.appendChild(h); m.appendChild(b); bg.appendChild(m); document.body.appendChild(bg);
+      return;
+    }
+
+    var lead = document.createElement('div'); lead.className = 'crm-empty';
+    lead.style.textAlign = 'left'; lead.style.padding = '4px 0'; lead.style.fontSize = '11px';
+    lead.textContent = 'Отмечены все заказы после договора. Сними лишние и нажми «Посчитать».';
+    b.appendChild(lead);
+
+    var checks = [];
+    var listBox = document.createElement('div');
+    listBox.style.cssText = 'max-height:180px;overflow:auto;border:1px solid #eee;border-radius:8px;padding:4px 8px;margin-bottom:8px';
+    candidates.forEach(function(o){
+      var row = document.createElement('label');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;cursor:pointer';
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true;
+      var txt = document.createElement('span');
+      txt.textContent = '\u2116' + o.num + (o.client ? ' \u2014 ' + o.client : '') + ' (' + (o.status || '') + ')';
+      row.appendChild(cb); row.appendChild(txt);
+      listBox.appendChild(row);
+      checks.push({ o: o, cb: cb });
+    });
+    b.appendChild(listBox);
+
+    var resultBox = document.createElement('div');
+    b.appendChild(resultBox);
+
+    var btns = document.createElement('div'); btns.className = 'crm-m-btns';
+    var bCalc = document.createElement('button'); bCalc.className = 'crm-m-btn save'; bCalc.textContent = 'Посчитать';
+    bCalc.addEventListener('click', function(){
+      var chosen = [];
+      checks.forEach(function(c){ if(c.cb.checked) chosen.push(c.o); });
+      if(!chosen.length){ toast('\u26A0\uFE0F Отметь хотя бы один заказ', '#BA7517'); return; }
+      bCalc.disabled = true; bCalc.textContent = 'Считаю...';
+      resultBox.innerHTML = '';
+      fetchStock(function(serr){
+        if(serr==='__no_key__'){ bCalc.disabled=false; bCalc.textContent='Посчитать'; toast('\u26A0\uFE0F Введи ключ доступа', '#BA7517'); return; }
+        if(serr){ bCalc.disabled=false; bCalc.textContent='Посчитать'; toast('\u26A0\uFE0F Остатки не загрузились: '+serr, '#BA7517'); return; }
+        var recs = [];
+        var errs = [];
+        var left = chosen.length;
+        chosen.forEach(function(o){
+          loadOrderRec(o.num, function(err, rec){
+            if(err) errs.push('\u2116' + o.num + ': ' + err);
+            else recs.push({ o: o, rec: rec });
+            left--;
+            if(left === 0){
+              bCalc.disabled = false; bCalc.textContent = 'Посчитать';
+              paintAggResult(resultBox, recs);
+              if(errs.length) toast('\u26A0\uFE0F Пропущено заказов (нет снимка): ' + errs.length, '#BA7517');
+            }
+          });
+        });
+      });
+    });
+    btns.appendChild(bCalc);
+    b.appendChild(btns);
+
+    m.appendChild(h); m.appendChild(b);
+    bg.appendChild(m);
+    document.body.appendChild(bg);
+  }
+
+  function paintAggResult(box, recs){
+    box.innerHTML = '';
+    var snaps = [];
+    recs.forEach(function(item){ snaps.push(item.rec.snap); });
+    var pur = aggregatePurchase(snaps, DB, STOCK);
+    var tracked = pur.tracked || [];
+    var untracked = pur.untracked || [];
+    tracked.sort(function(a,c){ return (c.buy - a.buy) || String(a.name||a.key).localeCompare(String(c.name||c.key), 'ru'); });
+    untracked.sort(function(a,c){ return String(a.n||'').localeCompare(String(c.n||''), 'ru'); });
+
+    var toBuy = 0;
+    tracked.forEach(function(t){ if(t.buy > 0) toBuy++; });
+    var lead = document.createElement('div'); lead.className = 'crm-empty';
+    lead.style.textAlign = 'left'; lead.style.padding = '4px 0';
+    lead.textContent = 'Заказов учтено: ' + recs.length + '. ' + (toBuy ? ('Докупить позиций: ' + toBuy) : 'Всё есть на складе \u2014 докупать нечего.');
+    box.appendChild(lead);
+
+    var fmt = function(n){ n = Number(n) || 0; return Number.isInteger(n) ? String(n) : n.toFixed(2); };
+
+    if(tracked.length){
+      var t1 = document.createElement('b'); t1.textContent = 'Со складским учётом';
+      t1.style.display = 'block'; t1.style.margin = '8px 0 4px';
+      box.appendChild(t1);
+      var tbl = document.createElement('table'); tbl.className = 'crm-ftbl';
+      var thr = document.createElement('tr');
+      ['Наименование','Ед','Нужно','Есть','Докупить'].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thr.appendChild(th); });
+      tbl.appendChild(thr);
+      tracked.forEach(function(t){
+        var tr = document.createElement('tr');
+        var c1 = document.createElement('td'); c1.textContent = String(t.name || t.key); tr.appendChild(c1);
+        var c2 = document.createElement('td'); c2.textContent = String(t.unit || ''); tr.appendChild(c2);
+        var c3 = document.createElement('td'); c3.textContent = fmt(t.need); tr.appendChild(c3);
+        var c4 = document.createElement('td'); c4.textContent = String(t.have); tr.appendChild(c4);
+        var c5 = document.createElement('td'); c5.textContent = String(t.buy);
+        if(t.buy > 0){ c5.style.color = '#A32D2D'; c5.style.fontWeight = '500'; }
+        tr.appendChild(c5);
+        tbl.appendChild(tr);
+      });
+      box.appendChild(tbl);
+    }
+
+    if(untracked.length){
+      var t2 = document.createElement('b'); t2.textContent = 'Без складского учёта';
+      t2.style.display = 'block'; t2.style.margin = '12px 0 4px';
+      box.appendChild(t2);
+      var hint = document.createElement('div'); hint.className = 'crm-empty';
+      hint.style.textAlign = 'left'; hint.style.fontSize = '11px'; hint.style.padding = '0 0 4px';
+      hint.textContent = 'Нет артикула \u2014 проверь наличие вручную.';
+      box.appendChild(hint);
+      var tbl2 = document.createElement('table'); tbl2.className = 'crm-ftbl';
+      var thr2 = document.createElement('tr');
+      ['Наименование','Кол-во'].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thr2.appendChild(th); });
+      tbl2.appendChild(thr2);
+      untracked.forEach(function(u){
+        var tr = document.createElement('tr');
+        var c1 = document.createElement('td'); c1.textContent = String(u.n || ''); tr.appendChild(c1);
+        var c2 = document.createElement('td'); c2.textContent = fmt(u.q); tr.appendChild(c2);
+        tbl2.appendChild(tr);
+      });
+      box.appendChild(tbl2);
+    }
+
+    if(!tracked.length && !untracked.length){
+      var e1 = document.createElement('div'); e1.className = 'crm-empty';
+      e1.textContent = 'В отмеченных заказах нет складских позиций.';
+      box.appendChild(e1);
+    }
+
+    var manualHost = document.createElement('div');
+    box.appendChild(manualHost);
+    paintAggManual(manualHost);
+  }
+
+  // Ручные позиции сводки: живут только в памяти вкладки (AGG_MANUAL),
+  // не пишутся на сервер и не влияют на дефицит склада — это отдельный
+  // список «что докупить руками сверху авто-расчёта».
+  function paintAggManual(host){
+    host.innerHTML = '';
+    var t3 = document.createElement('b'); t3.textContent = 'Добавлено вручную';
+    t3.style.display = 'block'; t3.style.margin = '12px 0 4px';
+    host.appendChild(t3);
+    if(AGG_MANUAL.length){
+      var tbl3 = document.createElement('table'); tbl3.className = 'crm-ftbl';
+      var thr3 = document.createElement('tr');
+      ['Наименование','Ед','Кол-во',''].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thr3.appendChild(th); });
+      tbl3.appendChild(thr3);
+      AGG_MANUAL.forEach(function(mi, idx){
+        var tr = document.createElement('tr');
+        var c1 = document.createElement('td'); c1.textContent = mi.name; tr.appendChild(c1);
+        var c2 = document.createElement('td'); c2.textContent = mi.unit; tr.appendChild(c2);
+        var c3 = document.createElement('td'); c3.textContent = String(mi.qty); tr.appendChild(c3);
+        var c4 = document.createElement('td');
+        var bx = document.createElement('button'); bx.textContent = '\u00D7';
+        bx.style.cssText = 'border:none;background:none;color:#A32D2D;cursor:pointer;font-weight:700;font-size:14px';
+        bx.addEventListener('click', function(){ AGG_MANUAL.splice(idx, 1); paintAggManual(host); });
+        c4.appendChild(bx); tr.appendChild(c4);
+        tbl3.appendChild(tr);
+      });
+      host.appendChild(tbl3);
+    } else {
+      var e2 = document.createElement('div'); e2.className = 'crm-empty';
+      e2.style.textAlign = 'left'; e2.style.fontSize = '11px'; e2.style.padding = '0 0 4px';
+      e2.textContent = 'Пока пусто \u2014 добавь позицию, которую авто-список не считает.';
+      host.appendChild(e2);
+    }
+    var addRow = document.createElement('div');
+    addRow.style.cssText = 'display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap';
+    var iName = document.createElement('input'); iName.placeholder = 'Наименование';
+    iName.style.cssText = 'flex:1;min-width:110px';
+    var iQty = document.createElement('input'); iQty.type = 'number'; iQty.placeholder = 'Кол-во'; iQty.min = '0';
+    iQty.style.cssText = 'width:70px';
+    var selU = document.createElement('select');
+    [['шт','шт'],['лист','лист']].forEach(function(u){ var op=document.createElement('option'); op.value=u[0]; op.textContent=u[1]; selU.appendChild(op); });
+    var bAdd = document.createElement('button'); bAdd.className = 'crm-vbtn'; bAdd.textContent = '+ Добавить';
+    bAdd.addEventListener('click', function(){
+      var nm = iName.value.trim();
+      var qn = Number(iQty.value);
+      if(!nm){ toast('\u26A0\uFE0F Укажи наименование', '#BA7517'); return; }
+      if(!(qn > 0)){ toast('\u26A0\uFE0F Кол-во должно быть больше нуля', '#BA7517'); return; }
+      AGG_MANUAL.push({ name: nm, unit: selU.value, qty: qn });
+      paintAggManual(host);
+    });
+    addRow.appendChild(iName); addRow.appendChild(iQty); addRow.appendChild(selU); addRow.appendChild(bAdd);
+    host.appendChild(addRow);
   }
 
   function openCalcFromOrder(num, orderInfo, done){
