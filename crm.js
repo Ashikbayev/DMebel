@@ -1093,6 +1093,36 @@
     return out;
   }
 
+  // ── Доп. работы (лист "ДопРаботы"): разовые выплаты по заказу ──
+  var DOP = [];
+  var DOP_LOADED = false;
+
+  function fetchDop(cb){
+    if(!getToken()){ cb('__no_key__'); return; }
+    fetch(GS_URL + '?action=dopworks&token=' + encodeURIComponent(getToken()))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(res && res.ok){ DOP = res.dop || []; DOP_LOADED = true; cb(null); }
+        else cb((res && res.error) || 'таблица вернула ошибку');
+      })
+      .catch(function(e){ cb(String(e && e.message || e)); });
+  }
+
+  function dopOf(num){
+    var out = [];
+    for(var i=0;i<DOP.length;i++){
+      if(String(DOP[i].num) === String(num)) out.push(DOP[i]);
+    }
+    return out;
+  }
+
+  // Имя сотрудника по id (для подписей). Неизвестный id → «(удалён)».
+  function empName(id){
+    if(!id) return '';
+    for(var i=0;i<EMP.length;i++){ if(String(EMP[i].id) === String(id)) return EMP[i].name; }
+    return '(удалён)';
+  }
+
   function fetchFin(cb){
     if(!getToken()){ cb('__no_key__'); return; }
     fetch(GS_URL + '?action=fin&token=' + encodeURIComponent(getToken()))
@@ -2014,13 +2044,36 @@
       });
       return;
     }
-    // Заработок с заказов за выбранный месяц (по дате договора)
-    var earnMasterM = 0, earnDesignerM = 0;
+    if(!DOP_LOADED){ fetchDop(function(err){ if(!err) renderView(); }); }
+
+    // Заработок с заказов за выбранный месяц (по дате договора).
+    // earnMaster заказа делится: основному мастеру = earnMaster − выплата
+    // помощнику; помощнику = его фикс. сумма. Заказы без назначенного
+    // основного мастера собираются в «Не распределено» (деньги не теряются).
+    var earnMasterM = 0, earnDesignerM = 0, unassignedM = 0;
+    var perEmp = {};
+    function slot(id){ if(!perEmp[id]) perEmp[id] = { main:0, help:0, dop:0, nMain:0, nHelp:0, nDop:0 }; return perEmp[id]; }
     if(LOADED){
       ORDERS.forEach(function(o){
         if(monthKey(o.dogDate) !== FIN_MONTH) return;
-        earnMasterM += Number(o.earnMaster)||0;
+        var em = Number(o.earnMaster)||0;
+        earnMasterM += em;
         earnDesignerM += Number(o.earnDesigner)||0;
+        var hp = o.helperId ? (Number(o.helperPay)||0) : 0;
+        var masterPart = em - hp;
+        if(o.masterId){ var sm = slot(o.masterId); sm.main += masterPart; sm.nMain++; }
+        else unassignedM += masterPart;
+        if(o.helperId){ var shp = slot(o.helperId); shp.help += hp; shp.nHelp++; }
+      });
+    }
+    // Доп. работы месяца (по дате работы) — сверх пула, конкретному исполнителю.
+    var dopTotalM = 0;
+    if(DOP_LOADED){
+      DOP.forEach(function(d){
+        if(monthKey(d.date) !== FIN_MONTH) return;
+        var s = Number(d.sum)||0;
+        dopTotalM += s;
+        if(d.empId){ var sd = slot(d.empId); sd.dop += s; sd.nDop++; }
       });
     }
 
@@ -2052,26 +2105,42 @@
     } else {
       var tbl = document.createElement('table'); tbl.className='crm-ftbl';
       var thead = document.createElement('tr');
-      ['Имя','Роль','Оклад','Процент/мес','К выплате','',''].forEach(function(t){ var th=document.createElement('th'); th.textContent=t; thead.appendChild(th); });
+      ['Имя','Роль','Оклад','Процент','Помощник','Доп','К выплате','',''].forEach(function(t){ var th=document.createElement('th'); th.textContent=t; thead.appendChild(th); });
       tbl.appendChild(thead);
       EMP.forEach(function(emp){
         var tr = document.createElement('tr');
         if(!emp.active) tr.style.opacity = '0.5';
-        // Процент делим поровну между активными сотрудниками той же роли
-        var pool = emp.role === 'Дизайнер' ? earnDesignerM : earnMasterM;
-        var cnt = emp.role === 'Дизайнер' ? nDesigners : nMasters;
-        var share = (emp.active && cnt > 0) ? Math.round(pool / cnt) : 0;
-        var payout = (Number(emp.salary)||0) + share;
-        var c1 = document.createElement('td'); c1.textContent = emp.name; tr.appendChild(c1);
+        var pe = perEmp[emp.id] || { main:0, help:0, dop:0, nMain:0, nHelp:0, nDop:0 };
+        var isDes = emp.role === 'Дизайнер';
+        // Дизайнеры: процент = доля общего пула (как раньше). Мастера:
+        // именной заработок как основной по своим заказам.
+        var pct = isDes ? ((emp.active && nDesigners > 0) ? Math.round(earnDesignerM / nDesigners) : 0) : Math.round(pe.main);
+        var helpV = isDes ? 0 : Math.round(pe.help);
+        var dopV = Math.round(pe.dop);
+        var payout = (Number(emp.salary)||0) + pct + helpV + dopV;
+        var c1 = document.createElement('td');
+        var nm = document.createElement('div'); nm.textContent = emp.name; c1.appendChild(nm);
+        var subParts = [];
+        if(!isDes){ if(pe.nMain) subParts.push(pe.nMain + ' осн.'); if(pe.nHelp) subParts.push(pe.nHelp + ' помощ.'); }
+        if(pe.nDop) subParts.push(pe.nDop + ' доп.');
+        if(subParts.length){
+          var subL = document.createElement('div');
+          subL.style.cssText = 'font-size:10px;color:#999;margin-top:1px';
+          subL.textContent = subParts.join(' \u00B7 ');
+          c1.appendChild(subL);
+        }
+        tr.appendChild(c1);
         var c2 = document.createElement('td'); c2.textContent = emp.role; tr.appendChild(c2);
         var c3 = document.createElement('td'); c3.textContent = fm0(emp.salary); tr.appendChild(c3);
-        var c4 = document.createElement('td'); c4.textContent = share ? fm0(share) : '\u2014'; tr.appendChild(c4);
-        var c5 = document.createElement('td'); c5.textContent = fm0(payout); c5.className='crm-margin'; tr.appendChild(c5);
-        var c6 = document.createElement('td');
+        var c4 = document.createElement('td'); c4.textContent = pct ? fm0(pct) : '\u2014'; tr.appendChild(c4);
+        var c5 = document.createElement('td'); c5.textContent = helpV ? fm0(helpV) : '\u2014'; tr.appendChild(c5);
+        var c6 = document.createElement('td'); c6.textContent = dopV ? fm0(dopV) : '\u2014'; tr.appendChild(c6);
+        var c7 = document.createElement('td'); c7.textContent = fm0(payout); c7.className='crm-margin'; tr.appendChild(c7);
+        var c8 = document.createElement('td');
         var ed = document.createElement('button'); ed.className='crm-vbtn'; ed.style.padding='3px 8px'; ed.textContent='\u270E';
         ed.addEventListener('click', function(){ openEmpModal(emp); });
-        c6.appendChild(ed); tr.appendChild(c6);
-        var c7 = document.createElement('td');
+        c8.appendChild(ed); tr.appendChild(c8);
+        var c9 = document.createElement('td');
         var dl = document.createElement('button'); dl.className='crm-vbtn'; dl.style.padding='3px 8px'; dl.textContent='\u2715';
         dl.addEventListener('click', function(){
           if(!confirm('Удалить сотрудника «'+emp.name+'»? Уже начисленные оклады в кассе останутся.')) return;
@@ -2080,10 +2149,19 @@
             renderAll(); toast('OK Удалено', '#1a5252');
           }, function(err){ toast('\u26A0\uFE0F Не удалилось: '+err, '#BA7517'); });
         });
-        c7.appendChild(dl); tr.appendChild(c7);
+        c9.appendChild(dl); tr.appendChild(c9);
         tbl.appendChild(tr);
       });
       view.appendChild(tbl);
+
+      // Заказы месяца без назначенного основного мастера — деньги видны, но
+      // ждут распределения (открой заказ → блок «Бригада»).
+      if(Math.round(unassignedM) > 0){
+        var un = document.createElement('div');
+        un.style.cssText = 'font-size:12px;color:#BA7517;margin:8px 0 2px';
+        un.textContent = '\u26A0\uFE0F Не распределено: ' + fm0(Math.round(unassignedM)) + ' \u2014 в заказах месяца не назначен основной мастер. Открой заказ и выбери бригаду.';
+        view.appendChild(un);
+      }
 
       // Итоги месяца по зарплатам
       var salT = 0;
@@ -2098,7 +2176,8 @@
       tile(fm0(salT), 'окладов/мес всего');
       tile(fm0(earnMasterM), 'заработок мастеров (мес)');
       tile(fm0(earnDesignerM), 'заработок дизайнеров (мес)');
-      tile(fm0(salT + earnMasterM + earnDesignerM), 'фонд оплаты за месяц');
+      tile(fm0(dopTotalM), 'доп. работы (мес)');
+      tile(fm0(salT + earnMasterM + earnDesignerM + dopTotalM), 'фонд оплаты за месяц');
       view.appendChild(sum);
 
       if(!LOADED){
@@ -2126,6 +2205,8 @@
     ['Мастер','Дизайнер'].forEach(function(c){ var op=document.createElement('option'); op.value=c; op.textContent=c; selRole.appendChild(op); });
     selRole.value = pre.role || 'Мастер';
     var iSal = inp(pre.salary || '', 'number'); iSal.placeholder = '0';
+    var iHelp = inp(pre.helperRate || '', 'number'); iHelp.placeholder = '0';
+    iHelp.title = 'Сколько этот человек получает, когда он ПОМОЩНИК в заказе. В самом заказе сумму можно поменять.';
     var selAct = document.createElement('select');
     [['да','Активен'],['нет','Уволен/пауза']].forEach(function(u){ var op=document.createElement('option'); op.value=u[0]; op.textContent=u[1]; selAct.appendChild(op); });
     selAct.value = (pre.active === false) ? 'нет' : 'да';
@@ -2134,7 +2215,9 @@
     var r1 = document.createElement('div'); r1.className='crm-2col';
     r1.appendChild(field('Роль', selRole)); r1.appendChild(field('Оклад/мес, \u20B8', iSal));
     b.appendChild(r1);
-    b.appendChild(field('Состояние', selAct));
+    var r1b = document.createElement('div'); r1b.className='crm-2col';
+    r1b.appendChild(field('Ставка помощника, \u20B8', iHelp)); r1b.appendChild(field('Состояние', selAct));
+    b.appendChild(r1b);
 
     var btns = document.createElement('div'); btns.className='crm-m-btns';
     var bSave = document.createElement('button'); bSave.className='crm-m-btn save'; bSave.textContent='Сохранить';
@@ -2144,7 +2227,9 @@
       var sal = Math.round(parseFloat(iSal.value)||0);
       if(sal < 0){ toast('\u26A0\uFE0F Оклад не может быть отрицательным', '#BA7517'); return; }
       bSave.disabled = true; bSave.textContent = 'Сохраняю...';
-      var emp = { id: pre.id || '', name: name, role: selRole.value, salary: sal, active: selAct.value !== 'нет' };
+      var hr = Math.round(parseFloat(iHelp.value)||0);
+      if(hr < 0){ toast('\u26A0\uFE0F Ставка помощника не может быть отрицательной', '#BA7517'); return; }
+      var emp = { id: pre.id || '', name: name, role: selRole.value, salary: sal, active: selAct.value !== 'нет', helperRate: hr };
       post({ action:'saveEmp', emp: emp }, function(res){
         EMP_LOADED = false;
         document.body.removeChild(bg);
@@ -3262,6 +3347,109 @@
     }
     b.appendChild(moneyWrap);
 
+    // ── Бригада: основной мастер + помощник ─────────────────
+    var selMaster = null, selHelper = null, iHelperPay = null;
+    var brigWrap = document.createElement('div');
+    function renderBrig(){
+      brigWrap.innerHTML = '';
+      selMaster = null; selHelper = null; iHelperPay = null;
+      var box = document.createElement('div'); box.className='crm-ch-box';
+      var bh = document.createElement('div'); bh.className='crm-ch-h';
+      var bt = document.createElement('b'); bt.textContent = 'Бригада';
+      bh.appendChild(bt); box.appendChild(bh);
+      if(!EMP_LOADED){
+        var ld = document.createElement('div'); ld.className='crm-ch-row'; ld.textContent = 'Загружаю сотрудников...';
+        box.appendChild(ld); brigWrap.appendChild(box); return;
+      }
+      var ms = EMP.filter(function(e){ return e.role === 'Мастер'; });
+      if(!ms.length){
+        var em = document.createElement('div'); em.className='crm-ch-row'; em.style.color='#999';
+        em.textContent = 'Мастеров пока нет \u2014 добавь их в Финансы \u2192 Зарплаты, тогда сможешь назначать бригаду.';
+        box.appendChild(em); brigWrap.appendChild(box); return;
+      }
+      selMaster = document.createElement('select');
+      var opNoM = document.createElement('option'); opNoM.value=''; opNoM.textContent='\u2014 не выбран \u2014'; selMaster.appendChild(opNoM);
+      selHelper = document.createElement('select');
+      var opNoH = document.createElement('option'); opNoH.value=''; opNoH.textContent='\u2014 без помощника \u2014'; selHelper.appendChild(opNoH);
+      ms.forEach(function(e){
+        var o1=document.createElement('option'); o1.value=e.id; o1.textContent=e.name; selMaster.appendChild(o1);
+        var o2=document.createElement('option'); o2.value=e.id; o2.textContent=e.name; selHelper.appendChild(o2);
+      });
+      selMaster.value = o.masterId || '';
+      selHelper.value = o.helperId || '';
+      iHelperPay = inp(o.helperPay || '', 'number'); iHelperPay.placeholder='0';
+      selHelper.addEventListener('change', function(){
+        if(selHelper.value && !(Number(iHelperPay.value) > 0)){
+          var hr = 0;
+          for(var i=0;i<EMP.length;i++){ if(String(EMP[i].id)===String(selHelper.value)){ hr = Number(EMP[i].helperRate)||0; break; } }
+          if(hr > 0) iHelperPay.value = hr;
+        }
+      });
+      var body = document.createElement('div'); body.style.cssText='padding:8px 0';
+      var rowA = document.createElement('div'); rowA.className='crm-2col';
+      rowA.appendChild(field('Основной мастер', selMaster));
+      rowA.appendChild(field('Помощник', selHelper));
+      body.appendChild(rowA);
+      body.appendChild(field('Помощнику за заказ, \u20B8', iHelperPay));
+      var hint = document.createElement('div'); hint.style.cssText='font-size:10px;color:#999;margin-top:2px';
+      hint.textContent = 'Процент с заказа идёт основному мастеру за вычетом суммы помощнику. Сохраняется кнопкой «Сохранить» внизу.';
+      body.appendChild(hint);
+      box.appendChild(body);
+      brigWrap.appendChild(box);
+    }
+    renderBrig();
+    if(!EMP_LOADED){ fetchEmp(function(err){ if(!err){ renderBrig(); renderDop(); } }); }
+    b.appendChild(brigWrap);
+
+    // ── Доп. работы: разовые выплаты исполнителям по заказу ──
+    var dopWrap = document.createElement('div');
+    function renderDop(){
+      dopWrap.innerHTML = '';
+      var box = document.createElement('div'); box.className='crm-ch-box';
+      var bh = document.createElement('div'); bh.className='crm-ch-h';
+      var bt = document.createElement('b'); bt.textContent = 'Доп. работы';
+      var add = document.createElement('button'); add.className='crm-vbtn new'; add.textContent='+ Доп.работа';
+      add.addEventListener('click', function(){
+        if(!EMP_LOADED){ toast('\u26A0\uFE0F Сотрудники ещё грузятся \u2014 подожди пару секунд', '#BA7517'); return; }
+        openDopModal(o, function(){ renderDop(); });
+      });
+      bh.appendChild(bt); bh.appendChild(add); box.appendChild(bh);
+      if(!DOP_LOADED){
+        var ld = document.createElement('div'); ld.className='crm-ch-row'; ld.textContent='Загружаю...';
+        box.appendChild(ld);
+      } else {
+        var items = dopOf(o.num);
+        if(!items.length){
+          var em = document.createElement('div'); em.className='crm-ch-row'; em.style.color='#999';
+          em.textContent = 'Разовые работы сверх процента (доставка, врезка, мелкий ремонт). Сумма \u2014 что получает сотрудник. Если за это платит клиент \u2014 добавь ещё \u00B1 Изменение к договору.';
+          box.appendChild(em);
+        } else {
+          items.forEach(function(d){
+            var r = document.createElement('div'); r.className='crm-ch-row';
+            var dt = document.createElement('span'); dt.className='dt'; dt.textContent = fmtDate(d.date);
+            var ds = document.createElement('span'); ds.className='ds'; ds.textContent = empName(d.empId) + (d.desc ? ' \u2014 ' + d.desc : '');
+            var sm = document.createElement('span'); sm.className='sm out'; sm.textContent = fm0(Number(d.sum)||0);
+            var del = document.createElement('button'); del.className='del'; del.textContent='\u2715';
+            del.title = 'Удалить доп. работу';
+            del.addEventListener('click', function(){
+              if(!confirm('Удалить доп. работу \u00AB'+(d.desc||empName(d.empId))+'\u00BB на '+fm0(Number(d.sum)||0)+'?')) return;
+              post({ action:'delDop', id:d.id }, function(){
+                DOP = DOP.filter(function(x){ return x.id !== d.id; });
+                renderDop();
+                toast('OK Доп. работа удалена', '#1a5252');
+              }, function(err){ toast('\u26A0\uFE0F Не удалилось: '+err, '#BA7517'); });
+            });
+            r.appendChild(dt); r.appendChild(ds); r.appendChild(sm); r.appendChild(del);
+            box.appendChild(r);
+          });
+        }
+      }
+      dopWrap.appendChild(box);
+    }
+    renderDop();
+    if(!DOP_LOADED){ fetchDop(function(err){ if(!err) renderDop(); }); }
+    b.appendChild(dopWrap);
+
     // ── Фото и заметки ──────────────────────────────────────
     var attWrap = document.createElement('div');
     function renderAttach(){
@@ -3553,9 +3741,17 @@
         note: iNote.value.trim(),
         mountDate: iMount.value
       };
+      // Бригада: шлём только если селекты построены (сотрудники загрузились
+      // и есть хоть один мастер). Пустая строка мастера/помощника = снять.
+      if(selMaster){
+        upd.masterId = selMaster.value;
+        upd.helperId = selHelper.value;
+        upd.helperPay = selHelper.value ? Math.round(parseFloat(iHelperPay.value)||0) : 0;
+      }
       post({ action:'updateOrder', order: upd }, function(){
         o.status=upd.status; o.client=upd.client; o.obj=upd.obj; o.phone=upd.phone;
         o.city=upd.city; o.furn=upd.furn; o.note=upd.note; o.mountDate=upd.mountDate;
+        if(upd.masterId !== undefined){ o.masterId=upd.masterId; o.helperId=upd.helperId; o.helperPay=upd.helperPay; }
         document.body.removeChild(bg);
         renderAll();
         toast('OK Заказ \u2116'+o.num+' обновлён', '#1a5252');
@@ -3570,6 +3766,69 @@
     m.appendChild(h); m.appendChild(b);
     bg.appendChild(m);
     document.body.appendChild(bg);
+  }
+
+  // ── Модалка добавления доп. работы (выплата исполнителю) ──
+  function openDopModal(o, done){
+    var bg = document.createElement('div'); bg.className='crm-modal-bg';
+    bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
+    var m = document.createElement('div'); m.className='crm-modal';
+    var h = document.createElement('div'); h.className='crm-m-h';
+    var title = document.createElement('b'); title.textContent = 'Доп. работа \u2014 заказ \u2116' + o.num;
+    var x = document.createElement('button'); x.className='crm-m-x'; x.textContent='\u00D7';
+    x.addEventListener('click', function(){ document.body.removeChild(bg); });
+    h.appendChild(title); h.appendChild(x);
+    var b = document.createElement('div'); b.className='crm-m-b';
+
+    var selEmp = document.createElement('select');
+    var ms = EMP.filter(function(e){ return e.role === 'Мастер'; });
+    ms.forEach(function(e){
+      var op = document.createElement('option'); op.value = e.id;
+      var tag = '';
+      if(String(e.id) === String(o.masterId)) tag = ' (основной)';
+      else if(String(e.id) === String(o.helperId)) tag = ' (помощник)';
+      op.textContent = e.name + tag; selEmp.appendChild(op);
+    });
+    if(o.masterId) selEmp.value = o.masterId;
+    var iDesc = inp(''); iDesc.placeholder = 'Что за работа (напр. доставка, врезка мойки)';
+    var iSum = inp('', 'number'); iSum.placeholder = '0';
+    var td = new Date();
+    var iDate = inp(td.getFullYear()+'-'+('0'+(td.getMonth()+1)).slice(-2)+'-'+('0'+td.getDate()).slice(-2), 'date');
+
+    b.appendChild(field('Кому выплата', selEmp));
+    b.appendChild(field('Описание', iDesc));
+    var rr = document.createElement('div'); rr.className='crm-2col';
+    rr.appendChild(field('Сумма сотруднику, \u20B8', iSum));
+    rr.appendChild(field('Дата', iDate));
+    b.appendChild(rr);
+    var note = document.createElement('div'); note.className='crm-fin-note';
+    note.textContent = 'Это выплата исполнителю (попадёт в его Зарплату за месяц даты). Если за доп. работу платит клиент \u2014 добавь ещё \u00B1 Изменение к договору, оно двигает цену и долг.';
+    b.appendChild(note);
+
+    var btns = document.createElement('div'); btns.className='crm-m-btns';
+    var bSave = document.createElement('button'); bSave.className='crm-m-btn save'; bSave.textContent='Добавить';
+    bSave.addEventListener('click', function(){
+      if(!selEmp.value){ toast('\u26A0\uFE0F Выбери сотрудника', '#BA7517'); return; }
+      var sum = Math.round(parseFloat(iSum.value)||0);
+      if(!(sum > 0)){ toast('\u26A0\uFE0F Сумма должна быть больше нуля', '#BA7517'); return; }
+      bSave.disabled = true; bSave.textContent = 'Добавляю...';
+      var dwork = { num:String(o.num), empId:selEmp.value, desc:iDesc.value.trim(), sum:sum, date:iDate.value };
+      post({ action:'addDop', dop:dwork }, function(res){
+        DOP.push({ id:res.id, num:String(o.num), empId:selEmp.value, desc:iDesc.value.trim(), sum:sum, date:iDate.value });
+        document.body.removeChild(bg);
+        if(typeof done === 'function') done();
+        toast('OK Доп. работа добавлена', '#1a5252');
+      }, function(err){
+        bSave.disabled=false; bSave.textContent='Добавить';
+        toast('\u26A0\uFE0F Не сохранилось: '+err, '#BA7517');
+      });
+    });
+    btns.appendChild(bSave);
+    b.appendChild(btns);
+    m.appendChild(h); m.appendChild(b);
+    bg.appendChild(m);
+    document.body.appendChild(bg);
+    setTimeout(function(){ try{ iDesc.focus(); }catch(e){} }, 50);
   }
 
   // ── Список закупщику из заказа (order-driven) ────────────

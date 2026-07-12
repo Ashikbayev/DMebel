@@ -829,6 +829,66 @@ function waitReady(dom, tries){
   var ml3 = att("stockMinList_(__stSS)");
   ok(ml3.mins.length === 0, 'нулевой минимум удаляет строку (минимум снят)');
 
+  // ─────────────────────────────────────────────────────────────
+  // v4.1: Мастера — helperRate, доп. работы, бригада заказа
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.1: Мастер + помощник + доп. работы ──');
+  function mkWritable(rows){
+    return {
+      getLastRow: function(){ return rows.length + 1; },
+      setFrozenRows: function(){}, hideColumns: function(){},
+      deleteRow: function(row){ rows.splice(row - 2, 1); },
+      getRange: function(row, col, numRows, numCols){
+        return {
+          setValue: function(v){ var r = row - 2; while(rows.length <= r) rows.push([]); rows[r][col - 1] = v; return this; },
+          getValue: function(){ var r = rows[row - 2] || []; return r[col - 1] === undefined ? '' : r[col - 1]; },
+          getValues: function(){ var out = []; for(var i = 0; i < (numRows || 1); i++){ var src = rows[row - 2 + i] || []; var line = []; for(var j = 0; j < (numCols || 1); j++) line.push(src[col - 1 + j] === undefined ? '' : src[col - 1 + j]); out.push(line); } return out; },
+          setValues: function(){ return this; }, setFontWeight: function(){ return this; }
+        };
+      }
+    };
+  }
+
+  // Сотрудник со ставкой помощника (helperRate — колонка 7)
+  var empRows = [];
+  var empWSheet = mkWritable(empRows);
+  gsCtx.__empSS = { getSheetByName: function(n){ return n === 'Сотрудники' ? empWSheet : null; }, insertSheet: function(){ return empWSheet; } };
+  var e1 = att("saveEmp_(__empSS, { name:'Мастер1', role:'Мастер', salary:0, helperRate:15000 })");
+  ok(e1.ok === true, 'сотрудник со ставкой помощника сохранён');
+  var el1 = att("empList_(__empSS)");
+  ok(el1.employees.length === 1 && el1.employees[0].helperRate === 15000, 'helperRate отдаётся в списке сотрудников');
+  att("saveEmp_(__empSS, { id:'" + e1.id + "', name:'Мастер1', role:'Мастер', salary:0, helperRate:20000 })");
+  var el2 = att("empList_(__empSS)");
+  ok(el2.employees.length === 1 && el2.employees[0].helperRate === 20000, 'helperRate обновляется без дубля строки');
+
+  // Доп. работы (лист ДопРаботы)
+  var dopRows = [];
+  var dopWSheet = mkWritable(dopRows);
+  gsCtx.__dopSS = { getSheetByName: function(n){ return n === 'ДопРаботы' ? dopWSheet : null; }, insertSheet: function(){ return dopWSheet; } };
+  ok(att("addDop_(__dopSS, { num:'77', empId:'', sum:5000 })").ok === false, 'доп. работа без сотрудника отклонена');
+  ok(att("addDop_(__dopSS, { num:'77', empId:'e1', sum:0 })").ok === false, 'доп. работа с нулевой суммой отклонена');
+  var d1 = att("addDop_(__dopSS, { num:'77', empId:'e1', desc:'Доставка', sum:5000, date:'2026-07-05' })");
+  ok(d1.ok === true, 'доп. работа добавлена');
+  var dl1 = att("dopList_(__dopSS)");
+  ok(dl1.dop.length === 1 && dl1.dop[0].sum === 5000 && dl1.dop[0].empId === 'e1', 'доп. работа отдаётся в списке');
+  var dd1 = att("delDop_(__dopSS, '" + d1.id + "')");
+  var dl2 = att("dopList_(__dopSS)");
+  ok(dd1.ok === true && dl2.dop.length === 0, 'доп. работа удаляется');
+  ok(att("delDop_(__dopSS, 'нет')").ok === false, 'удаление несуществующей доп. работы отклонено');
+
+  // Бригада заказа: updateOrder_ пишет колонки 30-32, ordersList_ их читает
+  var ub = att("updateOrder_(__ordSS, { num:'77', masterId:'e1', helperId:'e2', helperPay:15000 })");
+  ok(ub.ok === true, 'бригада записана в заказ');
+  var ol = att("ordersList_(__ordSS)");
+  var o77 = null; ol.orders.forEach(function(x){ if(x.num === '77') o77 = x; });
+  ok(!!o77 && o77.masterId === 'e1' && o77.helperId === 'e2' && o77.helperPay === 15000, 'ordersList отдаёт masterId/helperId/helperPay');
+  ok(o77 && o77.clientKey === undefined, 'ordersList НЕ отдаёт секретный clientKey');
+  att("updateOrder_(__ordSS, { num:'77', helperId:'', helperPay:0 })");
+  var ol2 = att("ordersList_(__ordSS)");
+  var o77b = null; ol2.orders.forEach(function(x){ if(x.num === '77') o77b = x; });
+  ok(o77b && o77b.helperId === '' && o77b.helperPay === 0, 'помощник снимается (пустой id и 0)');
+  ok(o77b && o77b.masterId === 'e1', 'при снятии помощника основной мастер не затронут');
+
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');
   process.exit(FAIL ? 1 : 0);
