@@ -287,6 +287,51 @@
     if(tK > 0) return mK;
     return mL || mP || mK || 0;
   }
+
+  // ── Материал заказа: 'L' ЛДСП / 'P' МДФ Плёнка / 'K' МДФ Краска ──
+  // До договора — явный выбор в карточке (o.material), если задан, иначе
+  // старая эвристика (что совпадает с Предв. ценой). После договора —
+  // ВСЕГДА по факту (что совпало с Согл. ценой): договор — обязательство
+  // на конкретный материал, o.material его больше не переопределяет.
+  function materialOf(o){
+    var tL = Number(o.totL)||0, tP = Number(o.totP)||0, tK = Number(o.totK)||0;
+    if(Number(o.sogl) > 0){
+      var s = Number(o.sogl);
+      if(tL === s) return 'L';
+      if(tP === s) return 'P';
+      if(tK === s) return 'K';
+      // Сумма не совпала ни с одним итогом (скидка/изменения после
+      // договора) — используем то, что было выбрано на момент подписания.
+      if(o.material === 'L' || o.material === 'P' || o.material === 'K') return o.material;
+      if(tL > 0) return 'L'; if(tP > 0) return 'P'; if(tK > 0) return 'K';
+      return 'L';
+    }
+    if(o.material === 'L' || o.material === 'P' || o.material === 'K') return o.material;
+    var pred = Number(o.pred)||0;
+    if(pred > 0){
+      if(tL === pred) return 'L';
+      if(tP === pred) return 'P';
+      if(tK === pred) return 'K';
+    }
+    if(tL > 0) return 'L'; if(tP > 0) return 'P'; if(tK > 0) return 'K';
+    return 'L';
+  }
+  function materialLabel(m){ return m === 'P' ? 'МДФ Плёнка' : (m === 'K' ? 'МДФ Краска' : 'ЛДСП'); }
+  function materialTotal(o, m){ return m === 'P' ? (Number(o.totP)||0) : (m === 'K' ? (Number(o.totK)||0) : (Number(o.totL)||0)); }
+  function materialMargin(o, m){ return m === 'P' ? (Number(o.margP)||0) : (m === 'K' ? (Number(o.margK)||0) : (Number(o.margL)||0)); }
+  // Только "корпус" (фасад в этой ветке, скорее всего, не заполнялся) —
+  // сигнал: сумма этой ветки СОВПАДАЕТ с суммой другой ветки. Раздельные
+  // цены фасада почти никогда не совпадают между собой случайно, а вот
+  // "фасад не занесён" в двух ветках сразу даёт одинаковый корпус.
+  function materialIsBareCarcass(o, m){
+    var t = materialTotal(o, m);
+    if(!(t > 0)) return false;
+    var others = ['L','P','K'].filter(function(x){ return x !== m; });
+    for(var i=0;i<others.length;i++){
+      if(materialTotal(o, others[i]) === t) return true;
+    }
+    return false;
+  }
   function matches(o){
     if(!SEARCH) return true;
     var s = SEARCH.toLowerCase();
@@ -1121,6 +1166,21 @@
     if(!id) return '';
     for(var i=0;i<EMP.length;i++){ if(String(EMP[i].id) === String(id)) return EMP[i].name; }
     return '(удалён)';
+  }
+
+  // ── Шаблоны доп. работ (лист "ШаблоныДопРабот") ────────────
+  var DOPT = [];
+  var DOPT_LOADED = false;
+
+  function fetchDopTemplates(cb){
+    if(!getToken()){ cb('__no_key__'); return; }
+    fetch(GS_URL + '?action=dopTemplates&token=' + encodeURIComponent(getToken()))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(res && res.ok){ DOPT = res.templates || []; DOPT_LOADED = true; cb(null); }
+        else cb((res && res.error) || 'таблица вернула ошибку');
+      })
+      .catch(function(e){ cb(String(e && e.message || e)); });
   }
 
   function fetchFin(cb){
@@ -3248,45 +3308,123 @@
     var moneyWrap = document.createElement('div');
     function renderMoney(){
       moneyWrap.innerHTML = '';
-      var g = document.createElement('div'); g.className='crm-money-grid';
-      function gRow(k,v,cls){
-        var a=document.createElement('span');a.textContent=k;
-        var c=document.createElement('b');c.textContent=v;c.style.textAlign='right';
-        if(cls) c.className = cls;
-        g.appendChild(a);g.appendChild(c);
-      }
+      var hasContract = (Number(o.sogl)||0) > 0;
+      var mat = materialOf(o);
+
+      // ── Верхняя карточка: цена + ярлык материала (инлайн-стили — своего
+      // styles.css класса под это нет, чтобы не зависеть от файла, который
+      // сюда не прикладывается) ─────────────────────────────────────────
+      var top = document.createElement('div');
+      top.style.cssText = 'background:#f6f6f4;border-radius:10px;padding:10px 12px;margin-bottom:8px';
+      var topHead = document.createElement('div');
+      topHead.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px';
+      var topLbl = document.createElement('span'); topLbl.style.cssText='font-size:12px;color:#888';
+      topLbl.textContent = hasContract ? 'Итоговая по договору' : 'Предв. цена';
+      var matBadge = document.createElement('span');
+      matBadge.style.cssText = 'font-size:11px;font-weight:700;color:#854F0B;background:#FAEEDA;border-radius:20px;padding:2px 10px';
+      matBadge.textContent = materialLabel(mat);
+      topHead.appendChild(topLbl); topHead.appendChild(matBadge);
+      top.appendChild(topHead);
       var chs = CH_LOADED ? changesOf(o.num) : [];
       var chSum = 0;
       chs.forEach(function(c){ chSum += Number(c.sum)||0; });
-      gRow('Предв. цена', fm0(o.pred));
+      var topPrice = document.createElement('div');
+      topPrice.style.cssText = 'font-size:24px;font-weight:700;color:#232323;margin-top:2px';
+      topPrice.textContent = hasContract ? fm0(o.sogl) : fm0(materialTotal(o, mat));
+      top.appendChild(topPrice);
       if(chs.length){
-        gRow('Цена по договору', fm0((Number(o.sogl)||0) - chSum));
-        gRow('Изменения ('+chs.length+')', (chSum>=0 ? '+' : '\u2212') + fm0(Math.abs(chSum)));
-        gRow('Итоговая цена', fm0(o.sogl));
-      } else {
-        gRow('Согл. цена', o.sogl ? fm0(o.sogl) : '\u2014');
+        var chLine = document.createElement('div'); chLine.style.cssText='font-size:11px;color:#999;margin-top:2px';
+        chLine.textContent = 'Цена по договору ' + fm0((Number(o.sogl)||0) - chSum) + ', изменения (' + chs.length + ') ' + (chSum>=0?'+':'\u2212') + fm0(Math.abs(chSum));
+        top.appendChild(chLine);
       }
-      gRow('Аванс', o.avans ? fm0(o.avans) : '\u2014');
+      moneyWrap.appendChild(top);
+
+      // ── Аванс / Долг ───────────────────────────────────────
+      var payGrid = document.createElement('div');
+      payGrid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px';
+      function payTile(k, v, warn){
+        var t = document.createElement('div');
+        t.style.cssText = 'border-radius:8px;padding:6px 10px;background:' + (warn ? '#FAEEDA' : '#f6f6f4');
+        var kk = document.createElement('div'); kk.style.cssText = 'font-size:11px;color:' + (warn ? '#854F0B' : '#888');
+        kk.textContent = k;
+        var vv = document.createElement('div'); vv.style.cssText = 'font-size:15px;font-weight:700;color:' + (warn ? '#854F0B' : '#232323');
+        vv.textContent = v;
+        t.appendChild(kk); t.appendChild(vv); payGrid.appendChild(t);
+      }
+      payTile('Аванс', o.avans ? fm0(o.avans) : '\u2014');
       var debt = debtOf(o);
-      if(debt < 0) gRow('Переплата', fm0(-debt), 'crm-over');
-      else gRow('Долг', fm0(debt));
-      gRow('Итог ЛДСП', fm0(o.totL));
-      gRow('Итог Плёнка', fm0(o.totP));
-      gRow('Итог Краска', fm0(o.totK));
-      var marg = marginOf(o);
-      var priceForCost = Number(o.sogl) > 0 ? Number(o.sogl)||0 : (Number(o.pred)||0);
+      if(debt < 0) payTile('Переплата', fm0(-debt), false);
+      else payTile('Долг', fm0(debt), debt > 0);
+      moneyWrap.appendChild(payGrid);
+
+      // ── Варианты материала: до договора кликабельны, после — только показ ──
+      var matWrap = document.createElement('div'); matWrap.style.cssText = 'margin-bottom:8px';
+      var matHint = document.createElement('div'); matHint.style.cssText = 'font-size:11px;color:#888;margin-bottom:6px';
+      matHint.textContent = 'Варианты материала';
+      matWrap.appendChild(matHint);
+      ['L','P','K'].forEach(function(m){
+        var t = materialTotal(o, m);
+        if(!(t > 0)) return;
+        var row = document.createElement('div');
+        var isSel = m === mat;
+        var rowBorder = isSel ? 'border:1.5px solid #1a5252' : 'border:1px solid #e5e5e0';
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;border-radius:8px;padding:7px 10px;margin-bottom:4px;' + rowBorder;
+        if(!hasContract){ row.style.cursor = 'pointer'; }
+        var lbl = document.createElement('span');
+        lbl.style.cssText = 'font-size:13px;' + (isSel ? 'font-weight:700;color:#1a5252' : 'color:' + (hasContract ? '#999' : '#555'));
+        lbl.textContent = (isSel ? '\u2713 ' : '') + materialLabel(m);
+        if(materialIsBareCarcass(o, m)) lbl.textContent += ' \u00B7 только корпус';
+        var val = document.createElement('span');
+        val.style.cssText = 'font-size:13px;' + (isSel ? 'font-weight:700;color:#232323' : 'color:#999');
+        val.textContent = fm0(t);
+        row.appendChild(lbl); row.appendChild(val);
+        if(!hasContract){
+          row.addEventListener('click', function(){
+            if(m === o.material) return;
+            var prevMaterial = o.material;
+            o.material = m;
+            renderMoney();
+            post({ action:'updateOrder', order:{ num:String(o.num), material:m } }, function(){
+              toast('OK Материал: ' + materialLabel(m), '#1a5252');
+            }, function(err){
+              o.material = prevMaterial;
+              renderMoney();
+              toast('\u26A0\uFE0F Не сохранилось: '+err, '#BA7517');
+            });
+          });
+        }
+        matWrap.appendChild(row);
+      });
+      moneyWrap.appendChild(matWrap);
+
+      // ── Для тебя: себестоимость / маржа / рентабельность ────
+      var marg = hasContract ? marginOf(o) : materialMargin(o, mat);
+      var priceForCost = hasContract ? (Number(o.sogl)||0) : materialTotal(o, mat);
       if(marg > 0 && priceForCost > 0){
+        var costWrap = document.createElement('div');
+        costWrap.style.cssText = 'border-top:1px solid #e5e5e0;padding-top:8px;margin-bottom:4px';
+        var costHint = document.createElement('div'); costHint.style.cssText = 'font-size:11px;color:#888;margin-bottom:4px';
+        costHint.textContent = 'Для тебя (клиент не видит)';
+        costWrap.appendChild(costHint);
         var cost = priceForCost - marg;
         var pct = Math.round(marg / priceForCost * 100);
-        var isDog = Number(o.sogl) > 0;
-        gRow(isDog ? 'Маржа (по договору)' : 'Маржа (предв.)', fm0(marg), 'crm-margin');
-        gRow('Себестоимость', fm0(cost));
-        gRow('Рентабельность', pct + '%');
+        function costRow(k, v, cls){
+          var r = document.createElement('div'); r.style.cssText = 'display:flex;justify-content:space-between;font-size:13px;padding:2px 0';
+          var kk = document.createElement('span'); kk.style.color = '#888'; kk.textContent = k;
+          var vv = document.createElement('span'); vv.textContent = v; if(cls) vv.className = cls;
+          r.appendChild(kk); r.appendChild(vv); costWrap.appendChild(r);
+        }
+        costRow('Себестоимость', fm0(cost));
+        costRow('Маржа', fm0(marg), 'crm-margin');
+        costRow('Рентабельность', pct + '%');
+        moneyWrap.appendChild(costWrap);
       }
-      gRow('Договор от', o.dogDate ? fmtDate(o.dogDate) : '\u2014');
-      moneyWrap.appendChild(g);
 
-      if((Number(o.sogl)||0) > 0){
+      var dogLine = document.createElement('div'); dogLine.style.cssText = 'font-size:11px;color:#999';
+      dogLine.textContent = 'Договор от ' + (o.dogDate ? fmtDate(o.dogDate) : '\u2014');
+      moneyWrap.appendChild(dogLine);
+
+      if(hasContract){
         var box = document.createElement('div'); box.className='crm-ch-box';
         var bh = document.createElement('div'); bh.className='crm-ch-h';
         var bt = document.createElement('b'); bt.textContent = 'Изменения к договору';
@@ -3790,12 +3928,48 @@
       op.textContent = e.name + tag; selEmp.appendChild(op);
     });
     if(o.masterId) selEmp.value = o.masterId;
+
+    var tplWrap = document.createElement('div');
+    var selTpl = document.createElement('select');
     var iDesc = inp(''); iDesc.placeholder = 'Что за работа (напр. доставка, врезка мойки)';
+    function renderTplSelect(){
+      selTpl.innerHTML = '';
+      var op0 = document.createElement('option'); op0.value=''; op0.textContent = DOPT_LOADED ? '\u2014 выбрать из шаблонов \u2014' : 'Загружаю шаблоны...';
+      selTpl.appendChild(op0);
+      DOPT.forEach(function(t){ var op=document.createElement('option'); op.value=t.name; op.textContent=t.name; selTpl.appendChild(op); });
+    }
+    renderTplSelect();
+    if(!DOPT_LOADED){ fetchDopTemplates(function(err){ if(!err) renderTplSelect(); }); }
+    selTpl.addEventListener('change', function(){
+      if(selTpl.value) iDesc.value = selTpl.value;
+      selTpl.value = '';
+    });
+    var tplSaveBtn = document.createElement('button'); tplSaveBtn.className='crm-vbtn'; tplSaveBtn.style.cssText='margin-top:4px;font-size:11px;padding:3px 8px';
+    tplSaveBtn.textContent = '+ Сохранить это описание как шаблон';
+    tplSaveBtn.addEventListener('click', function(){
+      var txt = iDesc.value.trim();
+      if(!txt){ toast('\u26A0\uFE0F Сначала впиши описание', '#BA7517'); return; }
+      var exists = DOPT.some(function(t){ return t.name === txt; });
+      if(exists){ toast('\u26A0\uFE0F Такой шаблон уже есть', '#BA7517'); return; }
+      tplSaveBtn.disabled = true;
+      post({ action:'saveDopTemplate', tpl:{ name: txt } }, function(res){
+        DOPT.push({ id: res.id, name: txt });
+        renderTplSelect();
+        tplSaveBtn.disabled = false;
+        toast('OK Шаблон добавлен', '#1a5252');
+      }, function(err){
+        tplSaveBtn.disabled = false;
+        toast('\u26A0\uFE0F Не сохранилось: '+err, '#BA7517');
+      });
+    });
+    tplWrap.appendChild(selTpl); tplWrap.appendChild(tplSaveBtn);
+
     var iSum = inp('', 'number'); iSum.placeholder = '0';
     var td = new Date();
     var iDate = inp(td.getFullYear()+'-'+('0'+(td.getMonth()+1)).slice(-2)+'-'+('0'+td.getDate()).slice(-2), 'date');
 
     b.appendChild(field('Кому выплата', selEmp));
+    b.appendChild(field('Шаблон', tplWrap));
     b.appendChild(field('Описание', iDesc));
     var rr = document.createElement('div'); rr.className='crm-2col';
     rr.appendChild(field('Сумма сотруднику, \u20B8', iSum));

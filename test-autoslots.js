@@ -889,6 +889,42 @@ function waitReady(dom, tries){
   ok(o77b && o77b.helperId === '' && o77b.helperPay === 0, 'помощник снимается (пустой id и 0)');
   ok(o77b && o77b.masterId === 'e1', 'при снятии помощника основной мастер не затронут');
 
+  // ─────────────────────────────────────────────────────────────
+  // v4.1.1: Материал заказа (до/после договора) + шаблоны доп.работ
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.1.1: Материал заказа + шаблоны доп.работ ──');
+  var um1 = att("updateOrder_(__ordSS, { num:'77', material:'P' })");
+  ok(um1.ok === true, 'материал \u00abP\u00bb записан в заказ');
+  var oml = att("ordersList_(__ordSS)");
+  var o77m = null; oml.orders.forEach(function(x){ if(x.num === '77') o77m = x; });
+  ok(o77m && o77m.material === 'P', 'ordersList отдаёт material');
+  var um2 = att("updateOrder_(__ordSS, { num:'77', material:'X' })");
+  var oml2 = att("ordersList_(__ordSS)");
+  var o77m2 = null; oml2.orders.forEach(function(x){ if(x.num === '77') o77m2 = x; });
+  ok(um2.ok === true && o77m2.material === 'P', 'неверный код материала (не L/P/K/\'\') не перезаписывает поле');
+  att("updateOrder_(__ordSS, { num:'77', material:'' })");
+  var oml3 = att("ordersList_(__ordSS)");
+  var o77m3 = null; oml3.orders.forEach(function(x){ if(x.num === '77') o77m3 = x; });
+  ok(o77m3.material === '', 'материал можно снять (пустая строка)');
+  var um3 = att("updateOrder_(__ordSS, { num:'77', material:'K', fromDogovor:true })");
+  var oml4 = att("ordersList_(__ordSS)");
+  var o77m4 = null; oml4.orders.forEach(function(x){ if(x.num === '77') o77m4 = x; });
+  ok(um3.ok === true && o77m4.material === '', 'fromDogovor НЕ трогает материал (фиксация только через карточку до договора)');
+
+  var dtRows = [];
+  var dtWSheet = mkWritable(dtRows);
+  gsCtx.__dtSS = { getSheetByName: function(n){ return n === 'ШаблоныДопРабот' ? dtWSheet : null; }, insertSheet: function(){ return dtWSheet; } };
+  ok(att("saveDopTemplate_(__dtSS, { name:'' })").ok === false, 'шаблон без названия отклонён');
+  var t1 = att("saveDopTemplate_(__dtSS, { name:'Доставка' })");
+  ok(t1.ok === true, 'шаблон добавлен');
+  att("saveDopTemplate_(__dtSS, { name:'Врезка мойки' })");
+  var tl1 = att("dopTemplatesList_(__dtSS)");
+  ok(tl1.templates.length === 2 && tl1.templates[0].name === 'Доставка', 'список шаблонов отдаётся по порядку добавления');
+  var td1 = att("delDopTemplate_(__dtSS, '" + t1.id + "')");
+  var tl2 = att("dopTemplatesList_(__dtSS)");
+  ok(td1.ok === true && tl2.templates.length === 1 && tl2.templates[0].name === 'Врезка мойки', 'шаблон удаляется');
+  ok(att("delDopTemplate_(__dtSS, 'нет')").ok === false, 'удаление несуществующего шаблона отклонено');
+
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');
   process.exit(FAIL ? 1 : 0);
