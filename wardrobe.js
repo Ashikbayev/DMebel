@@ -2166,11 +2166,50 @@ function render3D(){
     const Dc=D-FACADE_REVEAL-HDF_THICK;
     const Hc=H-2*T;
     const zFront=FACADE_REVEAL; // z=0 — истинный перед всего шкафа (лицо фасада), корпус начинается за ним
+    const shelfCols3d=getColumns(s);
+    // ── CORE ENGINE 3D: те же part.box, что уходят в раскрой (calcPartsCore) ──
+    let coreOk3d=false;
+    if(USE_CORE_ENGINE && window.WardrobeCore){
+      try{
+        const cfgCore={width:W,height:H,depth:D,legs:0,panel:T,back:3,edge:1,
+          gapFront:T,gapBack:3,sections:buildCoreTree(s)};
+        const resCore=window.WardrobeCore.buildCarcass(cfgCore);
+        const shelfOrder3d=shelfOrderForSection(s);
+        const MD3=new THREE.MeshStandardMaterial({color:0x8d9db6, roughness:0.6, metalness:0.1});
+        let shelfSeen3d=0;
+        resCore.parts.forEach(p=>{
+          const b=p.box; if(!b)return;
+          const cx=ox+W/2+b.cx, cy=LH+b.cy, cz=zFront+b.cz;
+          if(p.kind==='rod'){
+            const g2=new THREE.CylinderGeometry(b.dz/2,b.dz/2,b.dx,16);
+            const rm=new THREE.Mesh(g2,MR); rm.rotation.z=Math.PI/2;
+            rm.position.set(cx,cy,cz); rm.castShadow=true; rm.userData={w:true}; scene.add(rm);
+            return;
+          }
+          let mat3d=ML, ud3d=null;
+          if(p.kind==='bottom') mat3d=ML2;
+          else if(p.kind==='back') mat3d=MH;
+          else if(p.kind==='dside'||p.kind==='dfront'||p.kind==='dback') mat3d=MD3;
+          else if(p.kind==='dbottom') mat3d=MH;
+          else if(p.kind==='dfacade') mat3d=isMdfMaterial(s.facade.material)?MFM:MFL;
+          if(p.kind==='shelf'){
+            const entry3d=shelfOrder3d[shelfSeen3d]; shelfSeen3d++;
+            if(entry3d){
+              ud3d={drag:true, secId:s.id, shelfId:entry3d.id,
+                minY:LH+T*2, maxY:LH+Math.max(T*2+1,H-T*2),
+                sw:b.dx, sd:b.dz};
+            }
+          }
+          addBoard(cx-b.dx/2, cy-b.dy/2, cz-b.dz/2, b.dx, b.dy, b.dz, mat3d, false, ud3d);
+        });
+        coreOk3d=true;
+      }catch(e3d){ console.warn('CORE ENGINE 3D: ошибка, откат на старый рендер', e3d); }
+    }
+    if(!coreOk3d){
     // ── Корпус (поднят на LH; дно и крыша — накладные, полная ширина W) ──
     addBoard(ox,LH+T,zFront,T,Hc,Dc); addBoard(ox+W-T,LH+T,zFront,T,Hc,Dc);
     addBoard(ox,LH+T+Hc,zFront,W,T,Dc); addBoard(ox,LH,zFront,W,T,Dc,ML2);
     addBoard(ox,LH+T,zFront+Dc,W,Hc,HDF_THICK,MH);
-    const shelfCols3d=getColumns(s);
     s.shelves.forEach(sh=>{
       const sci=Math.min(sh.col||0, Math.max(0,shelfCols3d.length-1));
       const scol=shelfCols3d[sci] || {left:T, width:W-2*T};
@@ -2219,6 +2258,7 @@ function render3D(){
       const g2=new THREE.CylinderGeometry(10,10,rodLen,16);
       const rm=new THREE.Mesh(g2,MR); rm.rotation.z=Math.PI/2;
       rm.position.set(rodCx,rh,zFront+Dc/2); rm.castShadow=true; rm.userData={w:true}; scene.add(rm);
+    }
     }
     // ── Ножки (всегда, 4 шт, высота LH=100мм) — по полному внешнему габариту D ──
     {
@@ -2474,6 +2514,19 @@ function buildCoreTree(s){
     sizes: cols.map(c => c.width),
     children: cols.map(function(_, ci){ return colNode(ci); })
   };
+}
+
+// Порядок полок, в котором их эмитит ядро (по колонкам слева направо,
+// внутри колонки снизу вверх) — сопоставляется 1:1 с res.parts.filter
+// (kind==='shelf') для драга полки в 3D (render3D).
+function shelfOrderForSection(s){
+  const cols=getColumns(s);
+  const out=[];
+  cols.forEach((c,ci)=>{
+    const hs=s.shelves.filter(sh=>(sh.col||0)===ci).slice().sort((a,b)=>a.height-b.height);
+    hs.forEach(sh=>out.push({id:sh.id, col:ci}));
+  });
+  return out;
 }
 
 // Детали ядра → формат calcParts. Имена — в стиле CRM.
