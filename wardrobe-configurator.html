@@ -57,6 +57,13 @@
   .note{font-size:12px;color:var(--ink-soft);line-height:1.5;margin-top:10px;}
   .note b{color:var(--warn);}
 
+  #view3d{width:100%;height:460px;border:1px solid var(--paper-line);border-radius:6px;background:#efe9dd;position:relative;overflow:hidden;}
+  #view3d canvas{display:block;}
+  #view3dNote{position:absolute;left:0;right:0;top:45%;text-align:center;color:var(--ink-soft);font-size:13px;padding:0 20px;}
+  .v3d-controls{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--ink-soft);}
+  .v3d-controls label{display:flex;align-items:center;gap:6px;margin:0;cursor:pointer;}
+  .v3d-controls input{width:auto;}
+
   svg{width:100%;height:auto;background:
       repeating-linear-gradient(0deg,transparent,transparent 19px,#eee2cc 19px,#eee2cc 20px),
       repeating-linear-gradient(90deg,transparent,transparent 19px,#eee2cc 19px,#eee2cc 20px);
@@ -73,7 +80,7 @@
 <div class="wrap">
   <header>
     <h1>MebelOFF — Конфигуратор шкафа (ядро геометрии)</h1>
-    <div class="sub">wardrobe-core.js v0.6 · md5 1d7659e3eea76eb260bb27d849a68e5a · дерево + кастомные проёмы · выверено по эталону (125 тестов)</div>
+    <div class="sub">wardrobe-core.js v0.6 · дерево + кастомные проёмы · выверено по эталону (125 тестов) · 3D-вид из единого списка деталей</div>
   </header>
 
   <div class="grid">
@@ -138,6 +145,16 @@
         </table>
         <div class="summary" id="summary"></div>
         <div class="note">Полки — стационарные, делят высоту на равные проёмы, кромка только по переду. Формула в ядре, покрыта тестами.</div>
+      </div>
+
+      <div class="panel">
+        <h2>3D-вид (вращение — мышью, масштаб — колесом)</h2>
+        <div id="view3d"><div id="view3dNote">Загрузка three.js…</div></div>
+        <div class="v3d-controls">
+          <label><input type="checkbox" id="v3dBack" checked> Задняя стенка</label>
+          <label><input type="checkbox" id="v3dLegs" checked> Ножки</label>
+          <label><input type="checkbox" id="v3dExplode"> Разнести детали</label>
+        </div>
       </div>
 
       <div class="panel">
@@ -451,6 +468,10 @@ function renderSvg(cfg, result) {
 function recalc() {
   var cfg = readCfg();
   var result = WardrobeCore.buildCarcass(cfg);
+  // публикация для 3D-модуля (см. скрипт three.js ниже)
+  window.__carcassCfg = cfg;
+  window.__carcassResult = result;
+  window.dispatchEvent(new CustomEvent('carcass-updated'));
   var note = document.getElementById('sectionNote');
   if (result.derived.partitionOpeningW != null) {
     note.innerHTML = cfg.partitionCount + ' перегородка(-и) → ' + (cfg.partitionCount + 1) +
@@ -476,6 +497,197 @@ document.getElementById('loadEtalon').addEventListener('click', function () {
   recalc();
 });
 recalc();
+</script>
+
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"}}</script>
+<script type="module">
+/* ============================================================
+   3D-вид ядра (этап C). ЧИТАЕТ готовый список деталей из
+   WardrobeCore.buildCarcass() — ничего не пересчитывает сам,
+   поэтому 3D физически не может разойтись с раскроем/схемой.
+   Координаты ядра (X ширина, Y высота, Z глубина, правая тройка)
+   совпадают с координатами three.js — маппинг 1:1 без преобразований.
+============================================================ */
+import * as THREE from 'three';
+
+var holder = document.getElementById('view3d');
+var note = document.getElementById('view3dNote');
+
+// Цвета по kind детали
+var KIND_STYLE = {
+  side:      { color: 0xb98a5a },
+  top:       { color: 0xc59a68 },
+  bottom:    { color: 0xc59a68 },
+  shelf:     { color: 0xe0bd8e },
+  partition: { color: 0xa87848 },
+  back:      { color: 0xefe7d6, opacity: 0.55 },
+  _default:  { color: 0xcccccc }
+};
+
+var renderer, scene, camera, target;
+var partsGroup = null, legsGroup = null;
+// Орбита: сферические координаты вокруг цели
+var orbit = { theta: -0.55, phi: 1.15, radius: 3200 };
+var drag = null;
+
+function init() {
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  } catch (e) {
+    note.textContent = 'WebGL недоступен в этом браузере — 3D-вид отключён. Раскрой и схема работают.';
+    return false;
+  }
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  holder.appendChild(renderer.domElement);
+  note.remove();
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xefe9dd);
+
+  camera = new THREE.PerspectiveCamera(40, 1, 10, 60000);
+  target = new THREE.Vector3(0, 1000, 300);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+  var sun = new THREE.DirectionalLight(0xfff4e0, 1.6);
+  sun.position.set(1800, 3200, 2600);
+  scene.add(sun);
+  var fill = new THREE.DirectionalLight(0xdde8ff, 0.5);
+  fill.position.set(-2200, 1200, -1500);
+  scene.add(fill);
+
+  var grid = new THREE.GridHelper(4000, 20, 0xc9bda0, 0xe0d6c0);
+  scene.add(grid);
+
+  // Управление: перетаскивание — вращение, колесо — масштаб
+  holder.addEventListener('pointerdown', function (e) {
+    drag = { x: e.clientX, y: e.clientY };
+    holder.setPointerCapture(e.pointerId);
+  });
+  holder.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    orbit.theta -= (e.clientX - drag.x) * 0.006;
+    orbit.phi   -= (e.clientY - drag.y) * 0.006;
+    orbit.phi = Math.max(0.15, Math.min(Math.PI - 0.15, orbit.phi));
+    drag = { x: e.clientX, y: e.clientY };
+    render();
+  });
+  holder.addEventListener('pointerup', function () { drag = null; });
+  holder.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    orbit.radius *= (e.deltaY > 0 ? 1.1 : 0.9);
+    orbit.radius = Math.max(600, Math.min(30000, orbit.radius));
+    render();
+  }, { passive: false });
+
+  window.addEventListener('resize', resize);
+  resize();
+  return true;
+}
+
+function resize() {
+  var w = holder.clientWidth, h = holder.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  render();
+}
+
+function mkMesh(part, explode, center) {
+  var st = KIND_STYLE[part.kind] || KIND_STYLE._default;
+  var geo = new THREE.BoxGeometry(part.box.dx, part.box.dy, part.box.dz);
+  var mat = new THREE.MeshLambertMaterial({ color: st.color });
+  if (st.opacity !== undefined) { mat.transparent = true; mat.opacity = st.opacity; }
+  var mesh = new THREE.Mesh(geo, mat);
+  var p = { x: part.box.cx, y: part.box.cy, z: part.box.cz };
+  if (explode) {
+    // Разнести: сдвиг от центра корпуса на 22% расстояния
+    p.x += (p.x - center.x) * 0.22;
+    p.y += (p.y - center.y) * 0.22;
+    p.z += (p.z - center.z) * 0.22;
+    if (part.kind === 'back') p.z -= 120; // ЗС дополнительно назад
+  }
+  mesh.position.set(p.x, p.y, p.z);
+  // Рёбра для читаемости
+  var edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(geo),
+    new THREE.LineBasicMaterial({ color: 0x6e3f1f, transparent: true, opacity: 0.45 })
+  );
+  mesh.add(edges);
+  return mesh;
+}
+
+function rebuild() {
+  var result = window.__carcassResult, cfg = window.__carcassCfg;
+  if (!result || !renderer) return;
+
+  if (partsGroup) { scene.remove(partsGroup); disposeGroup(partsGroup); }
+  if (legsGroup) { scene.remove(legsGroup); disposeGroup(legsGroup); }
+  partsGroup = new THREE.Group();
+  legsGroup = new THREE.Group();
+
+  var showBack = document.getElementById('v3dBack').checked;
+  var showLegs = document.getElementById('v3dLegs').checked;
+  var explode = document.getElementById('v3dExplode').checked;
+
+  var d = result.derived;
+  var totalH = cfg.legs + d.corpusH;
+  var center = { x: 0, y: cfg.legs + d.corpusH / 2, z: d.partDepth / 2 };
+
+  result.parts.forEach(function (part) {
+    if (part.kind === 'back' && !showBack) return;
+    partsGroup.add(mkMesh(part, explode, center));
+  });
+  scene.add(partsGroup);
+
+  // Ножки — условные (в ядре их пока нет как деталей), 4 шт по углам
+  if (showLegs && cfg.legs > 0) {
+    var legMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+    var lw = 40;
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (q) {
+      var leg = new THREE.Mesh(new THREE.BoxGeometry(lw, cfg.legs, lw), legMat);
+      leg.position.set(
+        q[0] * (d.corpusW / 2 - lw / 2 - 8),
+        cfg.legs / 2,
+        d.partDepth / 2 + q[1] * (d.partDepth / 2 - lw / 2 - 8)
+      );
+      legsGroup.add(leg);
+    });
+    scene.add(legsGroup);
+  }
+
+  // Цель камеры — центр шкафа; радиус подгоняем под габарит
+  target.set(0, totalH / 2, d.partDepth / 2);
+  var size = Math.max(cfg.width, totalH, cfg.depth);
+  if (!rebuild._userZoomed) orbit.radius = size * 2.6;
+  render();
+}
+
+function disposeGroup(g) {
+  g.traverse(function (o) {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) o.material.dispose();
+  });
+}
+
+function render() {
+  if (!renderer) return;
+  camera.position.set(
+    target.x + orbit.radius * Math.sin(orbit.phi) * Math.sin(orbit.theta),
+    target.y + orbit.radius * Math.cos(orbit.phi),
+    target.z + orbit.radius * Math.sin(orbit.phi) * Math.cos(orbit.theta)
+  );
+  camera.lookAt(target);
+  renderer.render(scene, camera);
+}
+
+if (init()) {
+  window.addEventListener('carcass-updated', rebuild);
+  ['v3dBack', 'v3dLegs', 'v3dExplode'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', rebuild);
+  });
+  holder.addEventListener('wheel', function () { rebuild._userZoomed = true; }, { passive: true, once: true });
+  rebuild();
+}
 </script>
 </body>
 </html>
