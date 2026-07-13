@@ -1,5 +1,5 @@
 /* ============================================================
-   MebelOFF — Wardrobe Core (ядро геометрии шкафа) v0.7
+   MebelOFF — Wardrobe Core (ядро геометрии шкафа) v0.9
    ------------------------------------------------------------
    ЕДИНЫЙ ИСТОЧНИК ПРАВДЫ о деталях шкафа.
    Чистая логика, БЕЗ DOM, БЕЗ three.js — тестируется голым node.
@@ -11,7 +11,10 @@
    ЛИБО легаси-плоскими cfg.shelfCount / cfg.partitionCount (совместимость).
    Дерево воспроизводит реальный эталон-стеллаж из ПО (см. buildSection).
    ФАСАДЫ: накладные створки (buildFacades), эталон 1895×396 ×2.
-   Впереди: ниши, штанги, петли/присадка, витрины.
+   ШТАНГА: лист дерева {type:'rod'} — ⚠ БЕЗ эталона ПО, допущения в buildRod.
+   ЯЩИКИ: лист дерева {type:'drawers'} — ВЫВЕРЕНО по эталону ПО
+     (46 деталей, ЛДСП 7.8 м², ХДФ 2.2 м²), см. buildDrawers.
+   Впереди: ниши, петли/присадка, витрины.
 
    Система координат (мм), правая тройка:
      X — ширина  (вправо +)
@@ -53,6 +56,15 @@
     //               (равная часть остатка). Нет sizes → все доли равны.
     //   children  — длина N+1 (по под-ячейке слева-направо / снизу-вверх),
     //               элемент null = пустая ячейка (лист). Короче N+1 → хвост = null.
+    //   ЛИСТ-СУЩНОСТЬ: вместо null в children можно положить штангу:
+    //     { type:'rod', drop?, dia?, gap? } — труба + 2 держателя в ячейке.
+    //     БЕЗ ЭТАЛОНА ИЗ ПО — допущения задокументированы в buildRod, сверить!
+    //   ЛИСТ-СУЩНОСТЬ: секция с ящиками (ВЫВЕРЕНА по эталону ПО):
+    //     { type:'drawers', count, heights?, secTop?, secBottom?, boxDepth?,
+    //       topOffset?, bottomOffset?, bottomThick?, bottomInset?, clearance?,
+    //       railFront?, railBack?, fGapTop?, fGapBottom?, fGapSide? }
+    //     Свои стойки + 2 планки + на ящик: 2 боковины, перед/зад,
+    //     дно ХДФ, фасад, направляющие (фурнитура). См. buildDrawers.
     // Корень дерева = чистовой проём корпуса (innerW × clearH).
     sections: null,
     // ── НАКЛАДНЫЕ ФАСАДЫ (створки на фронт корпуса) ─────────────
@@ -87,9 +99,11 @@
       kind: o.kind,            // 'side' | 'top' | 'bottom' | 'back'
       material: o.material,    // 'ldsp' | 'hdf'
       thick: o.thick,          // толщина детали (16 или 3)
-      // габаритный размер детали в раскрое (то, что режется):
-      cutL: Math.round(o.cutL),  // длина в раскрое
-      cutW: Math.round(o.cutW),  // ширина в раскрое
+      // габаритный размер детали в раскрое (то, что режется).
+      // Корпусные детали ПО режет в целые мм (109.4→109, 360.8→361),
+      // фасады — с точностью 0.1 (146.4) → флаг o.fine (эталон image 2):
+      cutL: o.fine ? Math.round(o.cutL * 10) / 10 : Math.round(o.cutL),
+      cutW: o.fine ? Math.round(o.cutW * 10) / 10 : Math.round(o.cutW),
       // окромлённые стороны с их ДЛИНОЙ (для метража ленты):
       edges: o.edges || [],    // [{side:'front', len: 798}, ...]
       // 3D-позиция: центр детали и габарит по осям сцены
@@ -128,6 +142,189 @@
   }
 
   /* ============================================================
+     buildRod — ШТАНГА в ячейке дерева (лист-сущность).
+     ⚠ ЭТАЛОНА ИЗ ПО НЕТ — все правила ниже ДОПУЩЕНИЯ, сверить позже:
+       drop = 100 — от ВЕРХА ячейки до ОСИ трубы, мм (в ПО обычно 40–120);
+       dia  = 25  — диаметр круглой трубы (овал 30×15 добавим по эталону);
+       gap  = 2   — зазор трубы до стенки с КАЖДОЙ стороны (посадка в
+                    держатель): длина трубы = ширина ячейки − 2·gap;
+       по глубине ось трубы = середина глубины детали (в ПО часто
+                    фикс. отступ от переда — уточнить);
+       держатели — фурнитура 2 шт (Штангодержатель), НЕ панель:
+                    не попадают в раскрой и в м², идут в part.hardware.
+     Деталь: kind='rod', material='metal' (исключён из м² ЛДСП/ХДФ),
+     cutL = длина трубы (торцовка), cutW = dia, кромки нет.
+  ============================================================ */
+  function buildRod(node, cell, ctx, parts) {
+    var drop = (typeof node.drop === 'number') ? node.drop : 100;
+    var dia = (typeof node.dia === 'number') ? node.dia : 25;
+    var gap = (typeof node.gap === 'number') ? node.gap : 2;
+    var cellW = cell.x1 - cell.x0;
+    var len = cellW - 2 * gap;
+    ctx.counters.rod++;
+    parts.push(mkPart({
+      name: 'Штанга_' + ctx.counters.rod, kind: 'rod',
+      material: 'metal', thick: dia,
+      cutL: len, cutW: dia,
+      edges: [],
+      box: {
+        cx: (cell.x0 + cell.x1) / 2, cy: cell.y1 - drop, cz: cell.z,
+        dx: len, dy: dia, dz: dia
+      }
+    }));
+    parts[parts.length - 1].hardware = [{ name: 'Штангодержатель', qty: 2 }];
+  }
+
+  /* ============================================================
+     buildDrawers — СЕКЦИЯ С ЯЩИКАМИ в ячейке дерева (лист-сущность).
+     ВЫВЕРЕНО ПО ЭТАЛОНУ ИЗ ПО (шкаф 800×2000×600, колонки 376,
+     секция в проёме 360.8, ящиков 2, дно накладное 3/отступ 1,
+     шариковые направляющие: глубина 550, отступ верх 50 / низ 20):
+       ЯСтойка ×2       361 × 580   (=проём 360.8→361; глубина 580, см. ⚠)
+       ЯПланка перед    342 × 70    (=проём секции 344 − 2·edge)
+       ЯПланка зад      342 × 68
+       на ящик: бок ×2  549 × 109   (=550−edge × 180.4−50−20−edge=109.4→109)
+                п/з ×2  285 × 109   (=короб 318 − 2·panel − edge)
+                дно ХДФ 316 × 548   (=короб/глубина − 2·bottomInset, не кромится)
+                фасад 146.4 × 338   (=гео − 2·edge, точность 0.1 — fine)
+     Правила (все ✓ сходятся с раскроем ПО, image 2):
+       проём секции = ячейка − 2·panel (секция несёт СВОИ стойки);
+       короб по ширине = проём − clearance (26 — шариковые направляющие);
+       зона слотов = высота ячейки − secTop − secBottom; делится на
+       count долей БЕЗ панелей между (splitSizes, panel=0), heights
+       как sizes (число=фикс, null=авто); слот 1 — НИЖНИЙ (как в ПО:
+       «Высота ящика 1 (нижний)»); эталон: 360.8/2 = 180.4.
+     ⚠ ДОПУЩЕНИЯ (раскрой их не разделяет — сверить с ПО при случае):
+       fGapTop=30 / fGapBottom=2 — в раскрое видна только СУММА 32
+         (зазор-захват над фасадом, стиль «Модерн» без ручек);
+       глубина ЯСтойки = partDepth + edge (эталон 580 при полках 579) —
+         видимо, стойка секции без задней подрезки;
+       планка 70 — спереди, 68 — сзади (в ПО обе «Планка_верхняя»);
+       3D: планки плашмя под верхом ячейки; короб передним краем
+         заподлицо с корпусом; дно накладное снизу короба.
+     Фурнитура: «Направляющие шариковые {boxDepth} мм (компл.)» ×1 на
+       ящик (комплект = 2 планки), висит на левой боковине → summary.
+     Имена (маппинг на имена ПО — в даунстрим-отображении):
+       ЯщикБЛ/ЯщикБП → «ЯщикБ», ЯщикП/ЯщикЗ → «ЯщикП»,
+       ЯщикД → «ЯщикД», ЯщикФ → «Фасад_Модерн».
+  ============================================================ */
+  function buildDrawers(node, cell, ctx, parts) {
+    function num(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : d; }
+    var panel = ctx.panel, pd = ctx.partDepth;
+    var edge = num(ctx.edge, 1);
+    var count = node.count | 0;
+    if (count <= 0) return;
+    var secTop = num(node.secTop, 0), secBottom = num(node.secBottom, 0);
+    var boxDepth = num(node.boxDepth, 550);
+    var topOffset = num(node.topOffset, 50), bottomOffset = num(node.bottomOffset, 20);
+    var bottomThick = num(node.bottomThick, 3), bottomInset = num(node.bottomInset, 1);
+    var clearance = num(node.clearance, 26);
+    var railFront = num(node.railFront, 70), railBack = num(node.railBack, 68);
+    var fGapTop = num(node.fGapTop, 30), fGapBottom = num(node.fGapBottom, 2);
+    var fGapSide = num(node.fGapSide, 2);
+
+    var cellH = cell.y1 - cell.y0;
+    var cx = (cell.x0 + cell.x1) / 2;
+    var opening = (cell.x1 - cell.x0) - 2 * panel; // проём между своими стойками
+    var boxW = opening - clearance;                // короб по ширине
+    var s = ++ctx.counters.drawerSec;
+
+    // ── Стойки секции (2 шт), кромка — передний торец ────────────
+    function post(name, pcx) {
+      return mkPart({
+        name: name, kind: 'dpost', material: 'ldsp', thick: panel,
+        cutL: cellH, cutW: pd + edge,              // ⚠ эталон 580 при pd 579
+        edges: [{ side: 'front', len: cellH }],
+        box: { cx: pcx, cy: (cell.y0 + cell.y1) / 2, cz: cell.z, dx: panel, dy: cellH, dz: pd }
+      });
+    }
+    parts.push(post('ЯСтойка_левая_' + s, cell.x0 + panel / 2));
+    parts.push(post('ЯСтойка_правая_' + s, cell.x1 - panel / 2));
+
+    // ── Планки верхние (перед/зад), плашмя под верхом ячейки ─────
+    function rail(name, w, rcz) {
+      return mkPart({
+        name: name, kind: 'drail', material: 'ldsp', thick: panel,
+        cutL: opening - 2 * edge, cutW: w,
+        edges: [{ side: 'front', len: opening - 2 * edge }],
+        box: { cx: cx, cy: cell.y1 - panel / 2, cz: rcz, dx: opening, dy: panel, dz: w }
+      });
+    }
+    parts.push(rail('ЯПланка_перед_' + s, railFront, pd - railFront / 2));
+    parts.push(rail('ЯПланка_зад_' + s, railBack, railBack / 2));
+
+    // ── Слоты (снизу вверх) и ящики ──────────────────────────────
+    var zoneY0 = cell.y0 + secBottom, zoneY1 = cell.y1 - secTop;
+    var slots = splitSizes(node.heights, count, zoneY1 - zoneY0, 0, 0);
+    var ycur = zoneY0, i, slotH, k, bY0, bY1, bH, geomW, geomH;
+    for (i = 0; i < count; i++) {
+      slotH = slots[i];
+      k = ++ctx.counters.drawer;
+      bY0 = ycur + bottomOffset;                   // низ короба в слоте
+      bY1 = ycur + slotH - topOffset;              // верх короба
+      bH = bY1 - bY0;
+
+      // Боковины ×2: длина = глубина короба − подрезка,
+      // высота − подрезка под кромку (эталон 109.4 → раскрой 109)
+      function side(name, scx) {
+        return mkPart({
+          name: name, kind: 'dside', material: 'ldsp', thick: panel,
+          cutL: boxDepth - edge, cutW: bH - edge,
+          edges: [{ side: 'top', len: boxDepth - edge }],
+          box: { cx: scx, cy: (bY0 + bY1) / 2, cz: pd - boxDepth / 2, dx: panel, dy: bH, dz: boxDepth }
+        });
+      }
+      parts.push(side('ЯщикБЛ_' + k, cx - (boxW - panel) / 2));
+      parts[parts.length - 1].hardware = [
+        { name: 'Направляющие шариковые ' + boxDepth + ' мм (компл.)', qty: 1 }
+      ];
+      parts.push(side('ЯщикБП_' + k, cx + (boxW - panel) / 2));
+
+      // Перед / Зад: между боковинами, −edge (посадка, эталон 285)
+      function fb(name, fkind, fcz) {
+        return mkPart({
+          name: name, kind: fkind, material: 'ldsp', thick: panel,
+          cutL: boxW - 2 * panel - edge, cutW: bH - edge,
+          edges: [{ side: 'top', len: boxW - 2 * panel - edge }],
+          box: { cx: cx, cy: (bY0 + bY1) / 2, cz: fcz, dx: boxW - 2 * panel, dy: bH, dz: panel }
+        });
+      }
+      parts.push(fb('ЯщикП_' + k, 'dfront', pd - panel / 2));
+      parts.push(fb('ЯщикЗ_' + k, 'dback', pd - boxDepth + panel / 2));
+
+      // Дно ХДФ: накладное снизу короба, отступ по краям bottomInset
+      parts.push(mkPart({
+        name: 'ЯщикД_' + k, kind: 'dbottom', material: 'hdf', thick: bottomThick,
+        cutL: boxW - 2 * bottomInset, cutW: boxDepth - 2 * bottomInset,
+        edges: [],
+        box: {
+          cx: cx, cy: bY0 - bottomThick / 2, cz: pd - boxDepth / 2,
+          dx: boxW - 2 * bottomInset, dy: bottomThick, dz: boxDepth - 2 * bottomInset
+        }
+      }));
+
+      // Фасад: в слоте, утоплен на fGap*, раскрой = гео − 2·edge, fine 0.1
+      geomW = opening - 2 * fGapSide;
+      geomH = slotH - fGapTop - fGapBottom;
+      parts.push(mkPart({
+        name: 'ЯщикФ_' + k, kind: 'dfacade', material: 'ldsp', thick: panel, fine: true,
+        cutL: geomH - 2 * edge, cutW: geomW - 2 * edge,
+        edges: [
+          { side: 'top', len: geomW - 2 * edge },
+          { side: 'bottom', len: geomW - 2 * edge },
+          { side: 'left', len: geomH - 2 * edge },
+          { side: 'right', len: geomH - 2 * edge }
+        ],
+        box: {
+          cx: cx, cy: ycur + fGapBottom + geomH / 2, cz: pd + panel / 2,
+          dx: geomW, dy: geomH, dz: panel
+        }
+      }));
+      ycur += slotH;
+    }
+  }
+
+  /* ============================================================
      buildSection — рекурсивный обход ДЕРЕВА СЕКЦИЙ.
      Делит одну ячейку cell и плодит детали наполнения в parts.
 
@@ -152,6 +349,16 @@
     var children = node.children || [];
     var slots = N + 1, sizes, s, sc = [];
 
+    if (node.type === 'rod') {
+      // ЛИСТ-СУЩНОСТЬ: штанга занимает ячейку целиком, детей нет.
+      buildRod(node, cell, ctx, parts);
+      return;
+    }
+    if (node.type === 'drawers') {
+      // ЛИСТ-СУЩНОСТЬ: секция с ящиками занимает ячейку целиком.
+      buildDrawers(node, cell, ctx, parts);
+      return;
+    }
     if (node.type === 'panels') {
       // N вертикальных перегородок делят ШИРИНУ на slots долей (sizes или поровну).
       // Каждая перегородка режется РОВНО в высоту ячейки.
@@ -253,7 +460,7 @@
       gcx = xcur + gL + geomW / 2;       // центр створки в утопленном слоте
       parts.push(mkPart({
         name: 'Фасад_' + (i + 1), kind: 'facade',
-        material: mat, thick: thick,
+        material: mat, thick: thick, fine: true,
         cutL: cutH, cutW: cutW,
         edges: [
           { side: 'top', len: cutW },
@@ -381,7 +588,7 @@
       // Корневая ячейка = чистовой проём корпуса:
       //   по X — между внутренними гранями стоек (±innerW/2),
       //   по Y — от верха дна до низа крыши (высота = clearH = 1868).
-      var ctx = { panel: c.panel, partDepth: partDepth, counters: { shelf: 0, panel: 0 } };
+      var ctx = { panel: c.panel, partDepth: partDepth, edge: edge, counters: { shelf: 0, panel: 0, rod: 0, drawerSec: 0, drawer: 0 } };
       var rootCell = {
         x0: -innerW / 2, x1: innerW / 2,
         y0: c.legs + c.panel,               // верх дна
@@ -446,9 +653,16 @@
     if (c.facades) buildFacades(c.facades, c, partDepth + (typeof c.facades.thick === 'number' ? c.facades.thick : c.panel) / 2, parts);
 
     // ── Сводка ──────────────────────────────────────────────────
-    var edgeTotal = 0, areaLdsp = 0, areaHdf = 0;
+    var edgeTotal = 0, areaLdsp = 0, areaHdf = 0, hardware = {};
     for (var i = 0; i < parts.length; i++) {
       edgeTotal += partEdgeLen(parts[i]);
+      if (parts[i].hardware) {
+        for (var hi = 0; hi < parts[i].hardware.length; hi++) {
+          var hw = parts[i].hardware[hi];
+          hardware[hw.name] = (hardware[hw.name] || 0) + hw.qty;
+        }
+      }
+      if (parts[i].material === 'metal') continue; // фурнитура/металл — не в м²
       var a = parts[i].cutL * parts[i].cutW / 1e6; // м²
       if (parts[i].material === 'hdf') areaHdf += a; else areaLdsp += a;
     }
@@ -467,7 +681,8 @@
         edgeLenMm: Math.round(edgeTotal),
         edgeLenM: Math.round(edgeTotal) / 1000,
         areaLdspM2: Math.round(areaLdsp * 1000) / 1000,
-        areaHdfM2: Math.round(areaHdf * 1000) / 1000
+        areaHdfM2: Math.round(areaHdf * 1000) / 1000,
+        hardware: hardware
       }
     };
   }
@@ -477,6 +692,8 @@
     buildCarcass: buildCarcass,
     buildSection: buildSection,
     buildFacades: buildFacades,
+    buildRod: buildRod,
+    buildDrawers: buildDrawers,
     partEdgeLen: partEdgeLen
   };
 

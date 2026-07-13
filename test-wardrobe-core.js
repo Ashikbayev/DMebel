@@ -466,6 +466,148 @@ eq(r0.parts.filter(function (p) { return p.kind === 'facade'; }).length, 0, 'б�
 eq(r0.parts.length, 5, 'без наполнения и фасадов — 5 деталей корпуса');
 
 
+// ── ШТАНГА: лист дерева (⚠ допущения — эталона из ПО нет) ──
+console.log('── Штанга: лист дерева (допущения, сверить с ПО) ──');
+// Шкаф 800×2000: корень panels(1) → две колонки 376; в правой штанга.
+var rr = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'panels', count: 1, children: [
+    null,
+    { type: 'rod' }
+  ] }
+});
+var rod = byName(rr.parts, 'Штанга_1');
+ok(rod, 'деталь Штанга_1 есть');
+eq(rod.kind, 'rod', 'kind=rod');
+eq(rod.material, 'metal', 'материал metal');
+eq(rod.cutL, 372, 'длина трубы = ячейка 376 − 2·2 (gap по умолчанию)');
+eq(rod.cutW, 25, 'диаметр по умолчанию 25');
+eq(rod.edges.length, 0, 'труба не кромится');
+// позиция: правая колонка [ +8 .. +384 ], центр +196; ось на 100 ниже верха ячейки
+eq(rod.box.cx, 196, 'штанга по центру правой колонки (cx=196)');
+eq(rod.box.cy, (100 + 16 + 1868) - 100, 'ось трубы = верх ячейки − drop(100)');
+eq(rod.box.dz, 25, 'габарит по глубине = диаметр');
+// фурнитура
+eq(rod.hardware.length, 1, 'у штанги фурнитура');
+eq(rod.hardware[0].qty, 2, 'держателей 2');
+eq(rr.summary.hardware['Штангодержатель'], 2, 'сводка: 2 штангодержателя');
+// металл не в м²: площадь как без штанги
+var rr0 = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'panels', count: 1, children: [null, null] }
+});
+eq(rr.summary.areaLdspM2, rr0.summary.areaLdspM2, 'металл не входит в м² ЛДСП');
+eq(rr.parts.length, rr0.parts.length + 1, 'штанга = +1 деталь');
+
+// Кастомные параметры + штанга в под-ячейке (над полками)
+var rc = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'shelves', count: 1, sizes: [null, 500], children: [
+    null,
+    { type: 'rod', drop: 60, dia: 30, gap: 5 }
+  ] }
+});
+var rod2 = byName(rc.parts, 'Штанга_1');
+eq(rod2.cutL, 768 - 10, 'кастом gap=5: труба = проём 768 − 2·5');
+eq(rod2.cutW, 30, 'кастом диаметр 30');
+// верхняя ячейка: y1 = верх проёма = 100+16+1868; ось = y1 − 60
+eq(rod2.box.cy, 1984 - 60, 'кастом drop=60 от верха ВЕРХНЕЙ ячейки');
+// без штанг фурнитуры в сводке нет
+ok(!rr0.summary.hardware['Штангодержатель'], 'без штанги держателей в сводке нет');
+
+
+// ── ЯЩИКИ: реальный эталон из ПО (шкаф image 1, раскрой image 2) ──
+// Настройки ПО: секция с ящиками (2), дно накладное 3 мм / отступ 1,
+// шариковые направляющие: глубина короба 550, отступ верх 50 / низ 20.
+console.log('── Ящики: эталон 800×2000×600, 2 секции × 2 ящика ──');
+// Колонки 376; в каждой shelves(4) → проёмы 360.8; во 2-м снизу — ящики.
+var drTree = { type: 'panels', count: 1, children: [
+  { type: 'shelves', count: 4, children: [null, { type: 'drawers', count: 2 }, null, null, null] },
+  { type: 'shelves', count: 4, children: [null, { type: 'drawers', count: 2 }, null, null, null] }
+] };
+var rd = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3, sections: drTree
+});
+function cntIf(pred) { var n = 0; rd.parts.forEach(function (p) { if (pred(p)) n++; }); return n; }
+function cutCnt(kind, L, W) {
+  return cntIf(function (p) { return p.kind === kind && p.cutL === L && p.cutW === W; });
+}
+// «Общее количество деталей: 46» — как в ПО
+eq(rd.parts.length, 46, 'всего деталей 46 (эталон ПО)');
+// Корпус/полки не изменились: Полка 376×579 ×8
+eq(cutCnt('shelf', 376, 579), 8, 'Полка 376×579 ×8');
+// Стойки секций (в ПО «Стойка_левая/правая» 361×580 ×2+2)
+eq(cutCnt('dpost', 361, 580), 4, 'ЯСтойка 361×580 ×4');
+// Планки верхние: 342×70 ×2 (перед) и 342×68 ×2 (зад)
+eq(cutCnt('drail', 342, 70), 2, 'ЯПланка перед 342×70 ×2');
+eq(cutCnt('drail', 342, 68), 2, 'ЯПланка зад 342×68 ×2');
+// Боковины (ПО «ЯщикБ» 549×109 ×8): 550−подрезка × 109.4→109
+eq(cutCnt('dside', 549, 109), 8, 'ЯщикБ 549×109 ×8');
+// Перед/зад (ПО «ЯщикП» 285×109 ×8): короб 318 − 32 − 1
+eq(cntIf(function (p) {
+  return (p.kind === 'dfront' || p.kind === 'dback') && p.cutL === 285 && p.cutW === 109;
+}), 8, 'ЯщикП 285×109 ×8');
+// Дно (ПО «ЯщикД» 316×548 ×4, лист ХДФ)
+eq(cutCnt('dbottom', 316, 548), 4, 'ЯщикД 316×548 ×4');
+var dd1 = byName(rd.parts, 'ЯщикД_1');
+eq(dd1.material, 'hdf', 'дно ящика — ХДФ');
+eq(dd1.thick, 3, 'дно 3 мм');
+eq(dd1.edges.length, 0, 'дно не кромится');
+// Фасады (ПО «Фасад_Модерн» 146.4×338 ×4) — точность 0.1 (fine)
+eq(cutCnt('dfacade', 146.4, 338), 4, 'ЯщикФ 146.4×338 ×4');
+// Сводка: площади сходятся с шапками раскроя ПО
+eq(rd.summary.areaHdfM2, 2.207, 'ХДФ 2.207 м² (ПО: 2.2 кв.м)');
+ok(Math.abs(rd.summary.areaLdspM2 - 7.8) < 0.05,
+  'ЛДСП ≈ 7.8 м² (ПО: 7.8 кв.м), факт ' + rd.summary.areaLdspM2);
+// Фурнитура: по комплекту направляющих на ящик
+eq(rd.summary.hardware['Направляющие шариковые 550 мм (компл.)'], 4,
+  'направляющие 550: 4 комплекта');
+// Сквозная нумерация секций/ящиков
+ok(byName(rd.parts, 'ЯСтойка_левая_2'), 'вторая секция пронумерована');
+ok(byName(rd.parts, 'ЯщикФ_4'), 'четвёртый ящик пронумерован');
+// Геометрия: короб и фасад на местах (⚠ 3D-допущения, раскрой не трогают)
+var db1 = byName(rd.parts, 'ЯщикБЛ_1');
+var df1 = byName(rd.parts, 'ЯщикФ_1');
+var df2 = byName(rd.parts, 'ЯщикФ_2');
+eq(db1.box.dz, 550, 'глубина короба в 3D = 550');
+eq(df1.box.cz, 579 + 8, 'фасад ящика перед корпусом (cz = 587)');
+ok(df1.box.cy < df2.box.cy, 'ящик 1 — НИЖНИЙ (как в ПО)');
+// Металл/фурнитура не попали в м² и в детали: 46 — только панели
+eq(cntIf(function (p) { return p.material === 'metal'; }), 0, 'металла в деталях нет');
+
+// ── ЯЩИКИ: кастомная секция (heights, направляющие 500) ──
+console.log('── Ящики: кастом (3 ящика, heights, глубина 500) ──');
+var rd2 = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'panels', count: 1, children: [
+    null,
+    { type: 'shelves', count: 1, sizes: [700, null], children: [
+      { type: 'drawers', count: 3, heights: [200, 250, null],
+        boxDepth: 500, topOffset: 40, bottomOffset: 10 },
+      null
+    ] }
+  ] }
+});
+var cs1 = byName(rd2.parts, 'ЯщикБЛ_1');
+eq(cs1.cutL, 499, 'кастом: боковина = 500 − подрезка');
+eq(cs1.cutW, 149, 'кастом: высота боковины 200−40−10−1');
+var cf1 = byName(rd2.parts, 'ЯщикФ_1');
+eq(cf1.cutL, 166, 'кастом: фасад 200−30−2−2·кромка = 166');
+eq(cf1.cutW, 338, 'кастом: ширина фасада от проёма секции');
+var cd1 = byName(rd2.parts, 'ЯщикД_1');
+eq(cd1.cutL, 316, 'кастом: дно по ширине короба − 2·1');
+eq(cd1.cutW, 498, 'кастом: дно по глубине 500 − 2·1');
+// авто-высота третьего слота: 700 − 200 − 250 = 250 → боковина 199
+var cs3 = byName(rd2.parts, 'ЯщикБЛ_3');
+eq(cs3.cutW, 199, 'кастом: авто-высота 3-го ящика (250−40−10−1)');
+eq(rd2.summary.hardware['Направляющие шариковые 500 мм (компл.)'], 3,
+  'кастом: 3 комплекта направляющих 500 мм');
+
 // ── Итог ──
 console.log('');
 console.log('Пройдено: ' + passed + ', провалено: ' + failed);
