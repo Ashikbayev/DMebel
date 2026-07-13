@@ -399,6 +399,73 @@ var cs5shelves = pickByCut(cs5.parts, 'shelf', 500);
 eq(cs5shelves.length, 2, 'кастом+вложенность: 2 полки шириной 500 в широкой колонке');
 
 
+// ── ФАСАДЫ: реальный эталон 800×2000, 2 створки → 1895×396 ×2 ──
+console.log('── Фасады: эталон 800×2000, 2 створки (1895×396 ×2) ──');
+var rf = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  facades: { count: 2, gapTop: 2, gapBottom: 101, gapLeft: 1, gapRight: 1, material: 'ldsp' }
+});
+var fac = rf.parts.filter(function (p) { return p.kind === 'facade'; });
+eq(fac.length, 2, 'фасадов ровно 2');
+eq(rf.parts.length, 7, 'всего 7 деталей (5 корпус + 2 фасада)');
+var f1 = byName(rf.parts, 'Фасад_1');
+ok(f1, 'деталь Фасад_1 есть');
+eq(f1.cutL, 1895, 'Фасад_1 высота реза (2000−2−101−2·кромка)');
+eq(f1.cutW, 396, 'Фасад_1 ширина реза (400−1−1−2·кромка)');
+eq(f1.material, 'ldsp', 'Фасад_1 материал');
+eq(f1.thick, 16, 'Фасад_1 толщина (по умолчанию = panel)');
+eq(f1.edges.length, 4, 'Фасад_1 окромлён по кругу (4 стороны)');
+var f2 = byName(rf.parts, 'Фасад_2');
+eq(f2.cutW, 396, 'Фасад_2 ширина реза');
+// геометрия/позиции
+eq(f1.box.dy, 1897, 'Фасад геом. высота = 2000−2−101');
+eq(f1.box.dx, 398, 'Фасад геом. ширина = 400−1−1');
+eq(f1.box.cx, -200, 'Фасад_1 центр слева (cx=−200)');
+eq(f2.box.cx, 200, 'Фасад_2 центр справа (cx=+200)');
+eq(f1.box.cy, 1049.5, 'Фасад центр по высоте = (101+1998)/2');
+eq(f1.opening, 'right', 'Фасад_1 открывание направо (по умолчанию)');
+eq(f2.opening, 'left', 'Фасад_2 открывание налево');
+// накладной: лежит ПЕРЕД корпусом (cz > передний торец стойки partDepth=579)
+ok(f1.box.cz > rf.derived.partDepth, 'Фасад накладной — перед корпусом (cz > partDepth)');
+eq(f1.box.cz, rf.derived.partDepth + 8, 'Фасад cz = partDepth + thick/2');
+
+// Средний зазор между створками = gapRight(1)+gapLeft(1) = 2 мм
+var f1right = f1.box.cx + f1.box.dx / 2;  // −1
+var f2left = f2.box.cx - f2.box.dx / 2;   // +1
+eq(f2left - f1right, 2, 'зазор между створками = 2 мм');
+// Симметрия относительно центра корпуса
+eq(f1.box.cx + f2.box.cx, 0, 'створки симметричны относительно 0');
+
+// ── ФАСАД: одна створка на весь фронт ──
+console.log('── Фасад: одна створка ──');
+var r1 = WC.buildCarcass({
+  width: 800, height: 2000, legs: 100, panel: 16, edge: 1,
+  facades: { count: 1, gapTop: 2, gapBottom: 101, gapLeft: 3, gapRight: 3 }
+});
+var s1 = byName(r1.parts, 'Фасад_1');
+eq(s1.cutW, 800 - 3 - 3 - 2, 'одна створка: ширина реза = 800−3−3−2 = 792');
+eq(s1.box.cx, 0, 'одна створка по центру (cx=0)');
+eq(r1.parts.filter(function (p) { return p.kind === 'facade'; }).length, 1, 'ровно 1 фасад');
+
+// ── ФАСАДЫ: неравные ширины створок (sizes) ──
+console.log('── Фасады: неравные ширины (sizes) ──');
+var r3 = WC.buildCarcass({
+  width: 900, height: 2000, legs: 100, panel: 16, edge: 1,
+  facades: { count: 2, sizes: [600, 300], gapLeft: 1, gapRight: 1, gapTop: 0, gapBottom: 0 }
+});
+var g1 = byName(r3.parts, 'Фасад_1');
+var g2 = byName(r3.parts, 'Фасад_2');
+eq(g1.cutW, 600 - 1 - 1 - 2, 'широкая створка: рез 596');
+eq(g2.cutW, 300 - 1 - 1 - 2, 'узкая створка: рез 296');
+eq(g1.box.dx + g2.box.dx + 4, 900, 'суммы геом.ширин + зазоры (4) = зона 900 (проверка раскладки)');
+
+// ── Без фасадов (обратная совместимость) ──
+var r0 = WC.buildCarcass({ width: 800, height: 2000, legs: 100, panel: 16, edge: 1 });
+eq(r0.parts.filter(function (p) { return p.kind === 'facade'; }).length, 0, 'без facades фасадов нет');
+eq(r0.parts.length, 5, 'без наполнения и фасадов — 5 деталей корпуса');
+
+
 // ── Итог ──
 console.log('');
 console.log('Пройдено: ' + passed + ', провалено: ' + failed);

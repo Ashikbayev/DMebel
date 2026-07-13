@@ -65,6 +65,9 @@
   .part-back{fill:#efe7d6;stroke:#c9bda0;stroke-width:1.5;stroke-dasharray:4 3;}
   .part-shelf{fill:#f0d9b5;stroke:var(--accent);stroke-width:2;stroke-dasharray:6 3;}
   .part-partition{fill:#d9b989;stroke:var(--wood-dark);stroke-width:2;}
+  .part-facade{fill:rgba(180,150,110,0.30);stroke:var(--wood-dark);stroke-width:2.5;}
+  .fac-handle{fill:none;stroke:#3a3a3a;stroke-width:5;stroke-linecap:round;}
+  .fac-gap{stroke:var(--wood-dark);stroke-width:1;stroke-dasharray:3 3;}
   .part-leg{fill:#555;}
   .dim{font-family:var(--mono);font-size:11px;fill:var(--ink-soft);}
 </style>
@@ -124,6 +127,28 @@
           <div class="note" id="treeErr"></div>
           <div class="note">Узел: <code>{type:'shelves'|'panels', count, sizes?, children?}</code>. <code>sizes</code> — размеры проёмов в мм (число = фикс, <code>null</code> = авто); нет <code>sizes</code> → поровну.</div>
         </div>
+
+        <div class="shelf-block">
+          <h2 style="margin-bottom:8px;">Фасады (накладные створки)</h2>
+          <label style="display:flex;align-items:center;gap:8px;margin:0 0 8px;cursor:pointer;">
+            <input type="checkbox" id="facMode" style="width:auto;"> Показывать фасады
+          </label>
+          <button type="button" id="loadFacEtalon" class="btn">Загрузить эталон (2 створки)</button>
+          <div class="row2" style="margin-top:8px;">
+            <div><label for="facCount">Створок</label><input type="number" id="facCount" value="2" min="1"></div>
+            <div><label for="facThick">Толщина, мм</label><input type="number" id="facThick" value="16"></div>
+          </div>
+          <div class="row2">
+            <div><label for="facGapTop">Отступ сверху</label><input type="number" id="facGapTop" value="2"></div>
+            <div><label for="facGapBottom">Отступ снизу</label><input type="number" id="facGapBottom" value="101"></div>
+          </div>
+          <div class="row2">
+            <div><label for="facGapLeft">Отступ слева</label><input type="number" id="facGapLeft" value="1"></div>
+            <div><label for="facGapRight">Отступ справа</label><input type="number" id="facGapRight" value="1"></div>
+          </div>
+          <div class="note" id="facNote"></div>
+          <div class="note">Створки делят фронт по ширине поровну. Открывание чередуется (1-я направо). Раскрой створки = слот − отступы − 2·кромка.</div>
+        </div>
       </div>
     </div>
 
@@ -150,10 +175,10 @@
 
 <script>
 /* ============================================================
-   wardrobe-core.js — ВСТРОЕНО ВЕРБАТИМ (v0.6, md5 1d7659e3eea76eb260bb27d849a68e5a, дерево + кастомные проёмы)
+   wardrobe-core.js — ВСТРОЕНО (v0.7: дерево + кастомные проёмы + ФАСАДЫ)
    Не редактировать здесь. Источник истины — файл в репозитории.
-   Раскрой выверен по реальному эталону: глубина 579, стойка 1867, ЗС накладная 1898×798.
-   Наполнение: дерево секций (sections, с кастомными sizes) ИЛИ легаси shelfCount/partitionCount. 125/125 тестов.
+   Раскрой выверен по реальному эталону: глубина 579, стойка 1867, ЗС накладная 1898×798,
+   Фасад 1895×396 ×2 (отступы 2/101/1/1, кромка по кругу). 153/153 тестов.
 ============================================================ */
 var WardrobeCore = (function () {
   'use strict';
@@ -161,7 +186,7 @@ var WardrobeCore = (function () {
     width: 800, height: 2000, depth: 600, legs: 100,
     panel: 16, back: 3, edge: 1,
     gapFront: 16, gapBack: 3, gapLeft: 0, gapRight: 0, gapTop: 0, gapBottom: 0,
-    shelfCount: 0, partitionCount: 0, sections: null
+    shelfCount: 0, partitionCount: 0, sections: null, facades: null
   };
   function cfgWith(cfg) {
     var c = {};
@@ -234,6 +259,29 @@ var WardrobeCore = (function () {
       }
     } else { return; }
     for (s = 0; s < sc.length; s++) buildSection(children[s] || null, sc[s], ctx, parts);
+  }
+  function buildFacades(fc, c, cz, parts) {
+    var N = fc.count | 0;
+    if (N <= 0) return;
+    var edge = c.edge;
+    var thick = (typeof fc.thick === 'number') ? fc.thick : c.panel;
+    var gT = fc.gapTop || 0, gB = fc.gapBottom || 0, gL = fc.gapLeft || 0, gR = fc.gapRight || 0;
+    var mat = fc.material || 'ldsp', opening = fc.opening || [];
+    var zoneW = c.width, zoneY0 = gB, zoneY1 = c.height - gT;
+    var geomH = zoneY1 - zoneY0, cutH = geomH - 2 * edge, cyF = (zoneY0 + zoneY1) / 2;
+    var slotW = splitSizes(fc.sizes, N, zoneW, 0, 0);
+    var xcur = -zoneW / 2, i, sw, geomW, cutW, gcx;
+    for (i = 0; i < N; i++) {
+      sw = slotW[i]; geomW = sw - gL - gR; cutW = geomW - 2 * edge; gcx = xcur + gL + geomW / 2;
+      parts.push(mkPart({
+        name: 'Фасад_' + (i + 1), kind: 'facade', material: mat, thick: thick,
+        cutL: cutH, cutW: cutW,
+        edges: [{ side: 'top', len: cutW }, { side: 'bottom', len: cutW }, { side: 'left', len: cutH }, { side: 'right', len: cutH }],
+        box: { cx: gcx, cy: cyF, cz: cz, dx: geomW, dy: geomH, dz: thick }
+      }));
+      parts[parts.length - 1].opening = opening[i] || (i === 0 ? 'right' : 'left');
+      xcur += sw;
+    }
   }
   function buildCarcass(cfg) {
     var c = cfgWith(cfg);
@@ -318,6 +366,7 @@ var WardrobeCore = (function () {
         }
       }
     }
+    if (c.facades) buildFacades(c.facades, c, partDepth + (typeof c.facades.thick === 'number' ? c.facades.thick : c.panel) / 2, parts);
     var edgeTotal = 0, areaLdsp = 0, areaHdf = 0;
     for (var i = 0; i < parts.length; i++) {
       edgeTotal += partEdgeLen(parts[i]);
@@ -337,7 +386,7 @@ var WardrobeCore = (function () {
       }
     };
   }
-  return { DEFAULTS: DEFAULTS, buildCarcass: buildCarcass, buildSection: buildSection, partEdgeLen: partEdgeLen };
+  return { DEFAULTS: DEFAULTS, buildCarcass: buildCarcass, buildSection: buildSection, buildFacades: buildFacades, partEdgeLen: partEdgeLen };
 })();
 
 /* ============================================================
@@ -379,6 +428,14 @@ function readCfg() {
       }
     }
   }
+  if (document.getElementById('facMode').checked) {
+    cfg.facades = {
+      count: parseInt(document.getElementById('facCount').value, 10) || 0,
+      thick: n('facThick'),
+      gapTop: n('facGapTop'), gapBottom: n('facGapBottom'),
+      gapLeft: n('facGapLeft'), gapRight: n('facGapRight')
+    };
+  }
   return cfg;
 }
 
@@ -389,7 +446,7 @@ function renderTable(result) {
   var rows = [];
   var seen = {};
   result.parts.forEach(function (p) {
-    if (p.kind === 'shelf' || p.kind === 'partition') {
+    if (p.kind === 'shelf' || p.kind === 'partition' || p.kind === 'facade') {
       var key = p.kind + '|' + p.cutL + '|' + p.cutW;
       if (!seen[key]) { seen[key] = { p: p, count: 0 }; rows.push(seen[key]); }
       seen[key].count++;
@@ -402,7 +459,7 @@ function renderTable(result) {
     var tr = document.createElement('tr');
     var edgeLen = WardrobeCore.partEdgeLen(p);
     tr.innerHTML =
-      '<td class="name">' + (p.kind === 'shelf' ? 'Полка' : (p.kind === 'partition' ? 'Перегородка' : p.name)) + '</td>' +
+      '<td class="name">' + (p.kind === 'shelf' ? 'Полка' : (p.kind === 'partition' ? 'Перегородка' : (p.kind === 'facade' ? 'Фасад' : p.name))) + '</td>' +
       '<td class="num">' + p.cutL + '</td>' +
       '<td class="num">' + p.cutW + '</td>' +
       '<td class="num">' + r.count + '</td>' +
@@ -438,8 +495,21 @@ function renderSvg(cfg, result) {
   out += '<rect class="part-leg" x="' + (W / 2 + pad + result.derived.corpusW / 2 - 4 - legW) + '" y="' + (H - cfg.legs + pad) + '" width="' + legW + '" height="' + cfg.legs + '"></rect>';
 
   result.parts.forEach(function (p) {
+    if (p.kind === 'facade') return; // фасады рисуем поверх, отдельным проходом
     var cls = p.kind === 'back' ? 'part-back' : (p.kind === 'shelf' ? 'part-shelf' : (p.kind === 'partition' ? 'part-partition' : 'part-rect'));
     out += rect(p.box, cls);
+  });
+
+  // фасады — накладные, поверх корпуса; ручка у стороны, противоположной петлям
+  result.parts.forEach(function (p) {
+    if (p.kind !== 'facade') return;
+    out += rect(p.box, 'part-facade');
+    var x0 = p.box.cx - p.box.dx / 2 + W / 2 + pad;
+    var yTop = H - (p.box.cy + p.box.dy / 2) + pad;
+    // opening='right' → петли справа, ручка у ЛЕВОЙ кромки; 'left' → наоборот
+    var hx = (p.opening === 'right') ? (x0 + 18) : (x0 + p.box.dx - 18);
+    var hcy = yTop + p.box.dy / 2;
+    out += '<line class="fac-handle" x1="' + hx + '" y1="' + (hcy - 60) + '" x2="' + hx + '" y2="' + (hcy + 60) + '"></line>';
   });
 
   // габаритная разметка
@@ -460,6 +530,14 @@ function recalc() {
   }
   renderTable(result);
   renderSvg(cfg, result);
+  var facNote = document.getElementById('facNote');
+  var facs = result.parts.filter(function (p) { return p.kind === 'facade'; });
+  if (facs.length) {
+    facNote.innerHTML = facs.length + ' створка(-и), раскрой: <b>' + facs[0].cutL + ' × ' + facs[0].cutW + ' мм</b>' +
+      (facs.length > 1 ? ' каждая' : '');
+  } else {
+    facNote.innerHTML = '';
+  }
 }
 
 document.querySelectorAll('input, select').forEach(function (el) {
@@ -467,6 +545,16 @@ document.querySelectorAll('input, select').forEach(function (el) {
 });
 document.getElementById('treeJson').addEventListener('input', recalc);
 document.getElementById('treeMode').addEventListener('change', recalc);
+document.getElementById('facMode').addEventListener('change', recalc);
+document.getElementById('loadFacEtalon').addEventListener('click', function () {
+  document.getElementById('facMode').checked = true;
+  var set = { facCount: 2, facThick: 16, facGapTop: 2, facGapBottom: 101, facGapLeft: 1, facGapRight: 1 };
+  for (var k in set) { var el = document.getElementById(k); if (el) el.value = set[k]; }
+  // габариты эталонного шкафа (те же, что и у стеллажа)
+  var dims = { width: 800, height: 2000, depth: 600, legs: 100, panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3 };
+  for (var d in dims) { var el2 = document.getElementById(d); if (el2) el2.value = dims[d]; }
+  recalc();
+});
 document.getElementById('loadEtalon').addEventListener('click', function () {
   document.getElementById('treeMode').checked = true;
   document.getElementById('treeJson').value = JSON.stringify(ETALON_TREE, null, 2);

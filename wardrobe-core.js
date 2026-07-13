@@ -1,5 +1,5 @@
 /* ============================================================
-   MebelOFF — Wardrobe Core (ядро геометрии шкафа) v0.6
+   MebelOFF — Wardrobe Core (ядро геометрии шкафа) v0.7
    ------------------------------------------------------------
    ЕДИНЫЙ ИСТОЧНИК ПРАВДЫ о деталях шкафа.
    Чистая логика, БЕЗ DOM, БЕЗ three.js — тестируется голым node.
@@ -10,7 +10,8 @@
    Наполнение задаётся ЛИБО деревом секций (cfg.sections, рекурсия),
    ЛИБО легаси-плоскими cfg.shelfCount / cfg.partitionCount (совместимость).
    Дерево воспроизводит реальный эталон-стеллаж из ПО (см. buildSection).
-   Впереди: ниши, штанги, фасады, кастомные (неравные) проёмы.
+   ФАСАДЫ: накладные створки (buildFacades), эталон 1895×396 ×2.
+   Впереди: ниши, штанги, петли/присадка, витрины.
 
    Система координат (мм), правая тройка:
      X — ширина  (вправо +)
@@ -53,7 +54,17 @@
     //   children  — длина N+1 (по под-ячейке слева-направо / снизу-вверх),
     //               элемент null = пустая ячейка (лист). Короче N+1 → хвост = null.
     // Корень дерева = чистовой проём корпуса (innerW × clearH).
-    sections: null
+    sections: null,
+    // ── НАКЛАДНЫЕ ФАСАДЫ (створки на фронт корпуса) ─────────────
+    // Если задано — фронт закрывается count створками (см. buildFacades).
+    //   { count:N, thick:16, gapTop, gapBottom, gapLeft, gapRight,
+    //     sizes:[...], opening:['right'|'left', ...], material }
+    // Зона фасадов = ЗАДАННЫЕ Высота×Ширина (не корпус). Делится по
+    // ширине на N слотов (sizes или поровну); в каждом слоте створка
+    // утоплена на gapLeft/gapRight, по высоте — на gapTop/gapBottom.
+    // Раскрой створки = геометрия − 2·кромка (подрезка по кругу).
+    // Эталон 800×2000, N=2 → Фасад 1895×396 ×2.
+    facades: null
   };
 
   function cfgWith(cfg) {
@@ -194,6 +205,68 @@
     }
     // Рекурсия в под-ячейки (по одной на дочерний узел; отсутствующий = null)
     for (s = 0; s < sc.length; s++) buildSection(children[s] || null, sc[s], ctx, parts);
+  }
+
+  /* ============================================================
+     buildFacades — накладные фасады (створки) на фронт корпуса.
+     Плодит детали 'facade' в parts. Не режет корпус — фасады лежат
+     ПЕРЕД ним в зоне gapFront (накладные, перекрывают торцы).
+
+     Зона фасадов берётся от ЗАДАННЫХ размеров шкафа (не корпуса):
+       по X — полная ширина c.width, центр в 0 → [−W/2, +W/2];
+       по Y — от gapBottom (над цоколем) до height−gapTop.
+     Ширина делится на N слотов (fc.sizes или поровну, БЕЗ физического
+     разделителя — зазор между створками = gapRight[i] + gapLeft[i+1]).
+     В каждом слоте створка утоплена: geomW = slot−gapLeft−gapRight.
+     Раскрой = геометрия − 2·edge (подрезка/кромка по периметру).
+     Кромка — все 4 стороны (фасад окромлён по кругу).
+
+     Проверено на эталоне (800×2000, N=2, gapTop2/gapBottom101/
+     gapLeft1/gapRight1, edge1): geomH=1897→cut 1895; slot=400,
+     geomW=398→cut 396. Итог: Фасад 1895×396 ×2.
+     opening[i] ('right'|'left') хранится у детали — сторона петель/ручки.
+  ============================================================ */
+  function buildFacades(fc, c, cz, parts) {
+    var N = fc.count | 0;
+    if (N <= 0) return;
+    var edge = c.edge;
+    var thick = (typeof fc.thick === 'number') ? fc.thick : c.panel;
+    var gT = fc.gapTop || 0, gB = fc.gapBottom || 0;
+    var gL = fc.gapLeft || 0, gR = fc.gapRight || 0;
+    var mat = fc.material || 'ldsp';
+    var opening = fc.opening || [];
+
+    var zoneW = c.width;                 // полная ширина шкафа (эталон 800)
+    var zoneY0 = gB;                     // низ фасадной зоны (над цоколем)
+    var zoneY1 = c.height - gT;          // верх фасадной зоны
+    var geomH = zoneY1 - zoneY0;         // 1897
+    var cutH = geomH - 2 * edge;         // 1895
+    var cyF = (zoneY0 + zoneY1) / 2;     // центр по высоте
+
+    // Ширины слотов (без панелей между: panel=0) — sizes или поровну
+    var slotW = splitSizes(fc.sizes, N, zoneW, 0, 0);
+    var xcur = -zoneW / 2, i, sw, geomW, cutW, gcx;
+    for (i = 0; i < N; i++) {
+      sw = slotW[i];
+      geomW = sw - gL - gR;              // 398
+      cutW = geomW - 2 * edge;           // 396
+      gcx = xcur + gL + geomW / 2;       // центр створки в утопленном слоте
+      parts.push(mkPart({
+        name: 'Фасад_' + (i + 1), kind: 'facade',
+        material: mat, thick: thick,
+        cutL: cutH, cutW: cutW,
+        edges: [
+          { side: 'top', len: cutW },
+          { side: 'bottom', len: cutW },
+          { side: 'left', len: cutH },
+          { side: 'right', len: cutH }
+        ],
+        box: { cx: gcx, cy: cyF, cz: cz, dx: geomW, dy: geomH, dz: thick }
+      }));
+      // сторона петель/ручки для схемы и 3D (панель-геометрию не меняет)
+      parts[parts.length - 1].opening = opening[i] || (i === 0 ? 'right' : 'left');
+      xcur += sw;
+    }
   }
 
   /* ============================================================
@@ -367,6 +440,11 @@
       }
     }
 
+    // ── ФАСАДЫ (накладные створки) ──────────────────────────────
+    // Кладём ПЕРЕД корпусом: задняя грань фасада у переднего торца
+    // деталей корпуса (Z = partDepth), фасад занимает зону gapFront.
+    if (c.facades) buildFacades(c.facades, c, partDepth + (typeof c.facades.thick === 'number' ? c.facades.thick : c.panel) / 2, parts);
+
     // ── Сводка ──────────────────────────────────────────────────
     var edgeTotal = 0, areaLdsp = 0, areaHdf = 0;
     for (var i = 0; i < parts.length; i++) {
@@ -398,6 +476,7 @@
     DEFAULTS: DEFAULTS,
     buildCarcass: buildCarcass,
     buildSection: buildSection,
+    buildFacades: buildFacades,
     partEdgeLen: partEdgeLen
   };
 
