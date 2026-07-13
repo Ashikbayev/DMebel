@@ -71,13 +71,42 @@
   .part-rod{fill:#9aa2ab;stroke:#5c646d;stroke-width:1.5;}
   .part-leg{fill:#555;}
   .dim{font-family:var(--mono);font-size:11px;fill:var(--ink-soft);}
+
+  #treeEditorWrap{margin-top:10px;}
+  #treeEditorSvg{width:100%;height:auto;max-height:560px;background:#fff;
+    border:1px solid var(--paper-line);border-radius:6px;}
+  .te-cell{cursor:pointer;stroke-width:1.5;}
+  .te-empty{fill:#fbf8f2;stroke:var(--paper-line);}
+  .te-empty:hover{fill:#f0e6d4;}
+  .te-rod{fill:#c7ccd2;stroke:#5c646d;}
+  .te-drawers{fill:#e0c79a;stroke:var(--wood-dark);}
+  .te-facade{fill:rgba(180,150,110,0.35);stroke:var(--wood-dark);}
+  .te-selected{stroke:var(--accent);stroke-width:3;stroke-dasharray:none;}
+  .te-label{font-family:var(--sans);font-size:11px;fill:var(--ink-soft);
+    pointer-events:none;text-anchor:middle;}
+  .te-tag{cursor:pointer;}
+  .te-tag rect{fill:var(--wood);stroke:var(--wood-dark);stroke-width:1;}
+  .te-tag text{fill:#fff;font-family:var(--sans);font-size:10px;pointer-events:none;}
+  .te-tag.te-selected rect{fill:var(--accent);stroke:var(--wood-dark);}
+
+  #treeEditForm{margin-top:10px;padding:12px;border:1px solid var(--paper-line);
+    border-radius:6px;background:var(--paper);}
+  #treeEditForm .note{margin-top:2px;}
+  .te-fieldset{display:none;}
+  .te-fieldset.active{display:block;}
+  .te-checkline{display:flex;align-items:center;gap:6px;margin:8px 0 0;}
+  .te-checkline label{margin:0;cursor:pointer;}
+  .te-btnrow{display:flex;gap:8px;margin-top:12px;}
+  .te-btnrow .btn{width:auto;flex:1;}
+  .btn.te-danger{background:var(--warn);border-color:#7a3315;}
+  .btn.te-danger:hover{background:#7a3315;}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <h1>MebelOFF — Конфигуратор шкафа (ядро геометрии)</h1>
-    <div class="sub">wardrobe-core.js v0.9 · md5 6e04b45404691897ca044671f827abd9 · дерево + фасады + штанги + ЯЩИКИ + 3D · выверено по эталонам ПО (200 тестов)</div>
+    <div class="sub">wardrobe-core.js v1.3 · md5 446e264b147430244a86403a27d048a9 · дерево + фасады + штанги + ЯЩИКИ (внутр./НАКЛАДНЫЕ, эталоны 1+2) + СТВОРКИ (B3 ⚠) + ГРАНИЧНЫЕ ПОЛКИ (D ⚠) + РЕДАКТОР ДЕРЕВА (E) + 3D · 313 тестов ядра + 30 DOM</div>
   </header>
 
   <div class="grid">
@@ -122,11 +151,13 @@
             <input type="checkbox" id="treeMode" style="width:auto;"> Режим дерева (заменяет полки/перегородки выше)
           </label>
           <button type="button" id="loadEtalon" class="btn">Загрузить эталон (image 1)</button>
+          <button type="button" id="loadEtalon2" class="btn">Эталон 2: внутр. + наклад. ящики (image 3)</button>
+          <button type="button" id="loadFacadeDemo" class="btn">Пример створок (B3, ⚠ стандарт)</button>
           <label for="treeJson" style="margin-top:8px;">Дерево <code>sections</code> (JSON)</label>
           <textarea id="treeJson" spellcheck="false"
             style="width:100%;min-height:150px;padding:8px;border:1px solid var(--paper-line);border-radius:4px;font-family:var(--mono);font-size:12px;background:var(--paper);color:var(--ink);resize:vertical;"></textarea>
           <div class="note" id="treeErr"></div>
-          <div class="note">Узел: <code>{type:'shelves'|'panels', count, sizes?, children?}</code>. <code>sizes</code> — размеры проёмов в мм (число = фикс, <code>null</code> = авто); нет <code>sizes</code> → поровну. Штанга в ячейку (лист): <code>{type:'rod', drop?, dia?, gap?}</code> — ⚠ допущения без эталона ПО (drop=100 до оси, Ø25, труба=ячейка−2·2). Ящики в ячейку (лист, ВЫВЕРЕНО по эталону ПО): <code>{type:'drawers', count, heights?, boxDepth?(550), topOffset?(50), bottomOffset?(20), clearance?(26), bottomThick?(3), bottomInset?(1), railFront?(70), railBack?(68), fGapTop?(30⚠), fGapBottom?(2⚠), fGapSide?(2)}</code> — свои стойки + 2 планки; на ящик: 2 боковины, перед/зад, дно ХДФ, фасад, направляющие в фурнитуру.</div>
+          <div class="note">Узел: <code>{type:'shelves'|'panels', count, sizes?, children?}</code>. <code>sizes</code> — размеры проёмов в мм (число = фикс, <code>null</code> = авто); нет <code>sizes</code> → поровну. У <code>shelves</code> флаги <code>bottomShelf?/topShelf?</code> (⚠ ПО СТАНДАРТУ, image 5/7 нет) — граничные полки на низ/под верх ячейки, зона проёмов −16 за флаг. Штанга в ячейку (лист): <code>{type:'rod', drop?, dia?, gap?}</code> — ⚠ допущения без эталона ПО (drop=100 до оси, Ø25, труба=ячейка−2·2). Ящики в ячейку (лист, ВЫВЕРЕНО по эталонам ПО 1 и 2): <code>{type:'drawers', count, mount?('inset'|'overlay'), heights?, boxDepth?(550), topOffset?(50), bottomOffset?(20), clearance?(26), bottomThick?(3), bottomInset?(1), railFront?(70), railBack?(68), fGapTop?(30⚠), fGapBottom?(2⚠), fGapSide?(2), fGapMid?(0.8⚠, overlay), fOverhang?(16, overlay)}</code> — <b>внутренние</b>: свои стойки + 2 планки, фасад в проём секции (утоплен); <b>накладные</b>: без стоек, короб на всю ячейку «как полки», фасад поверх корпуса с перекрытием соседей. Фасад на ячейку (лист, ⚠ ПО СТАНДАРТУ, эталона ПО нет): <code>{type:'facade', count?(1), sizes?, opening?:['left'|'right'], gapTop?(2), gapBottom?(2), gapLeft?(2), gapRight?(2), thick?(16), material?('ldsp')}</code> — створки = проём ячейки − зазоры, перед корпусом, петли накладные по высоте в фурнитуру.</div>
         </div>
 
         <div class="shelf-block">
@@ -154,6 +185,15 @@
     </div>
 
     <div>
+      <div class="panel" id="treeEditorPanel" style="display:none;">
+        <h2>Редактор дерева (клик по ячейке)</h2>
+        <div class="note">Клик по пустой/листовой ячейке — задать тип. Клик по бирке над разделённой ячейкой — изменить деление или убрать его. Изменения сразу пишутся в JSON слева.</div>
+        <div id="treeEditorWrap">
+          <svg id="treeEditorSvg" viewBox="0 0 480 560" xmlns="http://www.w3.org/2000/svg"></svg>
+          <div id="treeEditForm"></div>
+        </div>
+      </div>
+
       <div class="panel">
         <h2>Раскрой</h2>
         <table id="partsTable">
@@ -189,12 +229,20 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 /* ============================================================
-   wardrobe-core.js — ВСТРОЕНО (v0.9: дерево + фасады + штанги + ЯЩИКИ)
+   wardrobe-core.js — ВСТРОЕНО (v1.1: дерево + фасады + штанги +
+   ЯЩИКИ + ФАСАДЫ НА ЯЧЕЙКУ (B3) + ГРАНИЧНЫЕ ПОЛКИ (D))
    Не редактировать здесь. Источник истины — файл в репозитории.
    Раскрой выверен по реальным эталонам: корпус (579/1867/1898×798),
-   фасады 1895×396 ×2, ЯЩИКИ (46 деталей, ЛДСП 7.8 м², ХДФ 2.2 м²:
-   ЯщикБ 549×109, ЯщикП 285×109, ЯщикД 316×548, Фасад 146.4×338).
-   Штанга: лист {type:'rod'}, допущения без эталона. 200/200 тестов.
+   фасады 1895×396 ×2, ЯЩИКИ mount:'inset' (эталон 1: 46 деталей,
+   ЯщикБ 549×109, ЯщикП 285, Фасад 146.4×338) и mount:'overlay'
+   (эталон 2: без стоек, короб = ячейка−26, ЯщикП без −1,
+   фасад 408×180 → раскрой 178×406 точно). 3D inset исправлено
+   по image 1/3: фасад утоплен в проём.
+   Штанга: лист {type:'rod'}, допущения без эталона.
+   Фасад на ячейку: лист {type:'facade'} — ⚠ ПО СТАНДАРТУ (решение
+   Дали, эталона ПО нет), см. buildCellFacade.
+   Граничные полки: флаги bottomShelf/topShelf узла shelves —
+   ⚠ ПО СТАНДАРТУ (image 5/7 нет), см. buildSection. 281/281 тестов.
 ============================================================ */
 var WardrobeCore = (function () {
   'use strict';
@@ -222,7 +270,9 @@ var WardrobeCore = (function () {
     // Узел делит ОДНУ прямоугольную ячейку:
     //   { type:'shelves'|'panels', count:N, sizes:[...], children:[узел|null, ...] }
     //   'shelves' — N полок делят ВЫСОТУ ячейки на N+1 проёмов,
-    //               каждая полка режется РОВНО в ширину ячейки.
+    //               каждая полка режется РОВНО в ширину ячейки;
+    //               ⚠ ПО СТАНДАРТУ (этап D): флаги bottomShelf/topShelf —
+    //               граничные полки на низ/под верх ячейки (см. buildSection).
     //   'panels'  — N перегородок делят ШИРИНУ ячейки на N+1 секций,
     //               каждая перегородка режется РОВНО в высоту ячейки.
     //   sizes     — опц. размеры долей (мм): число = фикс, null/нет = авто
@@ -238,6 +288,9 @@ var WardrobeCore = (function () {
     //       railFront?, railBack?, fGapTop?, fGapBottom?, fGapSide? }
     //     Свои стойки + 2 планки + на ящик: 2 боковины, перед/зад,
     //     дно ХДФ, фасад, направляющие (фурнитура). См. buildDrawers.
+    //   ЛИСТ-СУЩНОСТЬ: фасад (створки) на ячейку — ⚠ ПО СТАНДАРТУ:
+    //     { type:'facade', count?, sizes?, opening?, gapTop?, gapBottom?,
+    //       gapLeft?, gapRight?, thick?, material? } — см. buildCellFacade.
     // Корень дерева = чистовой проём корпуса (innerW × clearH).
     sections: null,
     // ── НАКЛАДНЫЕ ФАСАДЫ (створки на фронт корпуса) ─────────────
@@ -349,32 +402,132 @@ var WardrobeCore = (function () {
   }
 
   /* ============================================================
+     buildCellFacade — ФАСАД НА ЯЧЕЙКУ дерева (лист-сущность). Этап B3.
+     ⚠ ЭТАЛОНА ИЗ ПО НЕТ — правила приняты «ПО СТАНДАРТУ» (решение
+     Дали в сессии B3), сверить с раскроем ПО при первом же случае:
+       створка стоит ПЕРЕД корпусом, как фасад ящика: задняя грань
+         на переднем торце деталей (z = partDepth), толщина вперёд;
+       геометрия = ПРОЁМ ячейки − зазоры; зазоры по умолчанию 2 мм
+         со всех сторон (унифицировано с fGapSide/fGapBottom ящиков);
+         створка НЕ перекрывает торцы соседних панелей — стиль ПО,
+         виден на фасадах ящиков «Модерн»;
+       count>1: ширина ячейки делится на слоты (sizes или поровну,
+         БЕЗ панелей между); межстворочный зазор = gapRight+gapLeft (4);
+       раскрой = геометрия − 2·edge, точность 0.1 (fine), кромка —
+         все 4 стороны (как Фасад фронта и ЯщикФ);
+       петли: «Петля накладная», кол-во от ВЫСОТЫ створки (стандарт
+         мебельной практики, у ПО может отличаться):
+           < 900 → 2, < 1600 → 3, < 2000 → 4, иначе → 5;
+         идут в фурнитуру (part.hardware → summary), не в раскрой;
+       opening — сторона ПЕТЕЛЬ: одиночная 'right'; несколько —
+         крайние наружу ('left' … 'right'), середина чередуется.
+     Узел: { type:'facade', count?(1), sizes?, opening?:['left'|'right'],
+             gapTop?(2), gapBottom?(2), gapLeft?(2), gapRight?(2),
+             thick?(=panel), material?('ldsp') }
+     Деталь: kind='facade' (рендер в туле общий с buildFacades:
+     2D-ручка по opening, чекбокс «Фасады» в 3D), имя 'Створка_N' —
+     сквозная нумерация, не пересекается с 'Фасад_N' фронта.
+  ============================================================ */
+  function buildCellFacade(node, cell, ctx, parts) {
+    function num(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : d; }
+    var edge = num(ctx.edge, 1);
+    var count = node.count > 0 ? (node.count | 0) : 1;
+    var thick = num(node.thick, ctx.panel);
+    var gT = num(node.gapTop, 2), gB = num(node.gapBottom, 2);
+    var gL = num(node.gapLeft, 2), gR = num(node.gapRight, 2);
+    var mat = node.material || 'ldsp';
+    var opening = node.opening || [];
+
+    var cellH = cell.y1 - cell.y0;
+    var geomH = cellH - gT - gB;
+    var cutH = geomH - 2 * edge;
+    var cy = cell.y0 + gB + geomH / 2;
+    // Петли по высоте створки — стандарт: <900→2, <1600→3, <2000→4, ≥2000→5
+    var hinges = geomH < 900 ? 2 : geomH < 1600 ? 3 : geomH < 2000 ? 4 : 5;
+
+    var slotW = splitSizes(node.sizes, count, cell.x1 - cell.x0, 0, 0);
+    var xcur = cell.x0, i, sw, geomW, cutW, k;
+    for (i = 0; i < count; i++) {
+      sw = slotW[i];
+      geomW = sw - gL - gR;
+      cutW = geomW - 2 * edge;
+      k = ++ctx.counters.cfacade;
+      parts.push(mkPart({
+        name: 'Створка_' + k, kind: 'facade',
+        material: mat, thick: thick, fine: true,
+        cutL: cutH, cutW: cutW,
+        edges: [
+          { side: 'top', len: cutW },
+          { side: 'bottom', len: cutW },
+          { side: 'left', len: cutH },
+          { side: 'right', len: cutH }
+        ],
+        box: {
+          cx: xcur + gL + geomW / 2, cy: cy, cz: ctx.partDepth + thick / 2,
+          dx: geomW, dy: geomH, dz: thick
+        }
+      }));
+      parts[parts.length - 1].opening = opening[i] ||
+        (count === 1 ? 'right'
+          : (i === 0 ? 'left'
+            : (i === count - 1 ? 'right'
+              : (i % 2 ? 'right' : 'left'))));
+      parts[parts.length - 1].hardware = [{ name: 'Петля накладная', qty: hinges }];
+      xcur += sw;
+    }
+  }
+
+  /* ============================================================
      buildDrawers — СЕКЦИЯ С ЯЩИКАМИ в ячейке дерева (лист-сущность).
-     ВЫВЕРЕНО ПО ЭТАЛОНУ ИЗ ПО (шкаф 800×2000×600, колонки 376,
-     секция в проёме 360.8, ящиков 2, дно накладное 3/отступ 1,
-     шариковые направляющие: глубина 550, отступ верх 50 / низ 20):
-       ЯСтойка ×2       361 × 580   (=проём 360.8→361; глубина 580, см. ⚠)
+     ДВА ТИПА УСТАНОВКИ (mount), ОБА ВЫВЕРЕНЫ ПО ЭТАЛОНАМ ПО:
+     ── mount:'inset' (ВНУТРЕННИЕ, по умолчанию) ──────────────────
+     Эталон 1 (шкаф 800×2000×600, колонки 376, секция в проёме 360.8,
+     ящиков 2, дно накладное 3/отступ 1, шариковые направляющие:
+     глубина 550, отступ верх 50 / низ 20):
+       ЯСтойка ×2       361 × 580   (=проём 360.8→361; 580 = pd + edge:
+                        у стойки НЕТ задней подрезки — ПОДТВЕРЖДЕНО
+                        эталоном 2, где без подрезки стойка = полка)
        ЯПланка перед    342 × 70    (=проём секции 344 − 2·edge)
-       ЯПланка зад      342 × 68
-       на ящик: бок ×2  549 × 109   (=550−edge × 180.4−50−20−edge=109.4→109)
-                п/з ×2  285 × 109   (=короб 318 − 2·panel − edge)
-                дно ХДФ 316 × 548   (=короб/глубина − 2·bottomInset, не кромится)
-                фасад 146.4 × 338   (=гео − 2·edge, точность 0.1 — fine)
-     Правила (все ✓ сходятся с раскроем ПО, image 2):
-       проём секции = ячейка − 2·panel (секция несёт СВОИ стойки);
-       короб по ширине = проём − clearance (26 — шариковые направляющие);
+       ЯПланка зад      342 × 68    (⚠ в эталоне 2 планки 69/71 —
+                        ширины параметрические; какая перед — не видно)
+       на ящик: бок ×2  549 × 109   (=550−edge × 180.4−50−20−edge)
+                п/з ×2  285 × 109   (=короб 318 − 2·panel − 1)
+                дно ХДФ 316 × 548   (=короб/глубина − 2·bottomInset)
+                фасад 146.4 × 338   (=гео − 2·edge, fine 0.1)
+     Правила inset: проём секции = ячейка − 2·panel (секция несёт СВОИ
+       стойки + 2 планки); короб = проём − clearance (26); фасад В
+       РАЗМЕР ПРОЁМА СЕКЦИИ минус fGap* (внутренний).
+     3D inset (ИСПРАВЛЕНО по рендеру ПО, image 1/3 эталона 2): фасад
+       УТОПЛЕН В ПРОЁМ (передняя грань заподлицо с фронтом деталей,
+       cz = pd − panel/2), короб сдвинут назад на panel (за фасад).
+     ── mount:'overlay' (НАКЛАДНЫЕ, эталон 2: image 1–8) ──────────
+     Эталон 2 (та же геометрия, проект БЕЗ подрезки кромки; сверка
+     по деталям, не зависящим от подрезки, сошлась точно):
+       СВОИХ СТОЕК И ПЛАНОК НЕТ — короб на всю ширину ячейки,
+       «по ширине как полки» (Дали):
+         короб = ячейка − clearance      (376−26 = 350 ✓ ЯщикД 348)
+         п/з   = короб − 2·panel, БЕЗ −1 (350−32 = 318 ✓ раскрой)
+         дно   = короб/глубина − 2·bottomInset (348×548 ✓ точно)
+       ФАСАД НАКЛАДНОЙ, перед корпусом (в зоне gapFront — «отступ
+       спереди 16»), ПЕРЕКРЫВАЕТ соседние панели:
+         гео W = ячейка + 2·fOverhang, fOverhang по умолч. = panel
+                 (376+32 = 408 ✓ панель ПО, image 6/7)
+         по высоте фасады заполняют зону слотов ЗАПОДЛИЦО с краями,
+         межфасадный зазор fGapMid (0.8): 180+0.8+180 = 360.8 ✓
+                 (⚠ разбивка 0.4/0.4 на фасад — из одного расчёта)
+         раскрой = гео − 2·edge, fine: 178×406 ✓ ТОЧНО как в ПО
+       fGapTop/fGapBottom/fGapSide в overlay НЕ участвуют.
+       3D: короб передним краем заподлицо с корпусом (pd), фасад
+       pd..pd+panel; у детали фасада поле mount='overlay' (для ручки).
+     ── Общее ─────────────────────────────────────────────────────
        зона слотов = высота ячейки − secTop − secBottom; делится на
        count долей БЕЗ панелей между (splitSizes, panel=0), heights
-       как sizes (число=фикс, null=авто); слот 1 — НИЖНИЙ (как в ПО:
-       «Высота ящика 1 (нижний)»); эталон: 360.8/2 = 180.4.
-     ⚠ ДОПУЩЕНИЯ (раскрой их не разделяет — сверить с ПО при случае):
-       fGapTop=30 / fGapBottom=2 — в раскрое видна только СУММА 32
-         (зазор-захват над фасадом, стиль «Модерн» без ручек);
-       глубина ЯСтойки = partDepth + edge (эталон 580 при полках 579) —
-         видимо, стойка секции без задней подрезки;
-       планка 70 — спереди, 68 — сзади (в ПО обе «Планка_верхняя»);
-       3D: планки плашмя под верхом ячейки; короб передним краем
-         заподлицо с корпусом; дно накладное снизу короба.
+       как sizes; слот 1 — НИЖНИЙ (как в ПО); эталоны: 360.8/2=180.4.
+     ⚠ ДОПУЩЕНИЯ (осталось сверить):
+       inset: fGapTop=30 / fGapBottom=2 — в раскрое видна только
+         СУММА 32 (эталон 2 даёт сумму 30.4 при других настройках);
+       планки: какая 70 (перед) / 68 (зад) — в ПО обе «Планка_верхняя»;
+       overlay fGapMid=0.8 и его разбивка по фасадам.
      Фурнитура: «Направляющие шариковые {boxDepth} мм (компл.)» ×1 на
        ящик (комплект = 2 планки), висит на левой боковине → summary.
      Имена (маппинг на имена ПО — в даунстрим-отображении):
@@ -387,6 +540,7 @@ var WardrobeCore = (function () {
     var edge = num(ctx.edge, 1);
     var count = node.count | 0;
     if (count <= 0) return;
+    var mount = node.mount === 'overlay' ? 'overlay' : 'inset';
     var secTop = num(node.secTop, 0), secBottom = num(node.secBottom, 0);
     var boxDepth = num(node.boxDepth, 550);
     var topOffset = num(node.topOffset, 50), bottomOffset = num(node.bottomOffset, 20);
@@ -395,41 +549,49 @@ var WardrobeCore = (function () {
     var railFront = num(node.railFront, 70), railBack = num(node.railBack, 68);
     var fGapTop = num(node.fGapTop, 30), fGapBottom = num(node.fGapBottom, 2);
     var fGapSide = num(node.fGapSide, 2);
+    var fGapMid = num(node.fGapMid, 0.8);       // overlay: межфасадный зазор
+    var fOverhang = num(node.fOverhang, panel); // overlay: перекрытие соседей
 
     var cellH = cell.y1 - cell.y0;
+    var cellW = cell.x1 - cell.x0;
     var cx = (cell.x0 + cell.x1) / 2;
-    var opening = (cell.x1 - cell.x0) - 2 * panel; // проём между своими стойками
-    var boxW = opening - clearance;                // короб по ширине
+    // inset: проём между СВОИМИ стойками; overlay: вся ячейка (стоек нет)
+    var opening = mount === 'inset' ? cellW - 2 * panel : cellW;
+    var boxW = opening - clearance;             // короб по ширине
+    // inset: короб утоплен за фасад (image 1/3); overlay: заподлицо с pd
+    var boxFrontZ = mount === 'inset' ? pd - panel : pd;
     var s = ++ctx.counters.drawerSec;
 
-    // ── Стойки секции (2 шт), кромка — передний торец ────────────
-    function post(name, pcx) {
-      return mkPart({
-        name: name, kind: 'dpost', material: 'ldsp', thick: panel,
-        cutL: cellH, cutW: pd + edge,              // ⚠ эталон 580 при pd 579
-        edges: [{ side: 'front', len: cellH }],
-        box: { cx: pcx, cy: (cell.y0 + cell.y1) / 2, cz: cell.z, dx: panel, dy: cellH, dz: pd }
-      });
-    }
-    parts.push(post('ЯСтойка_левая_' + s, cell.x0 + panel / 2));
-    parts.push(post('ЯСтойка_правая_' + s, cell.x1 - panel / 2));
+    if (mount === 'inset') {
+      // ── Стойки секции (2 шт), кромка — передний торец ──────────
+      var post = function (name, pcx) {
+        return mkPart({
+          name: name, kind: 'dpost', material: 'ldsp', thick: panel,
+          cutL: cellH, cutW: pd + edge,            // 580: нет задней подрезки
+          edges: [{ side: 'front', len: cellH }],
+          box: { cx: pcx, cy: (cell.y0 + cell.y1) / 2, cz: cell.z, dx: panel, dy: cellH, dz: pd }
+        });
+      };
+      parts.push(post('ЯСтойка_левая_' + s, cell.x0 + panel / 2));
+      parts.push(post('ЯСтойка_правая_' + s, cell.x1 - panel / 2));
 
-    // ── Планки верхние (перед/зад), плашмя под верхом ячейки ─────
-    function rail(name, w, rcz) {
-      return mkPart({
-        name: name, kind: 'drail', material: 'ldsp', thick: panel,
-        cutL: opening - 2 * edge, cutW: w,
-        edges: [{ side: 'front', len: opening - 2 * edge }],
-        box: { cx: cx, cy: cell.y1 - panel / 2, cz: rcz, dx: opening, dy: panel, dz: w }
-      });
+      // ── Планки верхние (перед/зад), плашмя под верхом ячейки ───
+      var rail = function (name, w, rcz) {
+        return mkPart({
+          name: name, kind: 'drail', material: 'ldsp', thick: panel,
+          cutL: opening - 2 * edge, cutW: w,
+          edges: [{ side: 'front', len: opening - 2 * edge }],
+          box: { cx: cx, cy: cell.y1 - panel / 2, cz: rcz, dx: opening, dy: panel, dz: w }
+        });
+      };
+      parts.push(rail('ЯПланка_перед_' + s, railFront, pd - railFront / 2));
+      parts.push(rail('ЯПланка_зад_' + s, railBack, railBack / 2));
     }
-    parts.push(rail('ЯПланка_перед_' + s, railFront, pd - railFront / 2));
-    parts.push(rail('ЯПланка_зад_' + s, railBack, railBack / 2));
 
     // ── Слоты (снизу вверх) и ящики ──────────────────────────────
     var zoneY0 = cell.y0 + secBottom, zoneY1 = cell.y1 - secTop;
     var slots = splitSizes(node.heights, count, zoneY1 - zoneY0, 0, 0);
-    var ycur = zoneY0, i, slotH, k, bY0, bY1, bH, geomW, geomH;
+    var ycur = zoneY0, i, slotH, k, bY0, bY1, bH, geomW, geomH, fY0, fY1;
     for (i = 0; i < count; i++) {
       slotH = slots[i];
       k = ++ctx.counters.drawer;
@@ -439,31 +601,33 @@ var WardrobeCore = (function () {
 
       // Боковины ×2: длина = глубина короба − подрезка,
       // высота − подрезка под кромку (эталон 109.4 → раскрой 109)
-      function side(name, scx) {
+      var side = function (name, scx) {
         return mkPart({
           name: name, kind: 'dside', material: 'ldsp', thick: panel,
           cutL: boxDepth - edge, cutW: bH - edge,
           edges: [{ side: 'top', len: boxDepth - edge }],
-          box: { cx: scx, cy: (bY0 + bY1) / 2, cz: pd - boxDepth / 2, dx: panel, dy: bH, dz: boxDepth }
+          box: { cx: scx, cy: (bY0 + bY1) / 2, cz: boxFrontZ - boxDepth / 2, dx: panel, dy: bH, dz: boxDepth }
         });
-      }
+      };
       parts.push(side('ЯщикБЛ_' + k, cx - (boxW - panel) / 2));
       parts[parts.length - 1].hardware = [
         { name: 'Направляющие шариковые ' + boxDepth + ' мм (компл.)', qty: 1 }
       ];
       parts.push(side('ЯщикБП_' + k, cx + (boxW - panel) / 2));
 
-      // Перед / Зад: между боковинами, −edge (посадка, эталон 285)
-      function fb(name, fkind, fcz) {
+      // Перед / Зад: между боковинами.
+      // inset: −1 (посадка, эталон 1: 285); overlay: РОВНО (эталон 2: 318)
+      var fbCut = boxW - 2 * panel - (mount === 'inset' ? edge : 0);
+      var fb = function (name, fkind, fcz) {
         return mkPart({
           name: name, kind: fkind, material: 'ldsp', thick: panel,
-          cutL: boxW - 2 * panel - edge, cutW: bH - edge,
-          edges: [{ side: 'top', len: boxW - 2 * panel - edge }],
+          cutL: fbCut, cutW: bH - edge,
+          edges: [{ side: 'top', len: fbCut }],
           box: { cx: cx, cy: (bY0 + bY1) / 2, cz: fcz, dx: boxW - 2 * panel, dy: bH, dz: panel }
         });
-      }
-      parts.push(fb('ЯщикП_' + k, 'dfront', pd - panel / 2));
-      parts.push(fb('ЯщикЗ_' + k, 'dback', pd - boxDepth + panel / 2));
+      };
+      parts.push(fb('ЯщикП_' + k, 'dfront', boxFrontZ - panel / 2));
+      parts.push(fb('ЯщикЗ_' + k, 'dback', boxFrontZ - boxDepth + panel / 2));
 
       // Дно ХДФ: накладное снизу короба, отступ по краям bottomInset
       parts.push(mkPart({
@@ -471,14 +635,26 @@ var WardrobeCore = (function () {
         cutL: boxW - 2 * bottomInset, cutW: boxDepth - 2 * bottomInset,
         edges: [],
         box: {
-          cx: cx, cy: bY0 - bottomThick / 2, cz: pd - boxDepth / 2,
+          cx: cx, cy: bY0 - bottomThick / 2, cz: boxFrontZ - boxDepth / 2,
           dx: boxW - 2 * bottomInset, dy: bottomThick, dz: boxDepth - 2 * bottomInset
         }
       }));
 
-      // Фасад: в слоте, утоплен на fGap*, раскрой = гео − 2·edge, fine 0.1
-      geomW = opening - 2 * fGapSide;
-      geomH = slotH - fGapTop - fGapBottom;
+      // Фасад: раскрой = гео − 2·edge, точность 0.1 (fine), кромка 4 ст.
+      if (mount === 'inset') {
+        // в размер ПРОЁМА СЕКЦИИ минус fGap*, УТОПЛЕН В ПРОЁМ:
+        // передняя грань заподлицо с фронтом деталей (image 1/3)
+        geomW = opening - 2 * fGapSide;
+        geomH = slotH - fGapTop - fGapBottom;
+        fY0 = ycur + fGapBottom;
+      } else {
+        // НАКЛАДНОЙ: перекрывает соседние панели по ширине; по высоте
+        // фасады заполняют зону заподлицо, между ними fGapMid (эталон 2)
+        geomW = cellW + 2 * fOverhang;
+        fY0 = ycur + (i > 0 ? fGapMid / 2 : 0);
+        fY1 = ycur + slotH - (i < count - 1 ? fGapMid / 2 : 0);
+        geomH = fY1 - fY0;
+      }
       parts.push(mkPart({
         name: 'ЯщикФ_' + k, kind: 'dfacade', material: 'ldsp', thick: panel, fine: true,
         cutL: geomH - 2 * edge, cutW: geomW - 2 * edge,
@@ -489,10 +665,12 @@ var WardrobeCore = (function () {
           { side: 'right', len: geomH - 2 * edge }
         ],
         box: {
-          cx: cx, cy: ycur + fGapBottom + geomH / 2, cz: pd + panel / 2,
+          cx: cx, cy: fY0 + geomH / 2,
+          cz: mount === 'inset' ? pd - panel / 2 : pd + panel / 2,
           dx: geomW, dy: geomH, dz: panel
         }
       }));
+      parts[parts.length - 1].mount = mount;
       ycur += slotH;
     }
   }
@@ -512,6 +690,15 @@ var WardrobeCore = (function () {
      Эталон воспроизводится: корень panels(1)→376/376; лево shelves(2)→612×3
      (в средней 612-ячейке panels(1)→180/180 = короткая Вертикальная 612);
      право shelves(4)→360.8×5. Итог: Полка 376 ×6, Вертикальная 1868 ×1, 612 ×1.
+
+     ⚠ ЭТАП D — ПО СТАНДАРТУ (решение Дали, эталона image 5/7 нет):
+     у узла shelves флаги bottomShelf / topShelf добавляют ГРАНИЧНЫЕ
+     полки: bottomShelf лежит НА низу ячейки, topShelf — ПОД верхом.
+     Зона проёмов сжимается на panel за каждый флаг; число проёмов
+     (count+1) и children НЕ меняются. Граничная полка — обычная
+     Полка_N (та же ширина ячейки, кромка перёд, сквозной счётчик);
+     порядок нумерации: нижняя → промежуточные снизу вверх → верхняя.
+     Типовые случаи: полка над ящиками, антресольная, фальш-дно.
   ============================================================ */
   function buildSection(node, cell, ctx, parts) {
     if (!node) return;
@@ -530,6 +717,11 @@ var WardrobeCore = (function () {
     if (node.type === 'drawers') {
       // ЛИСТ-СУЩНОСТЬ: секция с ящиками занимает ячейку целиком.
       buildDrawers(node, cell, ctx, parts);
+      return;
+    }
+    if (node.type === 'facade') {
+      // ЛИСТ-СУЩНОСТЬ: створки закрывают ячейку целиком, детей нет.
+      buildCellFacade(node, cell, ctx, parts);
       return;
     }
     if (node.type === 'panels') {
@@ -559,27 +751,37 @@ var WardrobeCore = (function () {
     } else if (node.type === 'shelves') {
       // N горизонтальных полок делят ВЫСОТУ на slots долей (sizes или поровну).
       // Каждая полка режется РОВНО в ширину ячейки. Доли снизу вверх.
-      sizes = splitSizes(node.sizes, slots, cellH, N, panel);
-      var ycur = cell.y0;
+      // mkShelf(yBottom) — полка с нижней гранью на yBottom (общая фабрика
+      // для промежуточных и граничных полок этапа D).
+      var mkShelf = function (yBottom) {
+        ctx.counters.shelf++;
+        parts.push(mkPart({
+          name: 'Полка_' + ctx.counters.shelf, kind: 'shelf',
+          material: 'ldsp', thick: panel,
+          cutL: cellW, cutW: pd,
+          edges: [{ side: 'front', len: cellW }],
+          box: {
+            cx: (cell.x0 + cell.x1) / 2, cy: yBottom + panel / 2, cz: cell.z,
+            dx: cellW, dy: panel, dz: pd
+          }
+        }));
+      };
+      // ⚠ ЭТАП D (по стандарту): граничные полки сжимают зону проёмов.
+      var zy0 = cell.y0, zy1 = cell.y1;
+      if (node.bottomShelf) { mkShelf(zy0); zy0 += panel; }
+      if (node.topShelf) zy1 -= panel;
+      sizes = splitSizes(node.sizes, slots, zy1 - zy0, N, panel);
+      var ycur = zy0;
       for (s = 0; s < slots; s++) {
         var h = sizes[s];
         sc.push({ x0: cell.x0, x1: cell.x1, y0: ycur, y1: ycur + h, z: cell.z });
         ycur += h;
         if (s < N) {
-          ctx.counters.shelf++;
-          parts.push(mkPart({
-            name: 'Полка_' + ctx.counters.shelf, kind: 'shelf',
-            material: 'ldsp', thick: panel,
-            cutL: cellW, cutW: pd,
-            edges: [{ side: 'front', len: cellW }],
-            box: {
-              cx: (cell.x0 + cell.x1) / 2, cy: ycur + panel / 2, cz: cell.z,
-              dx: cellW, dy: panel, dz: pd
-            }
-          }));
+          mkShelf(ycur);
           ycur += panel;
         }
       }
+      if (node.topShelf) mkShelf(zy1);
     } else {
       return; // неизвестный тип — молча игнор (лист)
     }
@@ -761,7 +963,7 @@ var WardrobeCore = (function () {
       // Корневая ячейка = чистовой проём корпуса:
       //   по X — между внутренними гранями стоек (±innerW/2),
       //   по Y — от верха дна до низа крыши (высота = clearH = 1868).
-      var ctx = { panel: c.panel, partDepth: partDepth, edge: edge, counters: { shelf: 0, panel: 0, rod: 0, drawerSec: 0, drawer: 0 } };
+      var ctx = { panel: c.panel, partDepth: partDepth, edge: edge, counters: { shelf: 0, panel: 0, rod: 0, drawerSec: 0, drawer: 0, cfacade: 0 } };
       var rootCell = {
         x0: -innerW / 2, x1: innerW / 2,
         y0: c.legs + c.panel,               // верх дна
@@ -859,7 +1061,7 @@ var WardrobeCore = (function () {
       }
     };
   }
-  return { DEFAULTS: DEFAULTS, buildCarcass: buildCarcass, buildSection: buildSection, buildFacades: buildFacades, buildRod: buildRod, buildDrawers: buildDrawers, partEdgeLen: partEdgeLen };
+  return { DEFAULTS: DEFAULTS, buildCarcass: buildCarcass, buildSection: buildSection, buildFacades: buildFacades, buildCellFacade: buildCellFacade, buildRod: buildRod, buildDrawers: buildDrawers, partEdgeLen: partEdgeLen, splitSizes: splitSizes };
 })();
 
 /* ============================================================
@@ -986,7 +1188,16 @@ function renderSvg(cfg, result) {
   result.parts.forEach(function (p) {
     if (p.kind !== 'facade' && p.kind !== 'dfacade') return;
     out += rect(p.box, 'part-facade');
-    if (p.kind === 'dfacade') return; // у фасадов ящиков ручек нет (захват сверху)
+    if (p.kind === 'dfacade') {
+      // у ВНУТРЕННИХ фасадов ящиков ручек нет (захват сверху);
+      // у НАКЛАДНЫХ — горизонтальная ручка по центру (эталон 2, image 4)
+      if (p.mount !== 'overlay') return;
+      var dx0 = p.box.cx + W / 2 + pad;
+      var dyc = H - p.box.cy + pad;
+      var hw = Math.min(60, p.box.dx * 0.3);
+      out += '<line class="fac-handle" x1="' + (dx0 - hw) + '" y1="' + dyc + '" x2="' + (dx0 + hw) + '" y2="' + dyc + '"></line>';
+      return;
+    }
     var x0 = p.box.cx - p.box.dx / 2 + W / 2 + pad;
     var yTop = H - (p.box.cy + p.box.dy / 2) + pad;
     // opening='right' → петли справа, ручка у ЛЕВОЙ кромки; 'left' → наоборот
@@ -1150,6 +1361,311 @@ function render3d(cfg, result) {
   D3.applyCam();
 }
 
+/* ============================================================
+   E — Визуальный редактор дерева (клик по ячейке).
+   Не меняет геометрию ядра, только строит/правит cfg.sections
+   и пишет результат в textarea #treeJson (единый источник истины
+   для cfg.sections остаётся readCfg/JSON.parse — редактор лишь
+   удобная надстройка над тем же текстом).
+
+   TE_ROOT     — текущий корень дерева (объект или null), берётся
+                 из cfg.sections на каждый полный рендер (recalc).
+   TE_ENTRIES  — плоский список кликабельных элементов текущего
+                 рендера: {kind:'leaf'|'tag', cell, node, getter, setter}.
+                 getter/setter — замыкания на точное место в дереве
+                 (родительский children[i] или сам TE_ROOT для корня).
+   TE_SELECTED — индекс выбранного элемента в TE_ENTRIES (-1 = нет).
+============================================================ */
+var TE_ROOT = null, TE_ENTRIES = [], TE_SELECTED = -1, TE_LAST_CFG = null;
+var TE_TYPES = ['empty', 'shelves', 'panels', 'rod', 'drawers', 'facade'];
+var TE_NODE_INFO = {
+  rod: { cls: 'te-rod', label: function () { return 'Штанга'; } },
+  drawers: { cls: 'te-drawers', label: function (n) { return 'Ящики ×' + (n.count || 1) + (n.mount === 'overlay' ? ' (наклад.)' : ''); } },
+  facade: { cls: 'te-facade', label: function (n) { return 'Створка' + ((n.count && n.count > 1) ? ' ×' + n.count : ''); } }
+};
+
+// Рекурсивный обход дерева для редактора — та же математика, что и
+// в ядре (buildSection), но строит только прямоугольники ячеек
+// (мм) без деталей. WardrobeCore.splitSizes — общая с ядром функция.
+function teLayout(node, cell, getter, setter, out, panelMm) {
+  if (node && (node.type === 'panels' || node.type === 'shelves')) {
+    out.push({ kind: 'tag', cell: cell, node: node, getter: getter, setter: setter });
+    var N = node.count | 0, slots = N + 1;
+    var children = node.children || [];
+    var s, subCell, sizes, w, h, xcur, ycur;
+    if (node.type === 'panels') {
+      sizes = WardrobeCore.splitSizes(node.sizes, slots, cell.x1 - cell.x0, N, panelMm);
+      xcur = cell.x0;
+      for (s = 0; s < slots; s++) {
+        w = sizes[s];
+        subCell = { x0: xcur, x1: xcur + w, y0: cell.y0, y1: cell.y1 };
+        (function (s, subCell) {
+          teLayout(children[s] || null, subCell,
+            function () { return (node.children || [])[s] || null; },
+            function (v) { if (!node.children) node.children = []; node.children[s] = v; teSync(); },
+            out, panelMm);
+        })(s, subCell);
+        xcur += w;
+        if (s < N) xcur += panelMm;
+      }
+    } else {
+      var zy0 = cell.y0, zy1 = cell.y1;
+      if (node.bottomShelf) zy0 += panelMm;
+      if (node.topShelf) zy1 -= panelMm;
+      sizes = WardrobeCore.splitSizes(node.sizes, slots, zy1 - zy0, N, panelMm);
+      ycur = zy0;
+      for (s = 0; s < slots; s++) {
+        h = sizes[s];
+        subCell = { x0: cell.x0, x1: cell.x1, y0: ycur, y1: ycur + h };
+        (function (s, subCell) {
+          teLayout(children[s] || null, subCell,
+            function () { return (node.children || [])[s] || null; },
+            function (v) { if (!node.children) node.children = []; node.children[s] = v; teSync(); },
+            out, panelMm);
+        })(s, subCell);
+        ycur += h;
+        if (s < N) ycur += panelMm;
+      }
+    }
+  } else {
+    out.push({ kind: 'leaf', cell: cell, node: node, getter: getter, setter: setter });
+  }
+}
+
+function renderTreeEditor(cfg) {
+  TE_LAST_CFG = cfg;
+  var panelEl = document.getElementById('treeEditorPanel');
+  var on = document.getElementById('treeMode').checked;
+  panelEl.style.display = on ? '' : 'none';
+  if (!on) return;
+
+  var panelMm = cfg.panel;
+  var innerW = cfg.width - 2 * panelMm;
+  var clearH = (cfg.height - cfg.legs) - 2 * panelMm;
+  var svg = document.getElementById('treeEditorSvg');
+  if (!(innerW > 0) || !(clearH > 0)) { svg.innerHTML = ''; return; }
+
+  TE_ROOT = cfg.sections || null;
+  TE_ENTRIES = [];
+  var rootCell = { x0: -innerW / 2, x1: innerW / 2, y0: 0, y1: clearH };
+  teLayout(TE_ROOT, rootCell,
+    function () { return TE_ROOT; },
+    function (v) { TE_ROOT = v; teSync(); },
+    TE_ENTRIES, panelMm);
+
+  var vbW = 480, vbH = 560, pad = 20;
+  var scale = Math.min((vbW - 2 * pad) / innerW, (vbH - 2 * pad) / clearH);
+  var drawW = innerW * scale, drawH = clearH * scale;
+  var offX = pad + (vbW - 2 * pad - drawW) / 2;
+  var offY = pad + (vbH - 2 * pad - drawH) / 2;
+  function px(mmX) { return offX + (mmX - rootCell.x0) * scale; }
+  function py(mmY) { return offY + (rootCell.y1 - mmY) * scale; }
+
+  svg.setAttribute('viewBox', '0 0 ' + vbW + ' ' + vbH);
+  var out = '';
+  // проход 1: заливки листьев (пусто/штанга/ящики/створка)
+  TE_ENTRIES.forEach(function (e, i) {
+    if (e.kind !== 'leaf') return;
+    var x0 = px(e.cell.x0), x1 = px(e.cell.x1), y0 = py(e.cell.y1), y1 = py(e.cell.y0);
+    var w = x1 - x0, h = y1 - y0;
+    var info = e.node && TE_NODE_INFO[e.node.type];
+    var cls = 'te-cell ' + (info ? info.cls : 'te-empty') + (i === TE_SELECTED ? ' te-selected' : '');
+    out += '<rect class="' + cls + '" x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) +
+      '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" onclick="teSelect(' + i + ')"></rect>';
+    if (w > 30 && h > 16) {
+      var label = info ? info.label(e.node) : 'пусто';
+      out += '<text class="te-label" x="' + (x0 + w / 2).toFixed(1) + '" y="' + (y0 + h / 2 + 4).toFixed(1) + '">' + label + '</text>';
+    }
+  });
+  // проход 2: бирки разделённых ячеек — поверх заливок, иначе их
+  // перекрыл бы дочерний прямоугольник, нарисованный позже в обходе
+  TE_ENTRIES.forEach(function (e, i) {
+    if (e.kind !== 'tag') return;
+    var x0 = px(e.cell.x0), y1 = py(e.cell.y1);
+    var label = (e.node.type === 'panels' ? 'Перег.×' : 'Полки×') + (e.node.count | 0) +
+      (e.node.type === 'shelves' && e.node.bottomShelf ? ' Н' : '') +
+      (e.node.type === 'shelves' && e.node.topShelf ? ' В' : '');
+    var tw = 16 + label.length * 6;
+    var cls = 'te-tag' + (i === TE_SELECTED ? ' te-selected' : '');
+    out += '<g class="' + cls + '" onclick="teSelect(' + i + ')">' +
+      '<rect x="' + (x0 + 2).toFixed(1) + '" y="' + (y1 + 2).toFixed(1) + '" width="' + tw + '" height="16" rx="3"></rect>' +
+      '<text x="' + (x0 + 2 + tw / 2).toFixed(1) + '" y="' + (y1 + 13).toFixed(1) + '" text-anchor="middle">' + label + '</text></g>';
+  });
+  svg.innerHTML = out;
+  renderTeForm();
+}
+
+// Выбор элемента — лёгкая перерисовка без полного recalc (не трогает
+// таблицу/3D), TE_LAST_CFG кэширует cfg последнего полного прогона.
+function teSelect(i) {
+  TE_SELECTED = i;
+  if (TE_LAST_CFG) renderTreeEditor(TE_LAST_CFG);
+}
+
+function teShowFields() {
+  var t = document.getElementById('teType').value;
+  Array.prototype.forEach.call(document.querySelectorAll('#treeEditForm .te-fieldset'), function (fs) {
+    var fors = (fs.getAttribute('data-for') || '').split(',');
+    fs.className = 'te-fieldset' + (fors.indexOf(t) >= 0 ? ' active' : '');
+  });
+}
+
+function renderTeForm() {
+  var form = document.getElementById('treeEditForm');
+  if (TE_SELECTED < 0 || !TE_ENTRIES[TE_SELECTED]) { form.innerHTML = ''; return; }
+  var entry = TE_ENTRIES[TE_SELECTED];
+  var node = entry.node;
+  var curType = node && TE_TYPES.indexOf(node.type) >= 0 ? node.type : 'empty';
+
+  function opt(v, label) { return '<option value="' + v + '"' + (v === curType ? ' selected' : '') + '>' + label + '</option>'; }
+  function arrStr(a) { return a ? a.map(function (v) { return (v === null || v === undefined) ? '' : v; }).join(',') : ''; }
+  function val(v, d) { return (v !== undefined && v !== null) ? v : (d !== undefined ? d : ''); }
+
+  var html = '';
+  html += '<label for="teType">Тип ячейки</label><select id="teType" onchange="teShowFields()">' +
+    opt('empty', 'Пусто') + opt('shelves', 'Разделить полками (shelves)') +
+    opt('panels', 'Разделить перегородками (panels)') + opt('rod', 'Штанга') +
+    opt('drawers', 'Ящики') + opt('facade', 'Створка (фасад на ячейку, B3 ⚠)') + '</select>';
+
+  html += '<div class="te-fieldset" data-for="shelves,panels" id="te-fs-split">' +
+    '<div class="row2"><div><label for="teSplitCount">Кол-во делителей</label>' +
+    '<input type="number" id="teSplitCount" value="' + val(node && node.count, 1) + '" min="0"></div>' +
+    '<div><label for="teSplitSizes">Размеры проёмов, мм (запятая, пусто=авто)</label>' +
+    '<input type="text" id="teSplitSizes" value="' + arrStr(node && node.sizes) + '"></div></div></div>';
+
+  html += '<div class="te-fieldset" data-for="shelves" id="te-fs-shelvesflags">' +
+    '<div class="te-checkline"><input type="checkbox" id="teBottomShelf"' + (node && node.bottomShelf ? ' checked' : '') +
+    '><label for="teBottomShelf">Граничная полка снизу (⚠ стандарт, этап D)</label></div>' +
+    '<div class="te-checkline"><input type="checkbox" id="teTopShelf"' + (node && node.topShelf ? ' checked' : '') +
+    '><label for="teTopShelf">Граничная полка сверху (⚠ стандарт, этап D)</label></div></div>';
+
+  html += '<div class="te-fieldset" data-for="rod" id="te-fs-rod">' +
+    '<div class="row2"><div><label for="teRodDrop">Drop (до оси), мм</label>' +
+    '<input type="number" id="teRodDrop" value="' + val(node && node.drop) + '" placeholder="100"></div>' +
+    '<div><label for="teRodDia">Диаметр, мм</label>' +
+    '<input type="number" id="teRodDia" value="' + val(node && node.dia) + '" placeholder="25"></div></div>' +
+    '<label for="teRodGap">Зазор до стенки, мм</label>' +
+    '<input type="number" id="teRodGap" value="' + val(node && node.gap) + '" placeholder="2">' +
+    '<div class="note">⚠ допущения без эталона ПО.</div></div>';
+
+  html += '<div class="te-fieldset" data-for="drawers" id="te-fs-drawers">' +
+    '<label for="teDrMount">Тип установки (эталоны 1/2 из ПО)</label><select id="teDrMount">' +
+    '<option value="inset"' + ((!node || node.mount !== 'overlay') ? ' selected' : '') + '>Внутренние (свои стойки, фасад в проём)</option>' +
+    '<option value="overlay"' + (node && node.mount === 'overlay' ? ' selected' : '') + '>Накладные (без стоек, короб как полки, фасад поверх)</option></select>' +
+    '<div class="row2"><div><label for="teDrCount">Кол-во ящиков</label>' +
+    '<input type="number" id="teDrCount" value="' + val(node && node.count, 2) + '" min="1"></div>' +
+    '<div><label for="teDrBoxDepth">Глубина короба, мм</label>' +
+    '<input type="number" id="teDrBoxDepth" value="' + val(node && node.boxDepth) + '" placeholder="550"></div></div>' +
+    '<label for="teDrHeights">Высоты слотов, мм (запятая, пусто=авто)</label>' +
+    '<input type="text" id="teDrHeights" value="' + arrStr(node && node.heights) + '">' +
+    '<div class="row2"><div><label for="teDrTopOffset">Отступ верх, мм</label>' +
+    '<input type="number" id="teDrTopOffset" value="' + val(node && node.topOffset) + '" placeholder="50"></div>' +
+    '<div><label for="teDrBottomOffset">Отступ низ, мм</label>' +
+    '<input type="number" id="teDrBottomOffset" value="' + val(node && node.bottomOffset) + '" placeholder="20"></div></div>' +
+    '<label for="teDrClearance">Зазор направляющих, мм</label>' +
+    '<input type="number" id="teDrClearance" value="' + val(node && node.clearance) + '" placeholder="26">' +
+    '<div class="note">Выверено по эталону ПО (кроме зазоров фасада ящика).</div></div>';
+
+  html += '<div class="te-fieldset" data-for="facade" id="te-fs-facade">' +
+    '<div class="row2"><div><label for="teFaCount">Створок в ячейке</label>' +
+    '<input type="number" id="teFaCount" value="' + val(node && node.count, 1) + '" min="1"></div>' +
+    '<div><label for="teFaThick">Толщина, мм</label>' +
+    '<input type="number" id="teFaThick" value="' + val(node && node.thick) + '" placeholder="=панель"></div></div>' +
+    '<label for="teFaSizes">Ширины слотов, мм (запятая, пусто=авто)</label>' +
+    '<input type="text" id="teFaSizes" value="' + arrStr(node && node.sizes) + '">' +
+    '<div class="row2"><div><label for="teFaGapTop">Зазор сверху</label>' +
+    '<input type="number" id="teFaGapTop" value="' + val(node && node.gapTop) + '" placeholder="2"></div>' +
+    '<div><label for="teFaGapBottom">Зазор снизу</label>' +
+    '<input type="number" id="teFaGapBottom" value="' + val(node && node.gapBottom) + '" placeholder="2"></div></div>' +
+    '<div class="row2"><div><label for="teFaGapLeft">Зазор слева</label>' +
+    '<input type="number" id="teFaGapLeft" value="' + val(node && node.gapLeft) + '" placeholder="2"></div>' +
+    '<div><label for="teFaGapRight">Зазор справа</label>' +
+    '<input type="number" id="teFaGapRight" value="' + val(node && node.gapRight) + '" placeholder="2"></div></div>' +
+    '<div class="row2"><div><label for="teFaMaterial">Материал</label><select id="teFaMaterial">' +
+    '<option value="ldsp"' + ((!node || !node.material || node.material === 'ldsp') ? ' selected' : '') + '>ЛДСП</option>' +
+    '<option value="mdf"' + (node && node.material === 'mdf' ? ' selected' : '') + '>МДФ</option></select></div>' +
+    '<div><label for="teFaOpening">Петли слева/справа (запятая: left,right)</label>' +
+    '<input type="text" id="teFaOpening" value="' + ((node && node.opening) ? node.opening.join(',') : '') + '"></div></div>' +
+    '<div class="note">⚠ ПО СТАНДАРТУ, эталона ПО нет — см. buildCellFacade.</div></div>';
+
+  html += '<div class="te-btnrow"><button type="button" class="btn" onclick="teApply()">Применить</button>' +
+    '<button type="button" class="btn te-danger" onclick="teApplyEmpty()">Сделать пустой</button></div>';
+  if (entry.kind === 'tag') {
+    html += '<div class="note"><b>Внимание:</b> смена типа или количества делителей удаляет вложенное дерево внутри этой ячейки.</div>';
+  }
+  form.innerHTML = html;
+  teShowFields();
+}
+
+function teApplyEmpty() {
+  if (TE_SELECTED < 0 || !TE_ENTRIES[TE_SELECTED]) return;
+  TE_ENTRIES[TE_SELECTED].setter(null);
+}
+
+function teApply() {
+  if (TE_SELECTED < 0 || !TE_ENTRIES[TE_SELECTED]) return;
+  var entry = TE_ENTRIES[TE_SELECTED];
+  var type = document.getElementById('teType').value;
+  function nums(id) {
+    var raw = document.getElementById(id).value.trim();
+    if (!raw) return undefined;
+    return raw.split(',').map(function (s) { s = s.trim(); return s === '' ? null : parseFloat(s); });
+  }
+  function numOrUndef(id) {
+    var v = document.getElementById(id).value;
+    return v === '' ? undefined : parseFloat(v);
+  }
+  var node = null;
+  if (type === 'shelves' || type === 'panels') {
+    node = { type: type, count: parseInt(document.getElementById('teSplitCount').value, 10) || 0 };
+    var sz = nums('teSplitSizes'); if (sz) node.sizes = sz;
+    if (type === 'shelves') {
+      if (document.getElementById('teBottomShelf').checked) node.bottomShelf = true;
+      if (document.getElementById('teTopShelf').checked) node.topShelf = true;
+    }
+    // одно и то же деление (тип+кол-во не поменялись) — не рвём детей
+    if (entry.kind === 'tag' && entry.node && entry.node.type === type &&
+      (entry.node.count | 0) === node.count && entry.node.children) {
+      node.children = entry.node.children;
+    }
+  } else if (type === 'rod') {
+    node = { type: 'rod' };
+    var d1 = numOrUndef('teRodDrop'); if (d1 !== undefined) node.drop = d1;
+    var d2 = numOrUndef('teRodDia'); if (d2 !== undefined) node.dia = d2;
+    var d3 = numOrUndef('teRodGap'); if (d3 !== undefined) node.gap = d3;
+  } else if (type === 'drawers') {
+    node = { type: 'drawers', count: parseInt(document.getElementById('teDrCount').value, 10) || 1 };
+    if (document.getElementById('teDrMount').value === 'overlay') node.mount = 'overlay';
+    var h = nums('teDrHeights'); if (h) node.heights = h;
+    var bd = numOrUndef('teDrBoxDepth'); if (bd !== undefined) node.boxDepth = bd;
+    var to = numOrUndef('teDrTopOffset'); if (to !== undefined) node.topOffset = to;
+    var bo = numOrUndef('teDrBottomOffset'); if (bo !== undefined) node.bottomOffset = bo;
+    var cl = numOrUndef('teDrClearance'); if (cl !== undefined) node.clearance = cl;
+  } else if (type === 'facade') {
+    node = { type: 'facade' };
+    var fc = parseInt(document.getElementById('teFaCount').value, 10); if (fc && fc !== 1) node.count = fc;
+    var fs = nums('teFaSizes'); if (fs) node.sizes = fs;
+    [['teFaGapTop', 'gapTop'], ['teFaGapBottom', 'gapBottom'], ['teFaGapLeft', 'gapLeft'],
+    ['teFaGapRight', 'gapRight'], ['teFaThick', 'thick']].forEach(function (p) {
+      var v = numOrUndef(p[0]); if (v !== undefined) node[p[1]] = v;
+    });
+    var mat = document.getElementById('teFaMaterial').value; if (mat && mat !== 'ldsp') node.material = mat;
+    var op = document.getElementById('teFaOpening').value.trim();
+    if (op) node.opening = op.split(',').map(function (s) { return s.trim(); });
+  } // type === 'empty' → node остаётся null
+  entry.setter(node);
+}
+
+// Запись изменённого дерева обратно в textarea + полный recalc
+// (TE_ROOT уже содержит правки — setter'ы мутируют объект на месте,
+// кроме случая правки самого корня, где TE_ROOT переприсваивается).
+function teSync() {
+  document.getElementById('treeJson').value = TE_ROOT ? JSON.stringify(TE_ROOT, null, 2) : '';
+  document.getElementById('treeMode').checked = true;
+  TE_SELECTED = -1;
+  recalc();
+}
+
 function recalc() {
   var cfg = readCfg();
   var result = WardrobeCore.buildCarcass(cfg);
@@ -1163,6 +1679,7 @@ function recalc() {
   renderTable(result);
   renderSvg(cfg, result);
   render3d(cfg, result);
+  renderTreeEditor(cfg);
   var facNote = document.getElementById('facNote');
   var facs = result.parts.filter(function (p) { return p.kind === 'facade'; });
   if (facs.length) {
@@ -1176,8 +1693,8 @@ function recalc() {
 document.querySelectorAll('input, select').forEach(function (el) {
   el.addEventListener('input', recalc);
 });
-document.getElementById('treeJson').addEventListener('input', recalc);
-document.getElementById('treeMode').addEventListener('change', recalc);
+document.getElementById('treeJson').addEventListener('input', function () { TE_SELECTED = -1; recalc(); });
+document.getElementById('treeMode').addEventListener('change', function () { TE_SELECTED = -1; recalc(); });
 document.getElementById('facMode').addEventListener('change', recalc);
 ['d3back','d3fac','d3exp'].forEach(function (id) { document.getElementById(id).addEventListener('change', recalc); });
 document.getElementById('loadFacEtalon').addEventListener('click', function () {
@@ -1189,7 +1706,49 @@ document.getElementById('loadFacEtalon').addEventListener('click', function () {
   for (var d in dims) { var el2 = document.getElementById(d); if (el2) el2.value = dims[d]; }
   recalc();
 });
+// Пример B3: слева створка на всю колонку, справа полка:
+// низ — двустворка, верх — открытый проём. ⚠ стандарт.
+var FACADE_DEMO_TREE = {
+  type: 'panels', count: 1, children: [
+    { type: 'facade' },
+    { type: 'shelves', count: 1, sizes: [600], children: [
+      { type: 'facade', count: 2 },
+      null
+    ] }
+  ]
+};
+document.getElementById('loadFacadeDemo').addEventListener('click', function () {
+  TE_SELECTED = -1;
+  document.getElementById('treeMode').checked = true;
+  document.getElementById('treeJson').value = JSON.stringify(FACADE_DEMO_TREE, null, 2);
+  var set = { width: 800, height: 2000, depth: 600, legs: 100, panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3 };
+  for (var k in set) { var el = document.getElementById(k); if (el) el.value = set[k]; }
+  recalc();
+});
+// Эталон 2 из ПО (image 3/4/8): 2 колонки по 4 полки; во 2-м проёме
+// снизу слева — ВНУТРЕННЯЯ секция (2 ящика), справа — НАКЛАДНАЯ.
+// Раскрой ПО: наклад. без стоек/планок, короб 350, ЯщикП 318,
+// ЯщикД 348×548, фасад гео 408×180 → раскрой 178×406.
+var ETALON2_TREE = {
+  type: 'panels', count: 1, children: [
+    { type: 'shelves', count: 4, children: [
+      null, { type: 'drawers', count: 2 }, null, null, null
+    ] },
+    { type: 'shelves', count: 4, children: [
+      null, { type: 'drawers', count: 2, mount: 'overlay' }, null, null, null
+    ] }
+  ]
+};
+document.getElementById('loadEtalon2').addEventListener('click', function () {
+  TE_SELECTED = -1;
+  document.getElementById('treeMode').checked = true;
+  document.getElementById('treeJson').value = JSON.stringify(ETALON2_TREE, null, 2);
+  var set2 = { width: 800, height: 2000, depth: 600, legs: 100, panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3 };
+  for (var k2 in set2) { var el3 = document.getElementById(k2); if (el3) el3.value = set2[k2]; }
+  recalc();
+});
 document.getElementById('loadEtalon').addEventListener('click', function () {
+  TE_SELECTED = -1;
   document.getElementById('treeMode').checked = true;
   document.getElementById('treeJson').value = JSON.stringify(ETALON_TREE, null, 2);
   // выставим габариты эталонного шкафа-стеллажа

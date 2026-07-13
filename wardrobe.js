@@ -2388,7 +2388,301 @@ function toggleDimensions(){
 /* ============================================================
    КОНЕЦ РАЗМЕРНЫХ ЛИНИЙ
 ============================================================ */
+/* ============================================================
+   CORE ENGINE — интеграция wardrobe-core.js (v1.3, выверено по
+   двум эталонам ПО). Ядро подключается в index.html обычным
+   <script src="wardrobe-core.js"> ДО модуля и живёт в
+   window.WardrobeCore. Здесь — тонкий адаптер:
+     CRM-секция (sections[]) → дерево ядра → детали ядра →
+     формат calcParts (ldsp, hdf, fac-списки, edgeRows).
+   ЧТО МЕНЯЕТСЯ В ЦИФРАХ против старого calcParts (осознанно,
+   по эталонам ПО — раскрой теперь совпадает с производственным):
+     1) подрезка кромки: каждая деталь корпуса −1мм на кромлёный
+        габарит (Бок 2167×579 вместо 2168×581 при 2200/600);
+     2) ящики по эталону 2 (mount overlay): короб = колонка − 26
+        (было −25), дно ящика — ХДФ 3мм (было ЛДСП полной ширины),
+        боковины/перед/зад по формулам ПО, фасад ящика ПЕРЕКРЫВАЕТ
+        соседние панели (+16 с каждой стороны, гео как в ПО);
+     3) фурнитура ящиков (направляющие) приходит из ядра в
+        res.summary.hardware — пока не выводится, задел на Склад v4.
+   ЧТО НЕ ТРОНУТО: фасады секций (двери full/doors2/doors3) и
+   фасады антресоли считаются СТАРОЙ формулой CRM (по купе у нас
+   эталона ПО нет); антресоль — вторым корпусом ядра; кромка —
+   прежней логикой addEdge (vis/hid + переопределения граней),
+   только на новых размерах.
+   Откат: setCoreEngine(false) в консоли — старый калькулятор
+   целиком сохранён ниже как calcPartsLegacy-ветка.
+============================================================ */
+let USE_CORE_ENGINE = true;
+function setCoreEngine(v){ USE_CORE_ENGINE = !!v; projMarkUnsaved(); }
+
+// CRM-секция → дерево секций ядра.
+// Координатная сетка совместима: при legs=0 корень ядра по Y —
+// [T, H−T], как pts в getNiches; полка CRM низом на sh.height.
+function buildCoreTree(s){
+  const cols = getColumns(s);
+  const nichesAll = getNiches(s); // общая сетка ниш (nicheIdx ящиков)
+
+  function colNode(ci){
+    const hs = s.shelves
+      .filter(sh => (sh.col||0)===Math.min(ci, cols.length-1))
+      .map(sh => sh.height)
+      .sort((a,b)=>a-b);
+    const dbs = (s.drawerBlocks||[]).filter(db => db.col==null || db.col===ci);
+    const rodHere = s.hasRod && (s.rodCol==null || s.rodCol===ci);
+
+    // Границы проёмов колонки (низ..верх), core-совместимые
+    const bounds = [T];
+    hs.forEach(h => { bounds.push(h); bounds.push(h+T); });
+    bounds.push(s.height - T);
+    const opens = [];
+    for(let k=0; k<bounds.length; k+=2) opens.push({y0:bounds[k], y1:bounds[k+1]});
+
+    // Лист для проёма k: ящики (по пересечению с CRM-нишей) или штанга
+    function leafFor(k){
+      const o = opens[k];
+      for(const db of dbs){
+        const nn = nichesAll[db.nicheIdx];
+        if(!nn) continue;
+        const c = (nn.bottom + nn.top) / 2;
+        if(c >= o.y0 && c <= o.y1){
+          return { type:'drawers', count: db.count||1, mount:'overlay' };
+        }
+      }
+      if(rodHere && s.rodHeight >= o.y0 && s.rodHeight <= o.y1){
+        return { type:'rod', drop: Math.max(30, Math.round(o.y1 - s.rodHeight)) };
+      }
+      return null;
+    }
+
+    if(hs.length === 0){
+      return leafFor(0);
+    }
+    const sizes = [];
+    for(let k=0; k<opens.length; k++){
+      sizes.push(k === opens.length-1 ? null : (opens[k].y1 - opens[k].y0));
+    }
+    return {
+      type: 'shelves', count: hs.length, sizes: sizes,
+      children: opens.map(function(_, k){ return leafFor(k); })
+    };
+  }
+
+  if(s.dividers.length === 0) return colNode(0);
+  return {
+    type: 'panels', count: s.dividers.length,
+    sizes: cols.map(c => c.width),
+    children: cols.map(function(_, ci){ return colNode(ci); })
+  };
+}
+
+// Детали ядра → формат calcParts. Имена — в стиле CRM.
+function calcPartsCore(){
+  const ldsp=[], hdf=[], facLdsp=[], facMdfPlenka=[], facMdfKraska=[];
+  const edgeRows=[];
+  const WC = window.WardrobeCore;
+
+  sections.forEach((s,i)=>{
+    const W=s.width, H=s.height, L='С'+(i+1);
+    const ef=s.edgeFront||'2mm', eb=s.edgeBack||'none';
+
+    // та же логика кромки, что в старом calcParts (vis/hid + грани)
+    function addEdge(name,w,h,topDef,bottomDef,leftDef,rightDef){
+      function resolve(userMode,defBucket){
+        if(userMode==='none') return null;
+        if(userMode==='match') return 'vis';
+        return defBucket;
+      }
+      const bT=resolve(s.edgeTop||'auto',topDef);
+      const bB=resolve(s.edgeBottom||'auto',bottomDef);
+      const bL=resolve(s.edgeLeft||'auto',leftDef);
+      const bR=resolve(s.edgeRight||'auto',rightDef);
+      let visLen=0, hidLen=0;
+      if(bT==='vis') visLen+=w; else if(bT==='hid') hidLen+=w;
+      if(bB==='vis') visLen+=w; else if(bB==='hid') hidLen+=w;
+      if(bL==='vis') visLen+=h; else if(bL==='hid') hidLen+=h;
+      if(bR==='vis') visLen+=h; else if(bR==='hid') hidLen+=h;
+      const pm04=((ef==='04mm'?visLen:0)+(eb==='04mm'?hidLen:0))/1000;
+      const pm2=((ef==='2mm'?visLen:0)+(eb==='2mm'?hidLen:0))/1000;
+      if(pm04>0||pm2>0) edgeRows.push({name,pm04,pm2});
+    }
+
+    const cfg = {
+      width: W, height: H, depth: s.depth, legs: 0,
+      panel: T, back: 3, edge: 1, gapFront: T, gapBack: 3,
+      sections: buildCoreTree(s)
+    };
+    const res = WC.buildCarcass(cfg);
+
+    let shelfN=0, partN=0, sideN=0;
+    const dmat = normFacadeMat(s.facade.material);
+    res.parts.forEach(function(p){
+      if(p.material === 'metal') return; // штанга — не листовая деталь
+      const drawerNo = (p.name.indexOf('_') >= 0) ? p.name.split('_').pop() : '';
+      let nm = null, bucket = ldsp, edgeSpec = null, tex = false;
+      switch(p.kind){
+        case 'side':
+          sideN++;
+          nm = L + (sideN === 1 ? ' Бок лев' : ' Бок пр');
+          edgeSpec = ['vis','hid','vis','hid'];
+          break;
+        case 'top':    nm = L + ' Крыша'; edgeSpec = ['vis','hid','hid','hid']; break;
+        case 'bottom': nm = L + ' Дно';   edgeSpec = ['vis','hid','hid','hid']; break;
+        case 'back':   nm = L + ' Задняя'; bucket = hdf; break;
+        case 'shelf':
+          shelfN++;
+          nm = L + ' Полка ' + shelfN;
+          edgeSpec = ['vis','hid','hid','hid'];
+          break;
+        case 'partition':
+          partN++;
+          nm = L + ' Перегор.' + partN;
+          edgeSpec = ['hid','hid','vis','vis'];
+          break;
+        case 'dside':
+          nm = L + ' Яш.' + drawerNo + (p.name.indexOf('БЛ') >= 0 ? ' бок.л' : ' бок.п');
+          break;
+        case 'dfront':  nm = L + ' Яш.' + drawerNo + ' пер'; break;
+        case 'dback':   nm = L + ' Яш.' + drawerNo + ' зад'; break;
+        case 'dbottom': nm = L + ' Яш.' + drawerNo + ' дно'; bucket = hdf; break;
+        case 'dfacade':
+          nm = L + ' Яш.' + drawerNo + ' фас';
+          tex = !!s.facade.hasTexture;
+          if(dmat==='mdfKraska') bucket = facMdfKraska;
+          else if(dmat==='mdfPlenka') bucket = facMdfPlenka;
+          else bucket = facLdsp;
+          if(dmat==='ldsp') addEdge(nm, p.cutW, p.cutL, 'vis','vis','vis','vis');
+          break;
+        case 'dpost': nm = L + ' ЯщСтойка ' + drawerNo; edgeSpec = ['hid','hid','vis','vis']; break;
+        case 'drail': nm = L + ' ЯщПланка ' + drawerNo; edgeSpec = ['vis','hid','hid','hid']; break;
+        default: nm = L + ' ' + p.name;
+      }
+      // Деталь в списки: w — «ширина» по горизонтали листа, h — вторая
+      // сторона; для корпуса CRM клал (глубина, высота) у боков и
+      // (ширина, глубина) у горизонталей — сохраняем ту же ориентацию:
+      // у ядра cutL — «длинная» сторона (вдоль текстуры/высоты).
+      let pw, ph;
+      if(p.kind==='side' || p.kind==='partition'){ pw = p.cutW; ph = p.cutL; }
+      else if(p.kind==='dfacade'){ pw = p.cutW; ph = p.cutL; }
+      else { pw = p.cutL; ph = p.cutW; }
+      const row = {name: nm, w: pw, h: ph, tex: tex};
+      if(bucket === ldsp){ row.edgeFront = ef; row.edgeBack = eb; }
+      bucket.push(row);
+      if(edgeSpec) addEdge(nm, pw, ph, edgeSpec[0], edgeSpec[1], edgeSpec[2], edgeSpec[3]);
+    });
+
+    // Фасады секции (двери) — СТАРАЯ формула CRM, ядро не используется
+    if(s.facade.type!=='none'){
+      const count=s.facade.type==='doors3'?3:s.facade.type==='doors2'?2:1;
+      const gap=4,dw=Math.round((W-gap*(count+1))/count),dh=H-gap*2;
+      for(let k=0;k<count;k++){
+        const p={name:L+' Фасад '+(k+1),w:dw,h:dh,tex:s.facade.hasTexture};
+        const secMat=normFacadeMat(s.facade.material);
+        if(secMat==='mdfKraska') facMdfKraska.push(p);
+        else if(secMat==='mdfPlenka') facMdfPlenka.push(p);
+        else facLdsp.push(p);
+        if(secMat==='ldsp'){
+          addEdge(L+' Фасад '+(k+1),dw,dh,'vis','vis','vis','vis');
+        }
+      }
+    }
+  });
+
+  // Антресоли — вторым корпусом ядра на каждую секцию
+  sections.forEach((s,si)=>{
+    if(!s.antresol||!s.antresol.enabled)return;
+    const AH=s.antresol.height, AW=s.width, L='С'+(si+1)+'А';
+    const aef=s.edgeFront||'2mm', aeb=s.edgeBack||'none';
+    function addAEdge(name,w,h,topDef,bottomDef,leftDef,rightDef){
+      function resolve(userMode,defBucket){
+        if(userMode==='none') return null;
+        if(userMode==='match') return 'vis';
+        return defBucket;
+      }
+      const bT=resolve(s.edgeTop||'auto',topDef);
+      const bB=resolve(s.edgeBottom||'auto',bottomDef);
+      const bL=resolve(s.edgeLeft||'auto',leftDef);
+      const bR=resolve(s.edgeRight||'auto',rightDef);
+      let visLen=0, hidLen=0;
+      if(bT==='vis') visLen+=w; else if(bT==='hid') hidLen+=w;
+      if(bB==='vis') visLen+=w; else if(bB==='hid') hidLen+=w;
+      if(bL==='vis') visLen+=h; else if(bL==='hid') hidLen+=h;
+      if(bR==='vis') visLen+=h; else if(bR==='hid') hidLen+=h;
+      const pm04=((aef==='04mm'?visLen:0)+(aeb==='04mm'?hidLen:0))/1000;
+      const pm2=((aef==='2mm'?visLen:0)+(aeb==='2mm'?hidLen:0))/1000;
+      if(pm04>0||pm2>0) edgeRows.push({name,pm04,pm2});
+    }
+    const antrShelves=s.antresol.shelves||[];
+    const cfgA = {
+      width: AW, height: AH, depth: s.depth, legs: 0,
+      panel: T, back: 3, edge: 1, gapFront: T, gapBack: 3,
+      sections: antrShelves.length ? {type:'shelves', count: antrShelves.length} : null
+    };
+    const resA = window.WardrobeCore.buildCarcass(cfgA);
+    let aShelf=0, aSide=0;
+    resA.parts.forEach(function(p){
+      if(p.material === 'metal') return;
+      let nm=null, bucket=ldsp, edgeSpec=null;
+      switch(p.kind){
+        case 'side':
+          aSide++;
+          nm = L + (aSide === 1 ? ' Бок лев' : ' Бок пр');
+          edgeSpec = ['vis','hid','vis','hid'];
+          break;
+        case 'top':    nm = L + ' Крыша'; edgeSpec = ['vis','hid','hid','hid']; break;
+        case 'bottom': nm = L + ' Дно';   edgeSpec = ['vis','hid','hid','hid']; break;
+        case 'back':   nm = L + ' Задняя'; bucket = hdf; break;
+        case 'shelf':
+          aShelf++;
+          nm = L + ' Полка ' + aShelf;
+          edgeSpec = ['vis','hid','hid','hid'];
+          break;
+        default: nm = L + ' ' + p.name;
+      }
+      let pw, ph;
+      if(p.kind==='side'){ pw = p.cutW; ph = p.cutL; }
+      else { pw = p.cutL; ph = p.cutW; }
+      const row = {name: nm, w: pw, h: ph, tex:false};
+      if(bucket === ldsp){ row.edgeFront = aef; row.edgeBack = aeb; }
+      bucket.push(row);
+      if(edgeSpec) addAEdge(nm, pw, ph, edgeSpec[0], edgeSpec[1], edgeSpec[2], edgeSpec[3]);
+    });
+    if(s.antresol.facade.type!=='none'){
+      const cnt=s.antresol.facade.type==='doors3'?3:s.antresol.facade.type==='doors2'?2:1;
+      const gap=4,dw=Math.round((AW-gap*(cnt+1))/cnt),dh=AH-gap*2;
+      for(let k=0;k<cnt;k++){
+        const p={name:L+' Фасад '+(k+1),w:dw,h:dh,tex:false};
+        const antrMat=normFacadeMat(s.antresol.facade.material);
+        if(antrMat==='mdfKraska') facMdfKraska.push(p);
+        else if(antrMat==='mdfPlenka') facMdfPlenka.push(p);
+        else facLdsp.push(p);
+        if(antrMat==='ldsp'){
+          addAEdge(L+' Фасад '+(k+1),dw,dh,'vis','vis','vis','vis');
+        }
+      }
+    }
+  });
+
+  const totalPm04=edgeRows.reduce((a,r)=>a+r.pm04,0);
+  const totalPm2=edgeRows.reduce((a,r)=>a+r.pm2,0);
+  let n=1;
+  ldsp.forEach(p=>p.num=n++);
+  hdf.forEach(p=>p.num=n++);
+  facLdsp.forEach(p=>p.num=n++);
+  facMdfPlenka.forEach(p=>p.num=n++);
+  facMdfKraska.forEach(p=>p.num=n++);
+  return{ldsp,hdf,facLdsp,facMdfPlenka,facMdfKraska,edgeRows,totalPm04,totalPm2};
+}
+
 function calcParts(){
+  if(USE_CORE_ENGINE && window.WardrobeCore){
+    try{ return calcPartsCore(); }
+    catch(e){ console.warn('CORE ENGINE: ошибка, откат на старый расчёт', e); }
+  }
+  return calcPartsLegacy();
+}
+
+function calcPartsLegacy(){
   const ldsp=[],hdf=[],facLdsp=[],facMdfPlenka=[],facMdfKraska=[];
   const edgeRows=[];
   let partNum=0; // сквозная нумерация деталей
@@ -3709,6 +4003,9 @@ window._getSections  = () => sections;
 // Экспорт для ИИ-помощника — через геттер чтобы всегда получать актуальный массив
 Object.defineProperty(window, '_ai_sections', { get: ()=>sections, set: v=>{sections=v;} });
 window._ai_mkSection   = mkSection;
+window._calcParts      = calcParts;
+window._buildCoreTree  = buildCoreTree;
+window.setCoreEngine   = setCoreEngine;
 window._ai_renderPanel = renderPanel;
 window._ai_render3D    = render3D;
 window._ai_updateStats = updateStats;

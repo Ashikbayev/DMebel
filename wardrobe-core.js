@@ -1,5 +1,5 @@
 /* ============================================================
-   MebelOFF — Wardrobe Core (ядро геометрии шкафа) v0.9
+   MebelOFF — Wardrobe Core (ядро геометрии шкафа) v1.3
    ------------------------------------------------------------
    ЕДИНЫЙ ИСТОЧНИК ПРАВДЫ о деталях шкафа.
    Чистая логика, БЕЗ DOM, БЕЗ three.js — тестируется голым node.
@@ -12,9 +12,16 @@
    Дерево воспроизводит реальный эталон-стеллаж из ПО (см. buildSection).
    ФАСАДЫ: накладные створки (buildFacades), эталон 1895×396 ×2.
    ШТАНГА: лист дерева {type:'rod'} — ⚠ БЕЗ эталона ПО, допущения в buildRod.
-   ЯЩИКИ: лист дерева {type:'drawers'} — ВЫВЕРЕНО по эталону ПО
-     (46 деталей, ЛДСП 7.8 м², ХДФ 2.2 м²), см. buildDrawers.
-   Впереди: ниши, петли/присадка, витрины.
+   ЯЩИКИ: лист дерева {type:'drawers'} — ДВА ТИПА УСТАНОВКИ (mount):
+     'inset' (внутренние, эталон 1: 46 дет, ЛДСП 7.8/ХДФ 2.2 м²) и
+     'overlay' (НАКЛАДНЫЕ, эталон 2: без своих стоек, короб на всю
+     ячейку «как полки», фасад перекрывает соседей, 178×406 точно).
+     3D внутренних ИСПРАВЛЕНО по image 1/3: фасад утоплен в проём.
+   ФАСАД НА ЯЧЕЙКУ (B3): лист дерева {type:'facade'} — ⚠ ПО СТАНДАРТУ
+     (решение Дали: эталона ПО нет, допущения в buildCellFacade).
+   ГРАНИЧНЫЕ ПОЛКИ (D): флаги bottomShelf/topShelf узла shelves —
+     ⚠ ПО СТАНДАРТУ (решение Дали, image 5/7 нет), см. buildSection.
+   Впереди: ниши, присадка, витрины.
 
    Система координат (мм), правая тройка:
      X — ширина  (вправо +)
@@ -49,7 +56,9 @@
     // Узел делит ОДНУ прямоугольную ячейку:
     //   { type:'shelves'|'panels', count:N, sizes:[...], children:[узел|null, ...] }
     //   'shelves' — N полок делят ВЫСОТУ ячейки на N+1 проёмов,
-    //               каждая полка режется РОВНО в ширину ячейки.
+    //               каждая полка режется РОВНО в ширину ячейки;
+    //               ⚠ ПО СТАНДАРТУ (этап D): флаги bottomShelf/topShelf —
+    //               граничные полки на низ/под верх ячейки (см. buildSection).
     //   'panels'  — N перегородок делят ШИРИНУ ячейки на N+1 секций,
     //               каждая перегородка режется РОВНО в высоту ячейки.
     //   sizes     — опц. размеры долей (мм): число = фикс, null/нет = авто
@@ -65,6 +74,9 @@
     //       railFront?, railBack?, fGapTop?, fGapBottom?, fGapSide? }
     //     Свои стойки + 2 планки + на ящик: 2 боковины, перед/зад,
     //     дно ХДФ, фасад, направляющие (фурнитура). См. buildDrawers.
+    //   ЛИСТ-СУЩНОСТЬ: фасад (створки) на ячейку — ⚠ ПО СТАНДАРТУ:
+    //     { type:'facade', count?, sizes?, opening?, gapTop?, gapBottom?,
+    //       gapLeft?, gapRight?, thick?, material? } — см. buildCellFacade.
     // Корень дерева = чистовой проём корпуса (innerW × clearH).
     sections: null,
     // ── НАКЛАДНЫЕ ФАСАДЫ (створки на фронт корпуса) ─────────────
@@ -176,32 +188,132 @@
   }
 
   /* ============================================================
+     buildCellFacade — ФАСАД НА ЯЧЕЙКУ дерева (лист-сущность). Этап B3.
+     ⚠ ЭТАЛОНА ИЗ ПО НЕТ — правила приняты «ПО СТАНДАРТУ» (решение
+     Дали в сессии B3), сверить с раскроем ПО при первом же случае:
+       створка стоит ПЕРЕД корпусом, как фасад ящика: задняя грань
+         на переднем торце деталей (z = partDepth), толщина вперёд;
+       геометрия = ПРОЁМ ячейки − зазоры; зазоры по умолчанию 2 мм
+         со всех сторон (унифицировано с fGapSide/fGapBottom ящиков);
+         створка НЕ перекрывает торцы соседних панелей — стиль ПО,
+         виден на фасадах ящиков «Модерн»;
+       count>1: ширина ячейки делится на слоты (sizes или поровну,
+         БЕЗ панелей между); межстворочный зазор = gapRight+gapLeft (4);
+       раскрой = геометрия − 2·edge, точность 0.1 (fine), кромка —
+         все 4 стороны (как Фасад фронта и ЯщикФ);
+       петли: «Петля накладная», кол-во от ВЫСОТЫ створки (стандарт
+         мебельной практики, у ПО может отличаться):
+           < 900 → 2, < 1600 → 3, < 2000 → 4, иначе → 5;
+         идут в фурнитуру (part.hardware → summary), не в раскрой;
+       opening — сторона ПЕТЕЛЬ: одиночная 'right'; несколько —
+         крайние наружу ('left' … 'right'), середина чередуется.
+     Узел: { type:'facade', count?(1), sizes?, opening?:['left'|'right'],
+             gapTop?(2), gapBottom?(2), gapLeft?(2), gapRight?(2),
+             thick?(=panel), material?('ldsp') }
+     Деталь: kind='facade' (рендер в туле общий с buildFacades:
+     2D-ручка по opening, чекбокс «Фасады» в 3D), имя 'Створка_N' —
+     сквозная нумерация, не пересекается с 'Фасад_N' фронта.
+  ============================================================ */
+  function buildCellFacade(node, cell, ctx, parts) {
+    function num(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : d; }
+    var edge = num(ctx.edge, 1);
+    var count = node.count > 0 ? (node.count | 0) : 1;
+    var thick = num(node.thick, ctx.panel);
+    var gT = num(node.gapTop, 2), gB = num(node.gapBottom, 2);
+    var gL = num(node.gapLeft, 2), gR = num(node.gapRight, 2);
+    var mat = node.material || 'ldsp';
+    var opening = node.opening || [];
+
+    var cellH = cell.y1 - cell.y0;
+    var geomH = cellH - gT - gB;
+    var cutH = geomH - 2 * edge;
+    var cy = cell.y0 + gB + geomH / 2;
+    // Петли по высоте створки — стандарт: <900→2, <1600→3, <2000→4, ≥2000→5
+    var hinges = geomH < 900 ? 2 : geomH < 1600 ? 3 : geomH < 2000 ? 4 : 5;
+
+    var slotW = splitSizes(node.sizes, count, cell.x1 - cell.x0, 0, 0);
+    var xcur = cell.x0, i, sw, geomW, cutW, k;
+    for (i = 0; i < count; i++) {
+      sw = slotW[i];
+      geomW = sw - gL - gR;
+      cutW = geomW - 2 * edge;
+      k = ++ctx.counters.cfacade;
+      parts.push(mkPart({
+        name: 'Створка_' + k, kind: 'facade',
+        material: mat, thick: thick, fine: true,
+        cutL: cutH, cutW: cutW,
+        edges: [
+          { side: 'top', len: cutW },
+          { side: 'bottom', len: cutW },
+          { side: 'left', len: cutH },
+          { side: 'right', len: cutH }
+        ],
+        box: {
+          cx: xcur + gL + geomW / 2, cy: cy, cz: ctx.partDepth + thick / 2,
+          dx: geomW, dy: geomH, dz: thick
+        }
+      }));
+      parts[parts.length - 1].opening = opening[i] ||
+        (count === 1 ? 'right'
+          : (i === 0 ? 'left'
+            : (i === count - 1 ? 'right'
+              : (i % 2 ? 'right' : 'left'))));
+      parts[parts.length - 1].hardware = [{ name: 'Петля накладная', qty: hinges }];
+      xcur += sw;
+    }
+  }
+
+  /* ============================================================
      buildDrawers — СЕКЦИЯ С ЯЩИКАМИ в ячейке дерева (лист-сущность).
-     ВЫВЕРЕНО ПО ЭТАЛОНУ ИЗ ПО (шкаф 800×2000×600, колонки 376,
-     секция в проёме 360.8, ящиков 2, дно накладное 3/отступ 1,
-     шариковые направляющие: глубина 550, отступ верх 50 / низ 20):
-       ЯСтойка ×2       361 × 580   (=проём 360.8→361; глубина 580, см. ⚠)
+     ДВА ТИПА УСТАНОВКИ (mount), ОБА ВЫВЕРЕНЫ ПО ЭТАЛОНАМ ПО:
+     ── mount:'inset' (ВНУТРЕННИЕ, по умолчанию) ──────────────────
+     Эталон 1 (шкаф 800×2000×600, колонки 376, секция в проёме 360.8,
+     ящиков 2, дно накладное 3/отступ 1, шариковые направляющие:
+     глубина 550, отступ верх 50 / низ 20):
+       ЯСтойка ×2       361 × 580   (=проём 360.8→361; 580 = pd + edge:
+                        у стойки НЕТ задней подрезки — ПОДТВЕРЖДЕНО
+                        эталоном 2, где без подрезки стойка = полка)
        ЯПланка перед    342 × 70    (=проём секции 344 − 2·edge)
-       ЯПланка зад      342 × 68
-       на ящик: бок ×2  549 × 109   (=550−edge × 180.4−50−20−edge=109.4→109)
-                п/з ×2  285 × 109   (=короб 318 − 2·panel − edge)
-                дно ХДФ 316 × 548   (=короб/глубина − 2·bottomInset, не кромится)
-                фасад 146.4 × 338   (=гео − 2·edge, точность 0.1 — fine)
-     Правила (все ✓ сходятся с раскроем ПО, image 2):
-       проём секции = ячейка − 2·panel (секция несёт СВОИ стойки);
-       короб по ширине = проём − clearance (26 — шариковые направляющие);
+       ЯПланка зад      342 × 68    (⚠ в эталоне 2 планки 69/71 —
+                        ширины параметрические; какая перед — не видно)
+       на ящик: бок ×2  549 × 109   (=550−edge × 180.4−50−20−edge)
+                п/з ×2  285 × 109   (=короб 318 − 2·panel − 1)
+                дно ХДФ 316 × 548   (=короб/глубина − 2·bottomInset)
+                фасад 146.4 × 338   (=гео − 2·edge, fine 0.1)
+     Правила inset: проём секции = ячейка − 2·panel (секция несёт СВОИ
+       стойки + 2 планки); короб = проём − clearance (26); фасад В
+       РАЗМЕР ПРОЁМА СЕКЦИИ минус fGap* (внутренний).
+     3D inset (ИСПРАВЛЕНО по рендеру ПО, image 1/3 эталона 2): фасад
+       УТОПЛЕН В ПРОЁМ (передняя грань заподлицо с фронтом деталей,
+       cz = pd − panel/2), короб сдвинут назад на panel (за фасад).
+     ── mount:'overlay' (НАКЛАДНЫЕ, эталон 2: image 1–8) ──────────
+     Эталон 2 (та же геометрия, проект БЕЗ подрезки кромки; сверка
+     по деталям, не зависящим от подрезки, сошлась точно):
+       СВОИХ СТОЕК И ПЛАНОК НЕТ — короб на всю ширину ячейки,
+       «по ширине как полки» (Дали):
+         короб = ячейка − clearance      (376−26 = 350 ✓ ЯщикД 348)
+         п/з   = короб − 2·panel, БЕЗ −1 (350−32 = 318 ✓ раскрой)
+         дно   = короб/глубина − 2·bottomInset (348×548 ✓ точно)
+       ФАСАД НАКЛАДНОЙ, перед корпусом (в зоне gapFront — «отступ
+       спереди 16»), ПЕРЕКРЫВАЕТ соседние панели:
+         гео W = ячейка + 2·fOverhang, fOverhang по умолч. = panel
+                 (376+32 = 408 ✓ панель ПО, image 6/7)
+         по высоте фасады заполняют зону слотов ЗАПОДЛИЦО с краями,
+         межфасадный зазор fGapMid (0.8): 180+0.8+180 = 360.8 ✓
+                 (⚠ разбивка 0.4/0.4 на фасад — из одного расчёта)
+         раскрой = гео − 2·edge, fine: 178×406 ✓ ТОЧНО как в ПО
+       fGapTop/fGapBottom/fGapSide в overlay НЕ участвуют.
+       3D: короб передним краем заподлицо с корпусом (pd), фасад
+       pd..pd+panel; у детали фасада поле mount='overlay' (для ручки).
+     ── Общее ─────────────────────────────────────────────────────
        зона слотов = высота ячейки − secTop − secBottom; делится на
        count долей БЕЗ панелей между (splitSizes, panel=0), heights
-       как sizes (число=фикс, null=авто); слот 1 — НИЖНИЙ (как в ПО:
-       «Высота ящика 1 (нижний)»); эталон: 360.8/2 = 180.4.
-     ⚠ ДОПУЩЕНИЯ (раскрой их не разделяет — сверить с ПО при случае):
-       fGapTop=30 / fGapBottom=2 — в раскрое видна только СУММА 32
-         (зазор-захват над фасадом, стиль «Модерн» без ручек);
-       глубина ЯСтойки = partDepth + edge (эталон 580 при полках 579) —
-         видимо, стойка секции без задней подрезки;
-       планка 70 — спереди, 68 — сзади (в ПО обе «Планка_верхняя»);
-       3D: планки плашмя под верхом ячейки; короб передним краем
-         заподлицо с корпусом; дно накладное снизу короба.
+       как sizes; слот 1 — НИЖНИЙ (как в ПО); эталоны: 360.8/2=180.4.
+     ⚠ ДОПУЩЕНИЯ (осталось сверить):
+       inset: fGapTop=30 / fGapBottom=2 — в раскрое видна только
+         СУММА 32 (эталон 2 даёт сумму 30.4 при других настройках);
+       планки: какая 70 (перед) / 68 (зад) — в ПО обе «Планка_верхняя»;
+       overlay fGapMid=0.8 и его разбивка по фасадам.
      Фурнитура: «Направляющие шариковые {boxDepth} мм (компл.)» ×1 на
        ящик (комплект = 2 планки), висит на левой боковине → summary.
      Имена (маппинг на имена ПО — в даунстрим-отображении):
@@ -214,6 +326,7 @@
     var edge = num(ctx.edge, 1);
     var count = node.count | 0;
     if (count <= 0) return;
+    var mount = node.mount === 'overlay' ? 'overlay' : 'inset';
     var secTop = num(node.secTop, 0), secBottom = num(node.secBottom, 0);
     var boxDepth = num(node.boxDepth, 550);
     var topOffset = num(node.topOffset, 50), bottomOffset = num(node.bottomOffset, 20);
@@ -222,41 +335,49 @@
     var railFront = num(node.railFront, 70), railBack = num(node.railBack, 68);
     var fGapTop = num(node.fGapTop, 30), fGapBottom = num(node.fGapBottom, 2);
     var fGapSide = num(node.fGapSide, 2);
+    var fGapMid = num(node.fGapMid, 0.8);       // overlay: межфасадный зазор
+    var fOverhang = num(node.fOverhang, panel); // overlay: перекрытие соседей
 
     var cellH = cell.y1 - cell.y0;
+    var cellW = cell.x1 - cell.x0;
     var cx = (cell.x0 + cell.x1) / 2;
-    var opening = (cell.x1 - cell.x0) - 2 * panel; // проём между своими стойками
-    var boxW = opening - clearance;                // короб по ширине
+    // inset: проём между СВОИМИ стойками; overlay: вся ячейка (стоек нет)
+    var opening = mount === 'inset' ? cellW - 2 * panel : cellW;
+    var boxW = opening - clearance;             // короб по ширине
+    // inset: короб утоплен за фасад (image 1/3); overlay: заподлицо с pd
+    var boxFrontZ = mount === 'inset' ? pd - panel : pd;
     var s = ++ctx.counters.drawerSec;
 
-    // ── Стойки секции (2 шт), кромка — передний торец ────────────
-    function post(name, pcx) {
-      return mkPart({
-        name: name, kind: 'dpost', material: 'ldsp', thick: panel,
-        cutL: cellH, cutW: pd + edge,              // ⚠ эталон 580 при pd 579
-        edges: [{ side: 'front', len: cellH }],
-        box: { cx: pcx, cy: (cell.y0 + cell.y1) / 2, cz: cell.z, dx: panel, dy: cellH, dz: pd }
-      });
-    }
-    parts.push(post('ЯСтойка_левая_' + s, cell.x0 + panel / 2));
-    parts.push(post('ЯСтойка_правая_' + s, cell.x1 - panel / 2));
+    if (mount === 'inset') {
+      // ── Стойки секции (2 шт), кромка — передний торец ──────────
+      var post = function (name, pcx) {
+        return mkPart({
+          name: name, kind: 'dpost', material: 'ldsp', thick: panel,
+          cutL: cellH, cutW: pd + edge,            // 580: нет задней подрезки
+          edges: [{ side: 'front', len: cellH }],
+          box: { cx: pcx, cy: (cell.y0 + cell.y1) / 2, cz: cell.z, dx: panel, dy: cellH, dz: pd }
+        });
+      };
+      parts.push(post('ЯСтойка_левая_' + s, cell.x0 + panel / 2));
+      parts.push(post('ЯСтойка_правая_' + s, cell.x1 - panel / 2));
 
-    // ── Планки верхние (перед/зад), плашмя под верхом ячейки ─────
-    function rail(name, w, rcz) {
-      return mkPart({
-        name: name, kind: 'drail', material: 'ldsp', thick: panel,
-        cutL: opening - 2 * edge, cutW: w,
-        edges: [{ side: 'front', len: opening - 2 * edge }],
-        box: { cx: cx, cy: cell.y1 - panel / 2, cz: rcz, dx: opening, dy: panel, dz: w }
-      });
+      // ── Планки верхние (перед/зад), плашмя под верхом ячейки ───
+      var rail = function (name, w, rcz) {
+        return mkPart({
+          name: name, kind: 'drail', material: 'ldsp', thick: panel,
+          cutL: opening - 2 * edge, cutW: w,
+          edges: [{ side: 'front', len: opening - 2 * edge }],
+          box: { cx: cx, cy: cell.y1 - panel / 2, cz: rcz, dx: opening, dy: panel, dz: w }
+        });
+      };
+      parts.push(rail('ЯПланка_перед_' + s, railFront, pd - railFront / 2));
+      parts.push(rail('ЯПланка_зад_' + s, railBack, railBack / 2));
     }
-    parts.push(rail('ЯПланка_перед_' + s, railFront, pd - railFront / 2));
-    parts.push(rail('ЯПланка_зад_' + s, railBack, railBack / 2));
 
     // ── Слоты (снизу вверх) и ящики ──────────────────────────────
     var zoneY0 = cell.y0 + secBottom, zoneY1 = cell.y1 - secTop;
     var slots = splitSizes(node.heights, count, zoneY1 - zoneY0, 0, 0);
-    var ycur = zoneY0, i, slotH, k, bY0, bY1, bH, geomW, geomH;
+    var ycur = zoneY0, i, slotH, k, bY0, bY1, bH, geomW, geomH, fY0, fY1;
     for (i = 0; i < count; i++) {
       slotH = slots[i];
       k = ++ctx.counters.drawer;
@@ -266,31 +387,33 @@
 
       // Боковины ×2: длина = глубина короба − подрезка,
       // высота − подрезка под кромку (эталон 109.4 → раскрой 109)
-      function side(name, scx) {
+      var side = function (name, scx) {
         return mkPart({
           name: name, kind: 'dside', material: 'ldsp', thick: panel,
           cutL: boxDepth - edge, cutW: bH - edge,
           edges: [{ side: 'top', len: boxDepth - edge }],
-          box: { cx: scx, cy: (bY0 + bY1) / 2, cz: pd - boxDepth / 2, dx: panel, dy: bH, dz: boxDepth }
+          box: { cx: scx, cy: (bY0 + bY1) / 2, cz: boxFrontZ - boxDepth / 2, dx: panel, dy: bH, dz: boxDepth }
         });
-      }
+      };
       parts.push(side('ЯщикБЛ_' + k, cx - (boxW - panel) / 2));
       parts[parts.length - 1].hardware = [
         { name: 'Направляющие шариковые ' + boxDepth + ' мм (компл.)', qty: 1 }
       ];
       parts.push(side('ЯщикБП_' + k, cx + (boxW - panel) / 2));
 
-      // Перед / Зад: между боковинами, −edge (посадка, эталон 285)
-      function fb(name, fkind, fcz) {
+      // Перед / Зад: между боковинами.
+      // inset: −1 (посадка, эталон 1: 285); overlay: РОВНО (эталон 2: 318)
+      var fbCut = boxW - 2 * panel - (mount === 'inset' ? edge : 0);
+      var fb = function (name, fkind, fcz) {
         return mkPart({
           name: name, kind: fkind, material: 'ldsp', thick: panel,
-          cutL: boxW - 2 * panel - edge, cutW: bH - edge,
-          edges: [{ side: 'top', len: boxW - 2 * panel - edge }],
+          cutL: fbCut, cutW: bH - edge,
+          edges: [{ side: 'top', len: fbCut }],
           box: { cx: cx, cy: (bY0 + bY1) / 2, cz: fcz, dx: boxW - 2 * panel, dy: bH, dz: panel }
         });
-      }
-      parts.push(fb('ЯщикП_' + k, 'dfront', pd - panel / 2));
-      parts.push(fb('ЯщикЗ_' + k, 'dback', pd - boxDepth + panel / 2));
+      };
+      parts.push(fb('ЯщикП_' + k, 'dfront', boxFrontZ - panel / 2));
+      parts.push(fb('ЯщикЗ_' + k, 'dback', boxFrontZ - boxDepth + panel / 2));
 
       // Дно ХДФ: накладное снизу короба, отступ по краям bottomInset
       parts.push(mkPart({
@@ -298,14 +421,26 @@
         cutL: boxW - 2 * bottomInset, cutW: boxDepth - 2 * bottomInset,
         edges: [],
         box: {
-          cx: cx, cy: bY0 - bottomThick / 2, cz: pd - boxDepth / 2,
+          cx: cx, cy: bY0 - bottomThick / 2, cz: boxFrontZ - boxDepth / 2,
           dx: boxW - 2 * bottomInset, dy: bottomThick, dz: boxDepth - 2 * bottomInset
         }
       }));
 
-      // Фасад: в слоте, утоплен на fGap*, раскрой = гео − 2·edge, fine 0.1
-      geomW = opening - 2 * fGapSide;
-      geomH = slotH - fGapTop - fGapBottom;
+      // Фасад: раскрой = гео − 2·edge, точность 0.1 (fine), кромка 4 ст.
+      if (mount === 'inset') {
+        // в размер ПРОЁМА СЕКЦИИ минус fGap*, УТОПЛЕН В ПРОЁМ:
+        // передняя грань заподлицо с фронтом деталей (image 1/3)
+        geomW = opening - 2 * fGapSide;
+        geomH = slotH - fGapTop - fGapBottom;
+        fY0 = ycur + fGapBottom;
+      } else {
+        // НАКЛАДНОЙ: перекрывает соседние панели по ширине; по высоте
+        // фасады заполняют зону заподлицо, между ними fGapMid (эталон 2)
+        geomW = cellW + 2 * fOverhang;
+        fY0 = ycur + (i > 0 ? fGapMid / 2 : 0);
+        fY1 = ycur + slotH - (i < count - 1 ? fGapMid / 2 : 0);
+        geomH = fY1 - fY0;
+      }
       parts.push(mkPart({
         name: 'ЯщикФ_' + k, kind: 'dfacade', material: 'ldsp', thick: panel, fine: true,
         cutL: geomH - 2 * edge, cutW: geomW - 2 * edge,
@@ -316,10 +451,12 @@
           { side: 'right', len: geomH - 2 * edge }
         ],
         box: {
-          cx: cx, cy: ycur + fGapBottom + geomH / 2, cz: pd + panel / 2,
+          cx: cx, cy: fY0 + geomH / 2,
+          cz: mount === 'inset' ? pd - panel / 2 : pd + panel / 2,
           dx: geomW, dy: geomH, dz: panel
         }
       }));
+      parts[parts.length - 1].mount = mount;
       ycur += slotH;
     }
   }
@@ -339,6 +476,15 @@
      Эталон воспроизводится: корень panels(1)→376/376; лево shelves(2)→612×3
      (в средней 612-ячейке panels(1)→180/180 = короткая Вертикальная 612);
      право shelves(4)→360.8×5. Итог: Полка 376 ×6, Вертикальная 1868 ×1, 612 ×1.
+
+     ⚠ ЭТАП D — ПО СТАНДАРТУ (решение Дали, эталона image 5/7 нет):
+     у узла shelves флаги bottomShelf / topShelf добавляют ГРАНИЧНЫЕ
+     полки: bottomShelf лежит НА низу ячейки, topShelf — ПОД верхом.
+     Зона проёмов сжимается на panel за каждый флаг; число проёмов
+     (count+1) и children НЕ меняются. Граничная полка — обычная
+     Полка_N (та же ширина ячейки, кромка перёд, сквозной счётчик);
+     порядок нумерации: нижняя → промежуточные снизу вверх → верхняя.
+     Типовые случаи: полка над ящиками, антресольная, фальш-дно.
   ============================================================ */
   function buildSection(node, cell, ctx, parts) {
     if (!node) return;
@@ -357,6 +503,11 @@
     if (node.type === 'drawers') {
       // ЛИСТ-СУЩНОСТЬ: секция с ящиками занимает ячейку целиком.
       buildDrawers(node, cell, ctx, parts);
+      return;
+    }
+    if (node.type === 'facade') {
+      // ЛИСТ-СУЩНОСТЬ: створки закрывают ячейку целиком, детей нет.
+      buildCellFacade(node, cell, ctx, parts);
       return;
     }
     if (node.type === 'panels') {
@@ -386,27 +537,37 @@
     } else if (node.type === 'shelves') {
       // N горизонтальных полок делят ВЫСОТУ на slots долей (sizes или поровну).
       // Каждая полка режется РОВНО в ширину ячейки. Доли снизу вверх.
-      sizes = splitSizes(node.sizes, slots, cellH, N, panel);
-      var ycur = cell.y0;
+      // mkShelf(yBottom) — полка с нижней гранью на yBottom (общая фабрика
+      // для промежуточных и граничных полок этапа D).
+      var mkShelf = function (yBottom) {
+        ctx.counters.shelf++;
+        parts.push(mkPart({
+          name: 'Полка_' + ctx.counters.shelf, kind: 'shelf',
+          material: 'ldsp', thick: panel,
+          cutL: cellW, cutW: pd,
+          edges: [{ side: 'front', len: cellW }],
+          box: {
+            cx: (cell.x0 + cell.x1) / 2, cy: yBottom + panel / 2, cz: cell.z,
+            dx: cellW, dy: panel, dz: pd
+          }
+        }));
+      };
+      // ⚠ ЭТАП D (по стандарту): граничные полки сжимают зону проёмов.
+      var zy0 = cell.y0, zy1 = cell.y1;
+      if (node.bottomShelf) { mkShelf(zy0); zy0 += panel; }
+      if (node.topShelf) zy1 -= panel;
+      sizes = splitSizes(node.sizes, slots, zy1 - zy0, N, panel);
+      var ycur = zy0;
       for (s = 0; s < slots; s++) {
         var h = sizes[s];
         sc.push({ x0: cell.x0, x1: cell.x1, y0: ycur, y1: ycur + h, z: cell.z });
         ycur += h;
         if (s < N) {
-          ctx.counters.shelf++;
-          parts.push(mkPart({
-            name: 'Полка_' + ctx.counters.shelf, kind: 'shelf',
-            material: 'ldsp', thick: panel,
-            cutL: cellW, cutW: pd,
-            edges: [{ side: 'front', len: cellW }],
-            box: {
-              cx: (cell.x0 + cell.x1) / 2, cy: ycur + panel / 2, cz: cell.z,
-              dx: cellW, dy: panel, dz: pd
-            }
-          }));
+          mkShelf(ycur);
           ycur += panel;
         }
       }
+      if (node.topShelf) mkShelf(zy1);
     } else {
       return; // неизвестный тип — молча игнор (лист)
     }
@@ -588,7 +749,7 @@
       // Корневая ячейка = чистовой проём корпуса:
       //   по X — между внутренними гранями стоек (±innerW/2),
       //   по Y — от верха дна до низа крыши (высота = clearH = 1868).
-      var ctx = { panel: c.panel, partDepth: partDepth, edge: edge, counters: { shelf: 0, panel: 0, rod: 0, drawerSec: 0, drawer: 0 } };
+      var ctx = { panel: c.panel, partDepth: partDepth, edge: edge, counters: { shelf: 0, panel: 0, rod: 0, drawerSec: 0, drawer: 0, cfacade: 0 } };
       var rootCell = {
         x0: -innerW / 2, x1: innerW / 2,
         y0: c.legs + c.panel,               // верх дна
@@ -692,9 +853,11 @@
     buildCarcass: buildCarcass,
     buildSection: buildSection,
     buildFacades: buildFacades,
+    buildCellFacade: buildCellFacade,
     buildRod: buildRod,
     buildDrawers: buildDrawers,
-    partEdgeLen: partEdgeLen
+    partEdgeLen: partEdgeLen,
+    splitSizes: splitSizes
   };
 
   // Экспорт: и как модуль node, и как глобал для браузера

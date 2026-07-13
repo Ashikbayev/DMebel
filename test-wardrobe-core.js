@@ -574,7 +574,11 @@ var db1 = byName(rd.parts, 'ЯщикБЛ_1');
 var df1 = byName(rd.parts, 'ЯщикФ_1');
 var df2 = byName(rd.parts, 'ЯщикФ_2');
 eq(db1.box.dz, 550, 'глубина короба в 3D = 550');
-eq(df1.box.cz, 579 + 8, 'фасад ящика перед корпусом (cz = 587)');
+// ИСПРАВЛЕНО по рендеру ПО (эталон 2, image 1/3): внутренний фасад
+// УТОПЛЕН В ПРОЁМ (передняя грань заподлицо с фронтом деталей),
+// короб сдвинут за фасад. Было допущение cz = pd + 8 (перед корпусом).
+eq(df1.box.cz, 579 - 8, 'фасад ящика (inset) утоплен в проём (cz = 571)');
+eq(db1.box.cz, 579 - 16 - 275, 'короб (inset) утоплен за фасад');
 ok(df1.box.cy < df2.box.cy, 'ящик 1 — НИЖНИЙ (как в ПО)');
 // Металл/фурнитура не попали в м² и в детали: 46 — только панели
 eq(cntIf(function (p) { return p.material === 'metal'; }), 0, 'металла в деталях нет');
@@ -607,6 +611,320 @@ var cs3 = byName(rd2.parts, 'ЯщикБЛ_3');
 eq(cs3.cutW, 199, 'кастом: авто-высота 3-го ящика (250−40−10−1)');
 eq(rd2.summary.hardware['Направляющие шариковые 500 мм (компл.)'], 3,
   'кастом: 3 комплекта направляющих 500 мм');
+
+/* ── B3: ФАСАД НА ЯЧЕЙКУ дерева — ⚠ ПО СТАНДАРТУ (эталона ПО нет) ──
+   Правила: створка = проём ячейки − зазоры (2/2/2/2 по умолчанию),
+   перед корпусом (z=pd..pd+thick), раскрой = гео − 2·edge (fine),
+   кромка 4 стороны, петли по высоте (<900→2, <1600→3, <2000→4, ≥→5). */
+console.log('── B3: фасады на ячейку (по стандарту, ⚠ сверить с ПО) ──');
+var rf = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'panels', count: 1, children: [
+    { type: 'facade' },                                   // левая колонка: 1 створка
+    { type: 'shelves', count: 1, sizes: [600], children: [
+      { type: 'facade', count: 2 },                       // низ: двустворка
+      { type: 'facade', opening: ['left'] }               // верх: петли слева
+    ] }
+  ] }
+});
+// 2 стойки + дно + крыша + ЗС + перегородка + полка + 4 створки = 11
+eq(rf.parts.length, 11, 'B3: всего деталей 11');
+
+// Створка_1 — левая колонка целиком (ячейка 376 × 1868)
+var f1 = byName(rf.parts, 'Створка_1');
+ok(f1, 'Створка_1 есть');
+eq(f1.kind, 'facade', 'Створка_1 kind=facade (общий рендер)');
+eq(f1.cutL, 1862, 'Створка_1 раскрой H = 1868−2−2−2·кромка');
+eq(f1.cutW, 370, 'Створка_1 раскрой W = 376−2−2−2·кромка');
+eq(f1.box.dx, 372, 'Створка_1 геометрия W (проём − зазоры)');
+eq(f1.box.dy, 1864, 'Створка_1 геометрия H');
+eq(f1.box.cx, -196, 'Створка_1 центр X (левая колонка)');
+eq(f1.box.cy, 1050, 'Створка_1 центр Y');
+eq(f1.box.cz, 587, 'Створка_1 центр Z = pd + thick/2 (перед корпусом)');
+eq(f1.box.dz, 16, 'Створка_1 толщина по умолчанию = panel');
+eq(f1.opening, 'right', 'Створка_1 одиночная → петли справа');
+eq(WC.partEdgeLen(f1), 2 * (1862 + 370), 'Створка_1 кромка 4 стороны');
+ok(f1.hardware && f1.hardware[0].name === 'Петля накладная' &&
+  f1.hardware[0].qty === 4, 'Створка_1: 4 петли (1864 < 2000)');
+
+// Двустворка в нижней ячейке (376 × 600), слоты по 188
+var f2 = byName(rf.parts, 'Створка_2');
+var f3 = byName(rf.parts, 'Створка_3');
+ok(f2 && f3, 'двустворка: обе створки есть');
+eq(f2.cutL, 594, 'Створка_2 раскрой H = 600−4−2·кромка');
+eq(f2.cutW, 182, 'Створка_2 раскрой W = 188−4−2·кромка');
+eq(f2.box.cx, 102, 'Створка_2 центр X (левый слот)');
+eq(f3.box.cx, 290, 'Створка_3 центр X (правый слот)');
+eq(f2.box.cy, 416, 'Створка_2 центр Y (нижняя ячейка)');
+// межстворочный зазор = gapRight + gapLeft = 4
+eq((f3.box.cx - f3.box.dx / 2) - (f2.box.cx + f2.box.dx / 2), 4,
+  'зазор между створками 4 (2+2)');
+eq(f2.opening, 'left', 'двустворка: левая — петли слева');
+eq(f3.opening, 'right', 'двустворка: правая — петли справа');
+ok(f2.hardware[0].qty === 2 && f3.hardware[0].qty === 2,
+  'двустворка: по 2 петли (596 < 900)');
+
+// Верхняя ячейка (376 × 1252), opening задан явно
+var f4 = byName(rf.parts, 'Створка_4');
+ok(f4, 'Створка_4 есть');
+eq(f4.cutL, 1246, 'Створка_4 раскрой H = 1252−4−2·кромка');
+eq(f4.cutW, 370, 'Створка_4 раскрой W');
+eq(f4.box.cy, 1358, 'Створка_4 центр Y (верхняя ячейка)');
+eq(f4.opening, 'left', 'Створка_4: opening из узла');
+eq(f4.hardware[0].qty, 3, 'Створка_4: 3 петли (1248 < 1600)');
+
+// Фурнитура в сводке: 4 + 2 + 2 + 3 = 11 петель
+eq(rf.summary.hardware['Петля накладная'], 11, 'сводка: 11 петель');
+
+// Кромка итого: корпус 9890 + створки 4464+2·1552+3232 = 20690
+eq(rf.summary.edgeLenMm, 20690, 'B3: кромка итого 20690 мм');
+eq(rf.summary.edgeLenM, 20.69, 'B3: кромка итого 20.69 м');
+// Площади: ЛДСП 5.752 м² (корпус+перегородка+полка+4 створки), ХДФ 1.515
+eq(rf.summary.areaLdspM2, 5.752, 'B3: ЛДСП 5.752 м²');
+eq(rf.summary.areaHdfM2, 1.515, 'B3: ХДФ 1.515 м²');
+
+// ── B3: створка на ВЕСЬ корневой проём (768 × 1868) ──
+var rfr = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'facade' }
+});
+eq(rfr.parts.length, 6, 'корневая створка: 6 деталей');
+var fr = byName(rfr.parts, 'Створка_1');
+eq(fr.cutW, 762, 'корневая створка W = 768−4−2·кромка');
+eq(fr.cutL, 1862, 'корневая створка H');
+eq(fr.hardware[0].qty, 4, 'корневая створка: 4 петли');
+
+// ── B3: переопределения thick / material / зазоры + fine 0.1 ──
+var rft = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'facade', thick: 18, material: 'mdf',
+    gapTop: 3, gapBottom: 3, gapLeft: 1.75, gapRight: 1.75 }
+});
+var ft = byName(rft.parts, 'Створка_1');
+eq(ft.thick, 18, 'створка: thick переопределён (18)');
+eq(ft.box.dz, 18, 'створка: толщина в 3D');
+eq(ft.box.cz, 588, 'створка: cz = pd + 18/2');
+eq(ft.material, 'mdf', 'створка: material переопределён');
+eq(ft.cutW, 762.5, 'створка: fine 0.1 (768−3.5−2·кромка = 762.5)');
+eq(ft.cutL, 1860, 'створка: H при зазорах 3/3');
+
+// ── B3: границы петель (прямой вызов buildSection) ──
+function hingeQty(cellH) {
+  var ps = [], ctx = { panel: 16, partDepth: 579, edge: 1,
+    counters: { shelf: 0, panel: 0, rod: 0, drawerSec: 0, drawer: 0, cfacade: 0 } };
+  WC.buildSection({ type: 'facade' },
+    { x0: 0, x1: 400, y0: 0, y1: cellH, z: 290 }, ctx, ps);
+  return ps[0].hardware[0].qty;
+}
+eq(hingeQty(900), 2, 'петли: гео 896 < 900 → 2');
+eq(hingeQty(904), 3, 'петли: гео 900 → 3');
+eq(hingeQty(1604), 4, 'петли: гео 1600 → 4');
+eq(hingeQty(2004), 5, 'петли: гео 2000 → 5');
+
+// ── B3: совместимость с фасадами фронта (buildFacades) ──
+var rfc = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'panels', count: 1, children: [{ type: 'facade' }, null] },
+  facades: { count: 2, gapTop: 2, gapBottom: 101, gapLeft: 1, gapRight: 1 }
+});
+ok(byName(rfc.parts, 'Фасад_1') && byName(rfc.parts, 'Фасад_2') &&
+  byName(rfc.parts, 'Створка_1'), 'Фасад_N фронта и Створка_N сосуществуют');
+eq(byName(rfc.parts, 'Фасад_1').cutL, 1895, 'фронт-фасад не сломан (эталон 1895)');
+
+// ── B3: три створки — чередование петель у средней ──
+var rf3 = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'facade', count: 3 }
+});
+eq(byName(rf3.parts, 'Створка_1').opening, 'left', '3 створки: левая — слева');
+eq(byName(rf3.parts, 'Створка_2').opening, 'right', '3 створки: средняя — чередование');
+eq(byName(rf3.parts, 'Створка_3').opening, 'right', '3 створки: правая — справа');
+eq(byName(rf3.parts, 'Створка_1').cutW, 250, '3 створки: раскрой W = 256−4−2·кромка');
+
+/* ── D: ГРАНИЧНЫЕ ПОЛКИ bottomShelf/topShelf — ⚠ ПО СТАНДАРТУ ──
+   (эталона image 5/7 нет). Флаги узла shelves добавляют полки на низ /
+   под верх ячейки; зона проёмов −panel за флаг; children не меняются;
+   нумерация: нижняя → промежуточные снизу вверх → верхняя. */
+console.log('── D: граничные полки (по стандарту, ⚠ сверить с ПО) ──');
+var rD = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'shelves', count: 1, bottomShelf: true, topShelf: true,
+    children: [{ type: 'facade' }, null] }
+});
+// 5 корпус + 3 полки (нижняя, промежуточная, верхняя) + створка = 9
+eq(rD.parts.length, 9, 'D: всего деталей 9');
+var pD1 = byName(rD.parts, 'Полка_1');
+var pD2 = byName(rD.parts, 'Полка_2');
+var pD3 = byName(rD.parts, 'Полка_3');
+ok(pD1 && pD2 && pD3, 'D: три полки есть');
+// Нижняя лежит НА низу ячейки (низ проёма 116, центр 124)
+eq(pD1.box.cy, 124, 'D: нижняя полка на низу ячейки');
+// Зона проёмов 1868−32=1836; проём = (1836−16)/2 = 910
+// Промежуточная: 116+16+910=1042 → центр 1050
+eq(pD2.box.cy, 1050, 'D: промежуточная полка между проёмами');
+// Верхняя ПОД верхом ячейки (верх 1984, центр 1976)
+eq(pD3.box.cy, 1976, 'D: верхняя полка под верхом ячейки');
+// Все три — обычные полки: раскрой в ширину ячейки, кромка перёд
+eq(pD1.cutL, 768, 'D: нижняя раскрой в ширину проёма');
+eq(pD3.cutL, 768, 'D: верхняя раскрой в ширину проёма');
+eq(WC.partEdgeLen(pD1), 768, 'D: нижняя кромка только перёд');
+// Дочерняя ячейка сдвинута: створка в нижнем проёме y[132..1042]
+var fD = byName(rD.parts, 'Створка_1');
+ok(fD, 'D: створка в нижнем проёме есть');
+eq(fD.box.dy, 906, 'D: створка гео H = проём 910 − 4');
+eq(fD.cutL, 904, 'D: створка раскрой H');
+eq(fD.cutW, 762, 'D: створка раскрой W');
+eq(fD.box.cy, 587, 'D: створка центр Y (проём начат над нижней полкой)');
+eq(fD.hardware[0].qty, 3, 'D: створка 3 петли (906 < 1600)');
+// Сводка: кромка 7646 (корпус) + 3·768 + 2·(904+762) = 13282
+eq(rD.summary.edgeLenMm, 13282, 'D: кромка итого 13282 мм');
+eq(rD.summary.areaLdspM2, 5.109, 'D: ЛДСП 5.109 м²');
+
+// ── D: только нижняя, count:0 (полка без деления проёма) ──
+var rDb = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'shelves', count: 0, bottomShelf: true }
+});
+eq(rDb.parts.length, 6, 'D: count 0 + нижняя = 6 деталей');
+eq(byName(rDb.parts, 'Полка_1').box.cy, 124, 'D: одиночная нижняя на месте');
+
+// ── D: только верхняя в под-ячейке (антресольная полка колонки) ──
+var rDt = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'panels', count: 1, children: [
+    { type: 'shelves', count: 0, topShelf: true }, null ] }
+});
+var pDt = byName(rDt.parts, 'Полка_1');
+ok(pDt, 'D: антресольная полка есть');
+eq(pDt.cutL, 376, 'D: антресольная в ширину колонки');
+eq(pDt.box.cy, 1976, 'D: антресольная под верхом колонки');
+eq(pDt.box.cx, -196, 'D: антресольная в левой колонке');
+
+// ── D: флаги + кастомные sizes (нижний проём фикс. 400) ──
+var rDs = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'shelves', count: 1, bottomShelf: true, sizes: [400, null] }
+});
+// зона 1868−16=1852; проёмы 400 и 1852−16−400=1436
+var pDs2 = byName(rDs.parts, 'Полка_2');
+eq(pDs2.box.cy, 116 + 16 + 400 + 8, 'D: полка над фикс. проёмом 400');
+eq(rDs.parts.length, 7, 'D: sizes + нижняя = 7 деталей');
+
+// ── D: без флагов поведение прежнее (Полка_1 = промежуточная) ──
+var rD0 = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'shelves', count: 2 }
+});
+eq(rD0.parts.length, 7, 'D: без флагов 2 полки как раньше');
+// (1868 − 2·16)/3 = 612 → первая полка: 116+612=728 → центр 736
+eq(byName(rD0.parts, 'Полка_1').box.cy, 736, 'D: без флагов позиции прежние');
+
+/* ── ЯЩИКИ-2: НАКЛАДНЫЕ (mount:'overlay') — эталон 2 из ПО ──
+   Шкаф 800×2000×600, колонка 376, секция в проёме 360.8, 2 ящика.
+   Раскрой ПО (проект без подрезки; сверка по независимым деталям):
+     стоек и планок НЕТ; короб = ячейка − 26 = 350;
+     ЯщикП 318 (=350−32, БЕЗ −1); ЯщикД 348×548 (точно);
+     Фасад гео 408×180 (=376+2·16 × 180.4−0.4), раскрой 178×406 (точно). */
+console.log('── Ящики: НАКЛАДНЫЕ (mount overlay, эталон 2) ──');
+var ro = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'panels', count: 1, children: [
+    { type: 'shelves', count: 4, children: [
+      null, { type: 'drawers', count: 2, mount: 'overlay' }, null, null, null
+    ] },
+    null
+  ] }
+});
+// Стоек и планок у накладной секции НЕТ
+eq(ro.parts.filter(function (p) { return p.kind === 'dpost'; }).length, 0,
+  'overlay: стоек секции нет');
+eq(ro.parts.filter(function (p) { return p.kind === 'drail'; }).length, 0,
+  'overlay: планок нет');
+// Короб на всю ячейку: 376 − 26 = 350
+var oP1 = byName(ro.parts, 'ЯщикП_1');
+eq(oP1.cutL, 318, 'overlay: ЯщикП = 350 − 2·16, БЕЗ −1 (эталон 2)');
+eq(oP1.box.dx, 318, 'overlay: П/З в 3D между боковинами');
+var oD1 = byName(ro.parts, 'ЯщикД_1');
+eq(oD1.cutL, 348, 'overlay: дно по ширине 350 − 2·1 (точно эталон 2)');
+eq(oD1.cutW, 548, 'overlay: дно по глубине 550 − 2·1');
+var oB1 = byName(ro.parts, 'ЯщикБЛ_1');
+eq(oB1.cutL, 549, 'overlay: боковина − подрезка (наш режим с кромкой)');
+eq(oB1.cutW, 109, 'overlay: высота боковины 180.4−50−20−1 → 109');
+// Фасад накладной: гео 408×180, раскрой 178×406 — ТОЧНО как ПО
+var oF1 = byName(ro.parts, 'ЯщикФ_1');
+var oF2 = byName(ro.parts, 'ЯщикФ_2');
+eq(oF1.box.dx, 408, 'overlay: фасад гео W = 376 + 2·16 (перекрытие)');
+eq(Math.round(oF1.box.dy * 10) / 10, 180, 'overlay: фасад гео H = 180.4 − 0.4 (fGapMid/2)');
+eq(oF1.cutW, 406, 'overlay: фасад раскрой W = 406 (точно эталон 2)');
+eq(oF1.cutL, 178, 'overlay: фасад раскрой H = 178 (точно эталон 2)');
+eq(oF2.box.dy, 180, 'overlay: верхний фасад тоже 180');
+// Межфасадный зазор 0.8, крайние заподлицо с проёмом
+eq(Math.round(((oF2.box.cy - oF2.box.dy / 2) - (oF1.box.cy + oF1.box.dy / 2)) * 10) / 10,
+  0.8, 'overlay: межфасадный зазор 0.8');
+var oSecY0 = null, oSecY1 = null;
+// проём секции: 2-й снизу из 5 по 360.8: y0 = 116 + 360.8 + 16
+oSecY0 = 116 + 360.8 + 16; oSecY1 = oSecY0 + 360.8;
+eq(Math.round((oF1.box.cy - oF1.box.dy / 2) * 10) / 10, Math.round(oSecY0 * 10) / 10, 'overlay: нижний фасад заподлицо с низом проёма');
+eq(oF2.box.cy + oF2.box.dy / 2, oSecY1, 'overlay: верхний фасад заподлицо с верхом проёма');
+// Фасад перед корпусом («отступ спереди 16»), поле mount для рендера
+eq(oF1.box.cz, 579 + 8, 'overlay: фасад перед корпусом (cz = 587)');
+eq(oF1.mount, 'overlay', 'overlay: у фасада поле mount');
+// Короб заподлицо с фронтом корпуса (в отличие от inset)
+eq(oB1.box.cz, 579 - 275, 'overlay: короб передним краем на pd');
+// Направляющие по-прежнему в фурнитуре
+eq(ro.summary.hardware['Направляющие шариковые 550 мм (компл.)'], 2,
+  'overlay: 2 комплекта направляющих');
+
+// ── overlay: 3 фасада с heights — межзазор у среднего с двух сторон ──
+var ro3 = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'drawers', count: 3, mount: 'overlay', heights: [100, 100, null] }
+});
+// корневая ячейка 768×1868; слоты 100/100/1668; короб 768−26=742
+var o3F1 = byName(ro3.parts, 'ЯщикФ_1');
+var o3F2 = byName(ro3.parts, 'ЯщикФ_2');
+var o3F3 = byName(ro3.parts, 'ЯщикФ_3');
+eq(o3F1.box.dy, 99.6, 'overlay 3: нижний фасад 100 − 0.4');
+eq(Math.round(o3F2.box.dy * 10) / 10, 99.2, 'overlay 3: средний фасад 100 − 0.8 (два соседства)');
+eq(o3F3.box.dy, 1667.6, 'overlay 3: верхний фасад 1668 − 0.4');
+eq(o3F1.cutL, 97.6, 'overlay 3: раскрой fine 0.1 (97.6)');
+eq(o3F1.box.dx, 800, 'overlay 3: гео W = 768 + 32');
+eq(byName(ro3.parts, 'ЯщикП_1').cutL, 742 - 32, 'overlay 3: П/З от короба 742');
+
+// ── overlay: переопределение fOverhang и fGapMid ──
+var ro4 = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'drawers', count: 2, mount: 'overlay', fOverhang: 8, fGapMid: 3 }
+});
+var o4F1 = byName(ro4.parts, 'ЯщикФ_1');
+eq(o4F1.box.dx, 768 + 16, 'overlay: fOverhang переопределён (8)');
+eq(o4F1.box.dy, 934 - 1.5, 'overlay: fGapMid переопределён (3)');
+
+// ── inset не изменился по раскрою (регрессия внутри этого блока) ──
+var ri = WC.buildCarcass({
+  width: 800, height: 2000, depth: 600, legs: 100,
+  panel: 16, back: 3, edge: 1, gapFront: 16, gapBack: 3,
+  sections: { type: 'panels', count: 1, children: [
+    { type: 'shelves', count: 4, children: [
+      null, { type: 'drawers', count: 2 }, null, null, null ] },
+    null ] }
+});
+eq(byName(ri.parts, 'ЯщикП_1').cutL, 285, 'inset: ЯщикП 285 как в эталоне 1');
+eq(byName(ri.parts, 'ЯщикФ_1').cutL, 146.4, 'inset: фасад 146.4 как в эталоне 1');
+eq(byName(ri.parts, 'ЯщикФ_1').mount, 'inset', 'inset: поле mount у фасада');
 
 // ── Итог ──
 console.log('');
