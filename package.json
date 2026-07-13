@@ -1,0 +1,15 @@
+{
+  "name": "mebeloff-crm",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MebelOFF — расчёт мебели и CRM (статичное веб-приложение + тесты ядра геометрии)",
+  "scripts": {
+    "test": "node test-wardrobe-core.js && node test-autoslots.js",
+    "test:core": "node test-wardrobe-core.js",
+    "test:autoslots": "node test-autoslots.js",
+    "serve": "python3 -m http.server 8000"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
+}
