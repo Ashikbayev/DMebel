@@ -1012,10 +1012,7 @@ function w2dClick(sid,evt){
   let ci=cols.findIndex(cc=>xm>=cc.left&&xm<=cc.right);
   if(ci<0) ci=(xm<T)?0:cols.length-1;
   if(_w2dTool==='shelf'){
-    let h=Math.round(ym/10)*10;
-    h=Math.max(T*2, Math.min(s.height-T*2, h));
-    s.shelves.push({id:s.shelfId++, height:h, col:ci});
-    s.shelves.sort((a,b)=>a.height-b.height);
+    w2dAddShelfEven(s, ci);
   }else if(_w2dTool==='drawers'){
     const niches=getNiches(s);
     let ni=niches.findIndex(n=>ym>=n.bottom&&ym<=n.top); if(ni<0)ni=0;
@@ -1089,6 +1086,67 @@ function w2dToolBtn(id,label){
   return '<button onclick="w2dSetTool2('+q+id+q+')" style="padding:5px 10px;font-size:11px;border-radius:6px;cursor:pointer;border:1px solid '+(act?'#1a5252':'#ccc')+';background:'+(act?'#e8f5f0':'#fff')+';color:'+(act?'#1a5252':'#555')+';font-weight:'+(act?'600':'400')+'">'+label+'</button>';
 }
 function w2dSetTool2(t){ _w2dTool=t; w2dSyncView(); renderPanel(); }
+// Полка кликом: добавить в колонку и распределить ВСЕ полки колонки
+// равномерно по высоте (как в ПО — потом высоты проёмов правятся кликом)
+function w2dAddShelfEven(s,ci){
+  const cols=getColumns(s);
+  const cIdx=Math.min(ci, cols.length-1);
+  const keep=s.shelves.filter(sh=>Math.min(sh.col||0,cols.length-1)!==cIdx);
+  const n=(s.shelves.length-keep.length)+1;
+  const usable=s.height-2*T;
+  const step=Math.round(usable/(n+1));
+  if(step<60){ alert('Слишком много полок для этой высоты'); return; }
+  s.shelves=keep;
+  for(let i=1;i<=n;i++) s.shelves.push({id:s.shelfId++, height:T+step*i, col:cIdx});
+  s.shelves.sort((a,b)=>a.height-b.height);
+}
+// Перегородка кликом: +1 и все перегородки равномерно по ширине
+function w2dAddDividerEven(s){
+  const n=s.dividers.length+1;
+  const innerW=s.width-2*T;
+  const cw=(innerW-n*T)/(n+1);
+  if(cw<50){ alert('Слишком много перегородок для этой ширины'); return; }
+  s.dividers=[];
+  let cur=T;
+  for(let k=0;k<n;k++){ cur+=cw; s.dividers.push({id:s.divId++, pos:Math.round(cur)}); cur+=T; }
+}
+// Клик по числу проёма: правим высоту проёма (= «Зазор снизу» панели,
+// полки выше перераспределяются сами — updShelfGap)
+function w2dEditNiche(sid,shid){
+  const s=sections.find(x=>x.id===sid); if(!s)return;
+  const sh=s.shelves.find(x=>x.id===shid); if(!sh)return;
+  const cols=getColumns(s);
+  const ci=Math.min(sh.col||0,cols.length-1);
+  const sameCol=s.shelves.filter(x=>Math.min(x.col||0,cols.length-1)===ci).sort((a,b)=>a.height-b.height);
+  const idx=sameCol.findIndex(x=>x.id===shid);
+  const base=idx>0?sameCol[idx-1].height:T;
+  const v=prompt('Высота проёма, мм:', sh.height-base);
+  if(v==null)return;
+  updShelfGap(sid,shid,v);
+}
+// Клик по ширине колонки: правим ширину проёма, перегородки правее — равномерно
+function w2dEditColW(sid,ci){
+  const s=sections.find(x=>x.id===sid); if(!s)return;
+  const cols=getColumns(s);
+  if(ci>=cols.length-1)return;
+  const v=prompt('Ширина проёма, мм:', Math.round(cols[ci].width));
+  if(v==null)return;
+  let w=Math.max(50, parseInt(v)||0);
+  const divs=s.dividers.slice().sort((a,b)=>a.pos-b.pos);
+  const rightDivs=divs.slice(ci+1);
+  let newPos=cols[ci].left+w;
+  const maxPos=s.width-T-50-rightDivs.length*(T+50);
+  newPos=Math.max(cols[ci].left+50, Math.min(newPos, maxPos));
+  divs[ci].pos=Math.round(newPos);
+  if(rightDivs.length){
+    const span=(s.width-T)-(newPos+T);
+    const cw=(span-rightDivs.length*T)/(rightDivs.length+1);
+    let cur=newPos+T;
+    rightDivs.forEach(d=>{ cur+=cw; d.pos=Math.round(cur); cur+=T; });
+  }
+  s.dividers.sort((a,b)=>a.pos-b.pos);
+  renderPanel(); render3D(); updateStats(); projMarkUnsaved();
+}
 function render2DFull(){
   const q=String.fromCharCode(39);
   const vp=document.getElementById('viewport');
@@ -1140,7 +1198,28 @@ function render2DFull(){
       const col=cols[Math.min(sh.col||0,cols.length-1)]||{left:T,width:W-2*T};
       const shy=sy(sh.height+T);
       g+='<rect x="'+(x0+col.left*sc)+'" y="'+shy+'" width="'+(col.width*sc)+'" height="'+Math.max(1.5,T*sc)+'" fill="#b8935a"/>';
-      g+='<text x="'+(x0+(col.left+col.width)*sc-3)+'" y="'+(shy-2)+'" font-size="9" fill="#4a7a5a" text-anchor="end" style="cursor:pointer;user-select:none" onclick="w2dEditShelf('+s.id+','+sh.id+');event.stopPropagation()">'+sh.height+'</text>';
+    });
+    // проёмы (высоты ниш) по колонкам — кликабельные, как в ПО
+    cols.forEach((col,ciL)=>{
+      const midX=x0+(col.left+col.width/2)*sc;
+      const colSh=s.shelves.filter(sh=>Math.min(sh.col||0,cols.length-1)===ciL).sort((a,b)=>a.height-b.height);
+      let prevTop=T, prevBase=T;
+      colSh.forEach(sh=>{
+        const gap=sh.height-prevBase;
+        const midY=(sy(prevTop)+sy(sh.height))/2+3;
+        g+='<text x="'+midX+'" y="'+midY+'" font-size="10" fill="#1a5aa8" text-anchor="middle" style="cursor:pointer;text-decoration:underline" onclick="w2dEditNiche('+s.id+','+sh.id+');event.stopPropagation()">'+gap+'</text>';
+        prevTop=sh.height+T; prevBase=sh.height;
+      });
+      if(colSh.length){
+        const topGap=Math.round((s.height-T)-prevTop);
+        const midY2=(sy(prevTop)+sy(s.height-T))/2+3;
+        g+='<text x="'+midX+'" y="'+midY2+'" font-size="10" fill="#aaa" text-anchor="middle">'+topGap+'</text>';
+      }
+      if(cols.length>1){
+        const wLbl=Math.round(col.width);
+        const edit=(ciL<cols.length-1);
+        g+='<text x="'+midX+'" y="'+(topY+T*sc+11)+'" font-size="9" fill="'+(edit?'#1a5aa8':'#aaa')+'" text-anchor="middle"'+(edit?' style="cursor:pointer;text-decoration:underline" onclick="w2dEditColW('+s.id+','+ciL+');event.stopPropagation()"':'')+'>'+wLbl+'</text>';
+      }
     });
     if(s.hasRod){
       const rc=(s.rodCol!=null&&cols[s.rodCol])?cols[s.rodCol]:{left:T,width:W-2*T};
@@ -1211,10 +1290,7 @@ function w2dApplyTool(s,xm,ym){
   let ci=cols.findIndex(cc=>xm>=cc.left&&xm<=cc.right);
   if(ci<0) ci=(xm<T)?0:cols.length-1;
   if(_w2dTool==='shelf'){
-    let h=Math.round(ym/10)*10;
-    h=Math.max(T*2, Math.min(s.height-T*2, h));
-    s.shelves.push({id:s.shelfId++, height:h, col:ci});
-    s.shelves.sort((a,b)=>a.height-b.height);
+    w2dAddShelfEven(s, ci);
   }else if(_w2dTool==='drawers'){
     const niches=getNiches(s);
     let ni=niches.findIndex(n=>ym>=n.bottom&&ym<=n.top); if(ni<0)ni=0;
@@ -1226,10 +1302,7 @@ function w2dApplyTool(s,xm,ym){
     s.rodHeight=Math.max(T*3, Math.min(s.height-T*3, Math.round(ym/10)*10));
     s.rodCol=(cols.length>1?ci:null);
   }else if(_w2dTool==='part'){
-    let pos=Math.round(xm/10)*10;
-    pos=Math.max(T+50, Math.min(s.width-T-50, pos));
-    s.dividers.push({id:s.divId++, pos:pos});
-    s.dividers.sort((a,b)=>a.pos-b.pos);
+    w2dAddDividerEven(s);
   }else if(_w2dTool==='antr'){
     if(!s.antresol.enabled){ s.antresol.enabled=true; if(!s.antresol.height)s.antresol.height=400; }
     else s.antresol.enabled=false;
@@ -4269,6 +4342,7 @@ window.w2dSetTool=w2dSetTool; window.w2dClick=w2dClick;
 window.w2dToggleMode=w2dToggleMode; window.w2dSetTool2=w2dSetTool2;
 window.w2dFullClick=w2dFullClick; window.w2dEditDim=w2dEditDim; window.w2dEditShelf=w2dEditShelf;
 window._ai_w2dLayout=()=>_w2dLayout;
+window.w2dEditNiche=w2dEditNiche; window.w2dEditColW=w2dEditColW;
 window.toggleRod=toggleRod;
 window.updFacade=updFacade; window.updEdge=updEdge;
 window.addDrawerBlock=addDrawerBlock; window.removeDrawerBlock=removeDrawerBlock; window.updDrawerBlock=updDrawerBlock;
