@@ -1045,6 +1045,238 @@ function w2dClick(sid,evt){
   }
   renderPanel(); render3D(); updateStats(); projMarkUnsaved();
 }
+/* ============================================================
+   ПОЛНОЭКРАННЫЙ 2D-РЕЖИМ КОНСТРУИРОВАНИЯ (вид спереди).
+   Кнопки 2D/3D поверх вьюпорта. В 2D: все секции рядом, антресоли,
+   инструменты (полка/ящики/штанга/перегородка/антресоль/удалить),
+   авто-полки, шаблоны, кликабельные размеры (Ш/В/Г, высоты полок).
+   Правит ТЕ ЖЕ данные — 3D и раскрой обновляются мгновенно.
+============================================================ */
+let _viewMode='3d';
+let _w2dLayout=[];
+function ensure2DUI(){
+  const vp=document.getElementById('viewport'); if(!vp)return;
+  if(!document.getElementById('w2d-switch')){
+    vp.style.position='relative';
+    const sw=document.createElement('div');
+    sw.id='w2d-switch';
+    sw.style.cssText='position:absolute;top:10px;left:10px;z-index:30;display:flex;gap:0;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.25)';
+    sw.innerHTML='<button id="w2d-btn2d" onclick="w2dToggleMode(String.fromCharCode(50,100))" style="padding:6px 14px;border:none;cursor:pointer;font-size:12px;font-weight:600">2D</button>'+
+      '<button id="w2d-btn3d" onclick="w2dToggleMode(String.fromCharCode(51,100))" style="padding:6px 14px;border:none;cursor:pointer;font-size:12px;font-weight:600">3D</button>';
+    vp.appendChild(sw);
+    const ov=document.createElement('div');
+    ov.id='view2d';
+    ov.style.cssText='position:absolute;inset:0;display:none;background:#f2efe8;overflow:auto;z-index:20;padding:44px 14px 14px 14px;box-sizing:border-box';
+    vp.appendChild(ov);
+  }
+  const b2=document.getElementById('w2d-btn2d'), b3=document.getElementById('w2d-btn3d');
+  if(b2&&b3){
+    const on='background:#1a5252;color:#fff', off='background:#fff;color:#555';
+    b2.style.cssText+=';'+(_viewMode==='2d'?on:off);
+    b3.style.cssText+=';'+(_viewMode==='3d'?on:off);
+  }
+}
+function w2dToggleMode(m){ _viewMode=m; ensure2DUI(); w2dSyncView(); }
+function w2dSyncView(){
+  const ov=document.getElementById('view2d'); if(!ov)return;
+  ensure2DUI();
+  if(_viewMode==='2d'){ ov.style.display='block'; ov.innerHTML=render2DFull(); }
+  else ov.style.display='none';
+}
+function w2dToolBtn(id,label){
+  const q=String.fromCharCode(39);
+  const act=(_w2dTool===id);
+  return '<button onclick="w2dSetTool2('+q+id+q+')" style="padding:5px 10px;font-size:11px;border-radius:6px;cursor:pointer;border:1px solid '+(act?'#1a5252':'#ccc')+';background:'+(act?'#e8f5f0':'#fff')+';color:'+(act?'#1a5252':'#555')+';font-weight:'+(act?'600':'400')+'">'+label+'</button>';
+}
+function w2dSetTool2(t){ _w2dTool=t; w2dSyncView(); renderPanel(); }
+function render2DFull(){
+  const q=String.fromCharCode(39);
+  const vp=document.getElementById('viewport');
+  const cw=(vp&&vp.clientWidth)||1000, ch=(vp&&vp.clientHeight)||640;
+  const GAPX=30, ML_=70, MT_=46, MB_=64;
+  let totW=0, maxH=0;
+  sections.forEach(s=>{
+    totW+=s.width;
+    const hh=s.height+(s.antresol&&s.antresol.enabled?s.antresol.height:0);
+    if(hh>maxH)maxH=hh;
+  });
+  totW+=GAPX*Math.max(0,sections.length-1);
+  if(totW<100)totW=100; if(maxH<100)maxH=100;
+  const sc=Math.max(0.05, Math.min((cw-ML_-40)/totW, (ch-MT_-MB_-58)/maxH));
+  const pw=Math.round(totW*sc)+ML_+30, ph=Math.round(maxH*sc)+MT_+MB_;
+  const floorY=MT_+maxH*sc;
+  _w2dLayout=[];
+  let g='', ox=ML_;
+  sections.forEach((s,si)=>{
+    const W=s.width,H=s.height;
+    const antrH=(s.antresol&&s.antresol.enabled)?s.antresol.height:0;
+    const x0=ox, bw=W*sc, topY=floorY-H*sc;
+    _w2dLayout.push({sid:s.id, x0:x0, x1:x0+bw, floorY:floorY, sc:sc, H:H, antrH:antrH});
+    const sy=mm=>(floorY-mm*sc);
+    const cols=getColumns(s);
+    // корпус
+    g+='<rect x="'+x0+'" y="'+topY+'" width="'+bw+'" height="'+(H*sc)+'" fill="#fff" stroke="#333"/>';
+    g+='<rect x="'+x0+'" y="'+topY+'" width="'+(T*sc)+'" height="'+(H*sc)+'" fill="#d9c9a8"/>';
+    g+='<rect x="'+(x0+bw-T*sc)+'" y="'+topY+'" width="'+(T*sc)+'" height="'+(H*sc)+'" fill="#d9c9a8"/>';
+    g+='<rect x="'+x0+'" y="'+topY+'" width="'+bw+'" height="'+Math.max(1,T*sc)+'" fill="#d9c9a8"/>';
+    g+='<rect x="'+x0+'" y="'+(floorY-T*sc)+'" width="'+bw+'" height="'+Math.max(1,T*sc)+'" fill="#d9c9a8"/>';
+    s.dividers.forEach(dv=>{
+      g+='<rect x="'+(x0+dv.pos*sc)+'" y="'+(topY+T*sc)+'" width="'+Math.max(1,T*sc)+'" height="'+((H-2*T)*sc)+'" fill="#c9b183"/>';
+    });
+    const niches=getNiches(s);
+    s.drawerBlocks.forEach(db=>{
+      const n=niches[db.nicheIdx]; if(!n)return;
+      const col=(db.col!=null&&cols[db.col])?cols[db.col]:{left:T,width:W-2*T};
+      const dx=x0+col.left*sc, dw=col.width*sc;
+      const yT=sy(n.top), hh2=(n.top-n.bottom)*sc;
+      g+='<rect x="'+dx+'" y="'+yT+'" width="'+dw+'" height="'+hh2+'" fill="rgba(90,130,220,0.16)" stroke="#5a82dc" stroke-width="0.8"/>';
+      const cnt=db.count||1;
+      for(let i=1;i<cnt;i++){
+        const ly=yT+hh2*i/cnt;
+        g+='<line x1="'+dx+'" y1="'+ly+'" x2="'+(dx+dw)+'" y2="'+ly+'" stroke="#5a82dc" stroke-width="0.8"/>';
+      }
+    });
+    s.shelves.forEach(sh=>{
+      const col=cols[Math.min(sh.col||0,cols.length-1)]||{left:T,width:W-2*T};
+      const shy=sy(sh.height+T);
+      g+='<rect x="'+(x0+col.left*sc)+'" y="'+shy+'" width="'+(col.width*sc)+'" height="'+Math.max(1.5,T*sc)+'" fill="#b8935a"/>';
+      g+='<text x="'+(x0+(col.left+col.width)*sc-3)+'" y="'+(shy-2)+'" font-size="9" fill="#4a7a5a" text-anchor="end" style="cursor:pointer;user-select:none" onclick="w2dEditShelf('+s.id+','+sh.id+');event.stopPropagation()">'+sh.height+'</text>';
+    });
+    if(s.hasRod){
+      const rc=(s.rodCol!=null&&cols[s.rodCol])?cols[s.rodCol]:{left:T,width:W-2*T};
+      const ry=sy(s.rodHeight||1600);
+      g+='<line x1="'+(x0+rc.left*sc+2)+'" y1="'+ry+'" x2="'+(x0+(rc.left+rc.width)*sc-2)+'" y2="'+ry+'" stroke="#7a5c2e" stroke-width="3" stroke-linecap="round"/>';
+    }
+    // антресоль над корпусом
+    if(antrH>0){
+      const ay1=topY, ay0=topY-antrH*sc;
+      g+='<rect x="'+x0+'" y="'+ay0+'" width="'+bw+'" height="'+(antrH*sc)+'" fill="#fdfaf3" stroke="#333"/>';
+      g+='<rect x="'+x0+'" y="'+ay0+'" width="'+(T*sc)+'" height="'+(antrH*sc)+'" fill="#e4d7b8"/>';
+      g+='<rect x="'+(x0+bw-T*sc)+'" y="'+ay0+'" width="'+(T*sc)+'" height="'+(antrH*sc)+'" fill="#e4d7b8"/>';
+      const ash=(s.antresol.shelves||[]);
+      ash.forEach(sh=>{
+        const asy=ay1-(sh.height)*sc;
+        g+='<rect x="'+(x0+T*sc)+'" y="'+asy+'" width="'+(bw-2*T*sc)+'" height="'+Math.max(1.5,T*sc)+'" fill="#c9ab7c"/>';
+      });
+      g+='<text x="'+(x0+bw/2)+'" y="'+(ay0+12)+'" font-size="10" fill="#8a7448" text-anchor="middle" style="cursor:pointer" onclick="w2dEditDim('+s.id+',String.fromCharCode(97,110,116,114));event.stopPropagation()">антресоль '+antrH+'</text>';
+    }
+    // подписи-размеры (кликабельные)
+    g+='<text x="'+(x0+bw/2)+'" y="'+(topY-antrH*sc-8)+'" font-size="11" fill="#333" text-anchor="middle" font-weight="600">Секция '+(si+1)+'</text>';
+    g+='<text x="'+(x0+bw/2)+'" y="'+(floorY+18)+'" font-size="11" fill="#1a5aa8" text-anchor="middle" style="cursor:pointer;text-decoration:underline" onclick="w2dEditDim('+s.id+',String.fromCharCode(119,105,100,116,104));event.stopPropagation()">Ш '+W+'</text>';
+    g+='<text x="'+(x0+bw/2)+'" y="'+(floorY+34)+'" font-size="10" fill="#1a5aa8" text-anchor="middle" style="cursor:pointer;text-decoration:underline" onclick="w2dEditDim('+s.id+',String.fromCharCode(100,101,112,116,104));event.stopPropagation()">Г '+s.depth+'</text>';
+    g+='<text x="'+(x0-8)+'" y="'+(topY+H*sc/2)+'" font-size="11" fill="#1a5aa8" text-anchor="end" style="cursor:pointer;text-decoration:underline" onclick="w2dEditDim('+s.id+',String.fromCharCode(104,101,105,103,104,116));event.stopPropagation()">В '+H+'</text>';
+    ox+=bw+GAPX;
+  });
+  g+='<text x="'+ML_+'" y="'+(ph-8)+'" font-size="10" fill="#888">Общая ширина: '+sections.reduce((a,s)=>a+s.width,0)+' мм · клик по схеме — инструмент · клик по синим числам — изменить размер</text>';
+  // тулбар
+  let tb='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;align-items:center">';
+  tb+=w2dToolBtn('shelf','▤ Полка')+w2dToolBtn('drawers','▦ Ящики')+w2dToolBtn('rod','⊢ Штанга')+
+     w2dToolBtn('part','⊟ Перегородка')+w2dToolBtn('antr','⬒ Антресоль')+w2dToolBtn('auto','⚡ Авто-полки')+
+     w2dToolBtn('del','✕ Удалить');
+  tb+='<span style="flex:1"></span>';
+  const utpl=loadUserTemplates();
+  if(utpl.length){
+    tb+='<select id="w2d-tpl" style="font-size:11px;padding:4px;border-radius:6px;border:1px solid #ccc">';
+    utpl.forEach(t=>{ tb+='<option value="'+t.id+'">'+t.name+'</option>'; });
+    tb+='</select>'+w2dToolBtn('tpl','📐 Применить шаблон');
+  }
+  tb+='<button onclick="addSection();w2dSyncView()" style="padding:5px 10px;font-size:11px;border-radius:6px;cursor:pointer;border:1px solid #1a5252;background:#1a5252;color:#fff">+ Секция</button>';
+  tb+='</div>';
+  return tb+'<svg width="'+pw+'" height="'+ph+'" style="display:block;background:#fff;border:1px solid #ddd;border-radius:8px;cursor:crosshair" onclick="w2dFullClick(event)">'+g+'</svg>';
+}
+function w2dEditDim(sid,field){
+  const s=sections.find(x=>x.id===sid); if(!s)return;
+  if(field==='antr'){
+    const v=prompt('Высота антресоли, мм:', s.antresol.height||400);
+    if(v==null)return;
+    updAntresol(sid,'height',v);
+  }else{
+    const lbl=field==='width'?'Ширина':field==='height'?'Высота':'Глубина';
+    const v=prompt(lbl+' секции, мм:', s[field]);
+    if(v==null)return;
+    upd(sid,field,v);
+  }
+  renderPanel();
+}
+function w2dEditShelf(sid,shid){
+  const s=sections.find(x=>x.id===sid); if(!s)return;
+  const sh=s.shelves.find(x=>x.id===shid); if(!sh)return;
+  const v=prompt('Высота полки от пола, мм:', sh.height);
+  if(v==null)return;
+  updShelf(sid,shid,v);
+  renderPanel();
+}
+function w2dApplyTool(s,xm,ym){
+  const cols=getColumns(s);
+  let ci=cols.findIndex(cc=>xm>=cc.left&&xm<=cc.right);
+  if(ci<0) ci=(xm<T)?0:cols.length-1;
+  if(_w2dTool==='shelf'){
+    let h=Math.round(ym/10)*10;
+    h=Math.max(T*2, Math.min(s.height-T*2, h));
+    s.shelves.push({id:s.shelfId++, height:h, col:ci});
+    s.shelves.sort((a,b)=>a.height-b.height);
+  }else if(_w2dTool==='drawers'){
+    const niches=getNiches(s);
+    let ni=niches.findIndex(n=>ym>=n.bottom&&ym<=n.top); if(ni<0)ni=0;
+    const ex=s.drawerBlocks.find(db=>db.nicheIdx===ni&&(db.col==null||db.col===ci));
+    if(ex) ex.count=Math.min(5,(ex.count||1)+1);
+    else s.drawerBlocks.push({nicheIdx:ni, count:2, brand:'En-7', col:(cols.length>1?ci:null)});
+  }else if(_w2dTool==='rod'){
+    s.hasRod=true;
+    s.rodHeight=Math.max(T*3, Math.min(s.height-T*3, Math.round(ym/10)*10));
+    s.rodCol=(cols.length>1?ci:null);
+  }else if(_w2dTool==='part'){
+    let pos=Math.round(xm/10)*10;
+    pos=Math.max(T+50, Math.min(s.width-T-50, pos));
+    s.dividers.push({id:s.divId++, pos:pos});
+    s.dividers.sort((a,b)=>a.pos-b.pos);
+  }else if(_w2dTool==='antr'){
+    if(!s.antresol.enabled){ s.antresol.enabled=true; if(!s.antresol.height)s.antresol.height=400; }
+    else s.antresol.enabled=false;
+  }else if(_w2dTool==='auto'){
+    autoShelves(s.id); return true;
+  }else if(_w2dTool==='tpl'){
+    const sel=document.getElementById('w2d-tpl');
+    if(sel&&sel.value) applyUserTemplate(s.id, sel.value);
+    return true;
+  }else if(_w2dTool==='del'){
+    let best=-1,bd=40;
+    s.shelves.forEach((sh,i)=>{
+      const sci=Math.min(sh.col||0,cols.length-1);
+      if(sci!==ci)return;
+      const d=Math.abs(sh.height-ym);
+      if(d<bd){bd=d;best=i;}
+    });
+    if(best>=0){ s.shelves.splice(best,1); return false; }
+    let bp=-1,bpd=30;
+    s.dividers.forEach((dv,i)=>{
+      const d=Math.abs(dv.pos+T/2-xm);
+      if(d<bpd){bpd=d;bp=i;}
+    });
+    if(bp>=0){ s.dividers.splice(bp,1); return false; }
+    if(s.hasRod&&Math.abs((s.rodHeight||0)-ym)<60&&(s.rodCol==null||s.rodCol===ci)){ s.hasRod=false; return false; }
+    const niches=getNiches(s);
+    const ni=niches.findIndex(n=>ym>=n.bottom&&ym<=n.top);
+    const bi=s.drawerBlocks.findIndex(db=>db.nicheIdx===ni&&(db.col==null||db.col===ci));
+    if(bi>=0)s.drawerBlocks.splice(bi,1);
+  }
+  return false;
+}
+function w2dFullClick(evt){
+  const svg=evt.currentTarget||evt.target;
+  const r=svg.getBoundingClientRect?svg.getBoundingClientRect():{left:0,top:0};
+  const px=(evt.clientX!=null?evt.clientX-r.left:evt.offsetX);
+  const py=(evt.clientY!=null?evt.clientY-r.top:evt.offsetY);
+  const lay=_w2dLayout.find(l=>px>=l.x0&&px<=l.x1);
+  if(!lay)return;
+  const s=sections.find(x=>x.id===lay.sid); if(!s)return;
+  const xm=(px-lay.x0)/lay.sc;
+  const ym=(lay.floorY-py)/lay.sc;
+  if(ym<-10||ym>s.height+lay.antrH+10)return;
+  const selfRendered=w2dApplyTool(s, xm, Math.min(ym, s.height));
+  if(!selfRendered){ renderPanel(); render3D(); updateStats(); projMarkUnsaved(); }
+  w2dSyncView();
+}
 function updFacade(sid,field,val){
   const s=sections.find(x=>x.id===sid);
   if(field==='hasTexture') s.facade.hasTexture=val;
@@ -1849,7 +2081,7 @@ function initThree(){
   let isDrag=false,lx=0,ly=0,theta=35,phi=25,radius=4500;
   const target=new THREE.Vector3(0,900,0);
   canvas.addEventListener('mousedown',e=>{
-    if(!_drag){isDrag=true;lx=e.clientX;ly=e.clientY;}
+    isDrag=true;lx=e.clientX;ly=e.clientY;
   });
   window.addEventListener('mouseup',()=>isDrag=false);
   canvas.addEventListener('mousemove',e=>{
@@ -1869,164 +2101,6 @@ function initThree(){
   (function loop(){requestAnimationFrame(loop);renderer.render(scene,camera);})();
 
   // ── Drag & Drop полок ──────────────────────────────────────
-  initShelfDrag(canvas, vp);
-}
-
-/* ============================================================
-   SHELF DRAG & DROP
-   Логика: клик по полке → drag по Y в мировых координатах
-   → обновляем sh.height → renderPanel синхронизирует инпут
-============================================================ */
-const MAT_HIGHLIGHT = new THREE.MeshStandardMaterial({color:0x4fc3f7, transparent:true, opacity:0.85, roughness:0.5});
-const MAT_GHOST     = new THREE.MeshStandardMaterial({color:0x4fc3f7, transparent:true, opacity:0.35, depthWrite:false, roughness:0.5});
-
-let _drag = null; // активный drag-объект
-
-function initShelfDrag(canvas, vp){
-  const raycaster = new THREE.Raycaster();
-  const mouse     = new THREE.Vector2();
-
-  // Вспомогательная плоскость для отслеживания Y при drag
-  const dragPlane = new THREE.Plane();
-  const planeHit  = new THREE.Vector3();
-
-  // Подсветка — клон геометрии полки
-  let highlightMesh = null;
-  let ghostLine     = null;
-
-  function getMouseNDC(e){
-    const r = vp.getBoundingClientRect();
-    mouse.x =  ((e.clientX-r.left)/r.width )*2-1;
-    mouse.y = -((e.clientY-r.top )/r.height)*2+1;
-  }
-
-  function pickShelf(e){
-    getMouseNDC(e);
-    raycaster.setFromCamera(mouse, camera);
-    // Перебираем только объекты с userData.drag
-    const targets = scene.children.filter(c=>c.userData.drag);
-    const hits = raycaster.intersectObjects(targets, false);
-    return hits.length ? hits[0] : null;
-  }
-
-  function startDrag(hit){
-    const mesh = hit.object;
-    const ud   = mesh.userData;
-    _drag = {
-      mesh, ud,
-      startY: mesh.position.y,
-      startMouseY: hit.point.y,
-    };
-    // Горизонтальная плоскость на высоте попадания
-    dragPlane.setFromNormalAndCoplanarPoint(
-      new THREE.Vector3(0,0,1).applyQuaternion(camera.quaternion),
-      hit.point
-    );
-    // Подсветка
-    mesh.material = MAT_HIGHLIGHT;
-    canvas.style.cursor = 'grab';
-    // Ghost-линия на стене
-    if(ghostLine) scene.remove(ghostLine);
-    const gl = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.BoxGeometry(ud.sw, T, ud.sd)),
-      new THREE.LineBasicMaterial({color:0x0288d1, linewidth:2})
-    );
-    gl.position.copy(mesh.position);
-    gl.userData={w:true};
-    scene.add(gl);
-    ghostLine = gl;
-  }
-
-  function doDrag(e){
-    if(!_drag) return;
-    getMouseNDC(e);
-    raycaster.setFromCamera(mouse, camera);
-    if(!raycaster.ray.intersectPlane(dragPlane, planeHit)) return;
-
-    const ud = _drag.ud;
-    // Новая Y полки (низ полки)
-    let newY = Math.round(planeHit.y - T/2);
-    // Ограничения: не ниже дна+T и не выше крыши-2T
-    newY = Math.max(ud.minY, Math.min(ud.maxY, newY));
-    // Snap to 10mm grid
-    newY = Math.round(newY/10)*10;
-
-    _drag.mesh.position.y = newY + T/2;
-    if(ghostLine) ghostLine.position.y = newY + T/2;
-    canvas.style.cursor = 'grabbing';
-  }
-
-  function endDrag(){
-    if(!_drag) return;
-    const {mesh, ud} = _drag;
-    // Финальная позиция
-    const newH = Math.round(mesh.position.y - T/2);
-
-    // Обновляем state
-    const sec = sections.find(s=>s.id===ud.secId);
-    if(sec){
-      const sh = sec.shelves.find(x=>x.id===ud.shelfId);
-      if(sh){
-        sh.height = Math.max(ud.minY, Math.min(ud.maxY, newH));
-        // Сортируем полки по высоте
-        sec.shelves.sort((a,b)=>a.height-b.height);
-        projMarkUnsaved();
-      }
-    }
-
-    // Убираем подсветку
-    mesh.material = ML;
-    if(ghostLine){ scene.remove(ghostLine); ghostLine=null; }
-    canvas.style.cursor = '';
-    _drag = null;
-
-    // Полный перерисов и синхронизация панели
-    render3D();
-    renderPanel();
-  }
-
-  const hint = document.getElementById('drag-hint');
-  function showHint(v){ if(hint) hint.classList.toggle('show', v); }
-
-  // Курсор при наведении
-  canvas.addEventListener('mousemove', e=>{
-    if(_drag){ doDrag(e); return; }
-    const hit = pickShelf(e);
-    canvas.style.cursor = hit ? 'grab' : '';
-    showHint(!!hit);
-  });
-
-  canvas.addEventListener('mousedown', e=>{
-    if(e.button!==0) return;
-    const hit = pickShelf(e);
-    if(hit){ e.stopPropagation(); showHint(false); startDrag(hit); }
-  });
-
-  canvas.addEventListener('mouseleave', ()=>showHint(false));
-
-  window.addEventListener('mouseup', e=>{
-    if(_drag) endDrag();
-  });
-
-  // Touch support
-  canvas.addEventListener('touchstart', e=>{
-    if(e.touches.length!==1) return;
-    const t=e.touches[0];
-    const fakeE={clientX:t.clientX,clientY:t.clientY,button:0};
-    const hit=pickShelf(fakeE);
-    if(hit){e.preventDefault();startDrag(hit);}
-  },{passive:false});
-
-  canvas.addEventListener('touchmove', e=>{
-    if(!_drag||e.touches.length!==1) return;
-    e.preventDefault();
-    const t=e.touches[0];
-    doDrag({clientX:t.clientX,clientY:t.clientY});
-  },{passive:false});
-
-  canvas.addEventListener('touchend', e=>{
-    if(_drag) endDrag();
-  });
 }
 
 function clrScene(){ scene.children.filter(c=>c.userData.w).forEach(c=>scene.remove(c)); }
@@ -2325,9 +2399,7 @@ function render3D(){
             thick:T};
         }
         const resCore=window.WardrobeCore.buildCarcass(cfgCore);
-        const shelfOrder3d=shelfOrderForSection(s);
         const MD3=new THREE.MeshStandardMaterial({color:0x8d9db6, roughness:0.6, metalness:0.1});
-        let shelfSeen3d=0;
         // Ось Z: в ядре z=0 — ЗАДНЯЯ стенка (растёт к фасаду), в сцене
         // CRM z=0 — лицо фасада (растёт вглубь) → флип: zFront+Dc−b.cz
         resCore.parts.forEach(p=>{
@@ -2346,14 +2418,6 @@ function render3D(){
           else if(p.kind==='dbottom') mat3d=MH;
           else if(p.kind==='dfacade') mat3d=isMdfMaterial(s.facade.material)?MFM:MFL;
           else if(p.kind==='facade'){ mat3d=isMdfMaterial(s.facade.material)?MFM:MFL; noEdge3d=true; }
-          if(p.kind==='shelf'){
-            const entry3d=shelfOrder3d[shelfSeen3d]; shelfSeen3d++;
-            if(entry3d){
-              ud3d={drag:true, secId:s.id, shelfId:entry3d.id,
-                minY:LH+T*2, maxY:LH+Math.max(T*2+1,H-T*2),
-                sw:b.dx, sd:b.dz};
-            }
-          }
           addBoard(cx-b.dx/2, cy-b.dy/2, cz-b.dz/2, b.dx, b.dy, b.dz, mat3d, noEdge3d, ud3d);
         });
         coreOk3d=true;
@@ -2368,11 +2432,7 @@ function render3D(){
       const sci=Math.min(sh.col||0, Math.max(0,shelfCols3d.length-1));
       const scol=shelfCols3d[sci] || {left:T, width:W-2*T};
       const sx=ox+scol.left, sw=scol.width;
-      const sm=addBoard(sx,LH+sh.height,zFront,sw,T,Dc,ML,false,{
-        drag:true, secId:s.id, shelfId:sh.id,
-        minY:LH+T*2, maxY:LH+Math.max(T*2+1,H-T*2),
-        ox:sx, oz:zFront, sw:sw, sd:Dc
-      });
+      addBoard(sx,LH+sh.height,zFront,sw,T,Dc,ML);
     });
     // ящики по нишам и колонкам
     if(s.drawerBlocks&&s.drawerBlocks.length>0){
@@ -2668,19 +2728,6 @@ function buildCoreTree(s){
     sizes: cols.map(c => c.width),
     children: cols.map(function(_, ci){ return colNode(ci); })
   };
-}
-
-// Порядок полок, в котором их эмитит ядро (по колонкам слева направо,
-// внутри колонки снизу вверх) — сопоставляется 1:1 с res.parts.filter
-// (kind==='shelf') для драга полки в 3D (render3D).
-function shelfOrderForSection(s){
-  const cols=getColumns(s);
-  const out=[];
-  cols.forEach((c,ci)=>{
-    const hs=s.shelves.filter(sh=>(sh.col||0)===ci).slice().sort((a,b)=>a.height-b.height);
-    hs.forEach(sh=>out.push({id:sh.id, col:ci}));
-  });
-  return out;
 }
 
 // Детали ядра → формат calcParts. Имена — в стиле CRM.
@@ -4194,6 +4241,15 @@ function renderMobile3D(){
   });
 }
 
+// ── 2D-режим: после каждого render3D обновляем 2D-вид (если активен) ──
+{
+  const _render3D_base = render3D;
+  render3D = function(){
+    _render3D_base();
+    try{ ensure2DUI(); if(_viewMode==='2d') w2dSyncView(); }catch(e2d){}
+  };
+}
+
 /* ============================================================
    EXPOSE & INIT
 ============================================================ */
@@ -4210,6 +4266,9 @@ window.saveAsTemplate=saveAsTemplate; window.deleteUserTemplate=deleteUserTempla
 window.addDivider=addDivider; window.removeDivider=removeDivider;
 window.upd=upd; window.updShelf=updShelf; window.updDiv=updDiv;
 window.w2dSetTool=w2dSetTool; window.w2dClick=w2dClick;
+window.w2dToggleMode=w2dToggleMode; window.w2dSetTool2=w2dSetTool2;
+window.w2dFullClick=w2dFullClick; window.w2dEditDim=w2dEditDim; window.w2dEditShelf=w2dEditShelf;
+window._ai_w2dLayout=()=>_w2dLayout;
 window.toggleRod=toggleRod;
 window.updFacade=updFacade; window.updEdge=updEdge;
 window.addDrawerBlock=addDrawerBlock; window.removeDrawerBlock=removeDrawerBlock; window.updDrawerBlock=updDrawerBlock;
