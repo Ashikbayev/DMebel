@@ -946,6 +946,105 @@ function getColumns(s){
   }
   return cols;
 }
+/* ============================================================
+   2D-РЕДАКТОР СЕКЦИИ (вид спереди, SVG в панели секции).
+   Инструменты: полка / ящики / штанга / удалить. Клик по схеме
+   применяет инструмент. Правит ТЕ ЖЕ данные секции, что 3D/раскрой.
+============================================================ */
+let _w2dTool='shelf';
+function w2dSetTool(t){ _w2dTool=t; renderPanel(); }
+function render2D(s){
+  const W=s.width,H=s.height;
+  const sc=Math.min(224/W, 430/H);
+  const pw=Math.round(W*sc), ph=Math.round(H*sc);
+  const sy=mm=>(ph-mm*sc);
+  const q=String.fromCharCode(39);
+  const cols=getColumns(s);
+  let g='';
+  // корпус: рамка + панели
+  g+='<rect x="0" y="0" width="'+pw+'" height="'+ph+'" fill="#fff" stroke="#333"/>';
+  g+='<rect x="0" y="0" width="'+(T*sc)+'" height="'+ph+'" fill="#d9c9a8"/>';
+  g+='<rect x="'+(pw-T*sc)+'" y="0" width="'+(T*sc)+'" height="'+ph+'" fill="#d9c9a8"/>';
+  g+='<rect x="0" y="0" width="'+pw+'" height="'+(T*sc)+'" fill="#d9c9a8"/>';
+  g+='<rect x="0" y="'+(ph-T*sc)+'" width="'+pw+'" height="'+(T*sc)+'" fill="#d9c9a8"/>';
+  s.dividers.forEach(dv=>{
+    g+='<rect x="'+(dv.pos*sc)+'" y="'+(T*sc)+'" width="'+Math.max(1,T*sc)+'" height="'+(ph-2*T*sc)+'" fill="#c9b183"/>';
+  });
+  const niches=getNiches(s);
+  s.drawerBlocks.forEach(db=>{
+    const n=niches[db.nicheIdx]; if(!n)return;
+    const col=(db.col!=null&&cols[db.col])?cols[db.col]:{left:T,width:W-2*T};
+    const x=col.left*sc, w=col.width*sc;
+    const yTop=sy(n.top), hh=(n.top-n.bottom)*sc;
+    g+='<rect x="'+x+'" y="'+yTop+'" width="'+w+'" height="'+hh+'" fill="rgba(90,130,220,0.18)" stroke="#5a82dc" stroke-width="0.8"/>';
+    const cnt=db.count||1;
+    for(let i=1;i<cnt;i++){
+      const ly=yTop+hh*i/cnt;
+      g+='<line x1="'+x+'" y1="'+ly+'" x2="'+(x+w)+'" y2="'+ly+'" stroke="#5a82dc" stroke-width="0.8"/>';
+    }
+  });
+  s.shelves.forEach(sh=>{
+    const col=cols[Math.min(sh.col||0,cols.length-1)]||{left:T,width:W-2*T};
+    g+='<rect x="'+(col.left*sc)+'" y="'+sy(sh.height+T)+'" width="'+(col.width*sc)+'" height="'+Math.max(1.5,T*sc)+'" fill="#b8935a"/>';
+  });
+  if(s.hasRod){
+    const rc=(s.rodCol!=null&&cols[s.rodCol])?cols[s.rodCol]:{left:T,width:W-2*T};
+    const ry=sy(s.rodHeight||1600);
+    g+='<line x1="'+(rc.left*sc+2)+'" y1="'+ry+'" x2="'+((rc.left+rc.width)*sc-2)+'" y2="'+ry+'" stroke="#7a5c2e" stroke-width="2.5" stroke-linecap="round"/>';
+  }
+  const tools=[['shelf','Полка'],['drawers','Ящики'],['rod','Штанга'],['del','✕ Удалить']];
+  let tb='<div style="display:flex;gap:3px;margin-bottom:5px;flex-wrap:wrap">';
+  tools.forEach(tp=>{
+    const act=(_w2dTool===tp[0]);
+    tb+='<button onclick="w2dSetTool('+q+tp[0]+q+')" style="flex:1;min-width:0;padding:3px 4px;font-size:10px;border-radius:5px;cursor:pointer;border:1px solid '+(act?'#1a5252':'#ddd')+';background:'+(act?'#e8f5f0':'#fff')+';color:'+(act?'#1a5252':'#666')+';font-weight:'+(act?'600':'400')+'">'+tp[1]+'</button>';
+  });
+  tb+='</div>';
+  return tb +
+    '<svg width="'+pw+'" height="'+ph+'" data-sc="'+sc+'" style="display:block;margin:0 auto;cursor:crosshair" onclick="w2dClick('+s.id+',event)">'+g+'</svg>' +
+    '<div style="font-size:9px;color:#999;text-align:center;margin-top:3px">клик по схеме — применить инструмент</div>';
+}
+function w2dClick(sid,evt){
+  const s=sections.find(x=>x.id===sid); if(!s)return;
+  const el=evt.currentTarget||evt.target;
+  const sc=parseFloat(el&&el.dataset?el.dataset.sc:'')||1;
+  const xm=evt.offsetX/sc, ym=s.height-evt.offsetY/sc;
+  const cols=getColumns(s);
+  let ci=cols.findIndex(cc=>xm>=cc.left&&xm<=cc.right);
+  if(ci<0) ci=(xm<T)?0:cols.length-1;
+  if(_w2dTool==='shelf'){
+    let h=Math.round(ym/10)*10;
+    h=Math.max(T*2, Math.min(s.height-T*2, h));
+    s.shelves.push({id:s.shelfId++, height:h, col:ci});
+    s.shelves.sort((a,b)=>a.height-b.height);
+  }else if(_w2dTool==='drawers'){
+    const niches=getNiches(s);
+    let ni=niches.findIndex(n=>ym>=n.bottom&&ym<=n.top); if(ni<0)ni=0;
+    const ex=s.drawerBlocks.find(db=>db.nicheIdx===ni&&(db.col==null||db.col===ci));
+    if(ex) ex.count=Math.min(5,(ex.count||1)+1);
+    else s.drawerBlocks.push({nicheIdx:ni, count:2, brand:'En-7', col:(cols.length>1?ci:null)});
+  }else if(_w2dTool==='rod'){
+    s.hasRod=true;
+    s.rodHeight=Math.max(T*3, Math.min(s.height-T*3, Math.round(ym/10)*10));
+    s.rodCol=(cols.length>1?ci:null);
+  }else if(_w2dTool==='del'){
+    let best=-1,bd=40;
+    s.shelves.forEach((sh,i)=>{
+      const sci=Math.min(sh.col||0,cols.length-1);
+      if(sci!==ci)return;
+      const d=Math.abs(sh.height-ym);
+      if(d<bd){bd=d;best=i;}
+    });
+    if(best>=0){ s.shelves.splice(best,1); }
+    else if(s.hasRod&&Math.abs((s.rodHeight||0)-ym)<60&&(s.rodCol==null||s.rodCol===ci)){ s.hasRod=false; }
+    else{
+      const niches=getNiches(s);
+      const ni=niches.findIndex(n=>ym>=n.bottom&&ym<=n.top);
+      const bi=s.drawerBlocks.findIndex(db=>db.nicheIdx===ni&&(db.col==null||db.col===ci));
+      if(bi>=0)s.drawerBlocks.splice(bi,1);
+    }
+  }
+  renderPanel(); render3D(); updateStats(); projMarkUnsaved();
+}
 function updFacade(sid,field,val){
   const s=sections.find(x=>x.id===sid);
   if(field==='hasTexture') s.facade.hasTexture=val;
@@ -1516,6 +1615,9 @@ function renderPanel(){
         `<div><div class="fl">Высота</div><input type="number" value="${s.height}" onchange="upd(${s.id},'height',this.value)"></div>` +
         `<div><div class="fl">Глубина</div><input type="number" value="${s.depth}" onchange="upd(${s.id},'depth',this.value)"></div>` +
       `</div>` +
+
+      // ── 2D схема (вид спереди, клик = инструмент) ──
+      acc('sch','▦ 2D схема','',render2D(s),true) +
 
       // ── Шаблоны (по умолчанию открыты) ──
       acc('tpl','📐 Шаблоны наполнения','',renderTemplateBar(s.id),true) +
@@ -4107,6 +4209,7 @@ window.applyTemplate=applyTemplate; window.applyUserTemplate=applyUserTemplate;
 window.saveAsTemplate=saveAsTemplate; window.deleteUserTemplate=deleteUserTemplate;
 window.addDivider=addDivider; window.removeDivider=removeDivider;
 window.upd=upd; window.updShelf=updShelf; window.updDiv=updDiv;
+window.w2dSetTool=w2dSetTool; window.w2dClick=w2dClick;
 window.toggleRod=toggleRod;
 window.updFacade=updFacade; window.updEdge=updEdge;
 window.addDrawerBlock=addDrawerBlock; window.removeDrawerBlock=removeDrawerBlock; window.updDrawerBlock=updDrawerBlock;
