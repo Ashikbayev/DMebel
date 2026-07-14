@@ -571,6 +571,7 @@ function mkSection(){
     antresol:{enabled:false, height:400, facade:{type:'none', material:'ldsp'}, shelves:[], shelfId:0},
     edgeFront:'2mm', edgeBack:'none',
     edgeTop:'auto', edgeBottom:'auto', edgeLeft:'auto', edgeRight:'auto',
+    shelfDepthOffset:0, sideExtraLeft:0, sideExtraRight:0, drawerFrontDrop:0,
     drawerBlocks:[],
     shelfId:0, divId:0
   };
@@ -1442,6 +1443,16 @@ function renderPanel(){
         <div style="padding:8px 10px;display:${open?'':'none'}">${content}</div>
       </div>`;
     };
+    const tuneFields=['shelfDepthOffset','sideExtraLeft','sideExtraRight','drawerFrontDrop'];
+    const tuneCount=tuneFields.filter(f=>(s[f]||0)!==0).length;
+    const tuneBadge=tuneCount>0?(tuneCount+' акт.'):'';
+    const tuneInp=(label,field)=>{
+      return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
+        '<div class="fl" style="flex:1;margin:0">' + label + '</div>' +
+        '<input type="number" step="1" value="' + (s[field]||0) + '" style="width:64px;flex-shrink:0"' +
+        ' onchange="upd(' + s.id + ',' + String.fromCharCode(39) + field + String.fromCharCode(39) + ',this.value)">' +
+        '</div>';
+    };
 
     // Бейджи с кол-вом элементов
     const shBadge = s.shelves.length ? `${s.shelves.length} шт` : '';
@@ -1523,6 +1534,16 @@ function renderPanel(){
       acc('drawers','▦ Ящики',drBadge,
         drawerBlocksHtml + `<button class="addbtn" onclick="addDrawerBlock(${s.id})">+ блок ящиков</button>`,
         s.drawerBlocks.length>0
+      ) +
+
+      // ── Поправки (сверка 98: стандарта нет — оператор задаёт вручную) ──
+      acc('tune','⚙ Поправки, мм',tuneBadge,
+        tuneInp('Полка мельче корпуса по глубине','shelfDepthOffset') +
+        tuneInp('Напуск левой стойки, под стену','sideExtraLeft') +
+        tuneInp('Напуск правой стойки, под стену','sideExtraRight') +
+        tuneInp('Перед ящика ниже зада','drawerFrontDrop') +
+        '<div style="font-size:10px;color:#999;margin-top:4px">0 = стандартный расчёт. Влияет на раскрой; полка — и на 3D.</div>',
+        tuneCount>0
       ) +
 
       // ── Фасад ──
@@ -2172,14 +2193,20 @@ function render3D(){
     if(USE_CORE_ENGINE && window.WardrobeCore){
       try{
         const cfgCore={width:W,height:H,depth:D,legs:0,panel:T,back:3,edge:1,
-          gapFront:T,gapBack:3,sections:buildCoreTree(s)};
+          gapFront:T,gapBack:3,
+          shelfDepthOffset:s.shelfDepthOffset||0,
+          sideExtraLeft:s.sideExtraLeft||0,
+          sideExtraRight:s.sideExtraRight||0,
+          sections:buildCoreTree(s)};
         const resCore=window.WardrobeCore.buildCarcass(cfgCore);
         const shelfOrder3d=shelfOrderForSection(s);
         const MD3=new THREE.MeshStandardMaterial({color:0x8d9db6, roughness:0.6, metalness:0.1});
         let shelfSeen3d=0;
+        // Ось Z: в ядре z=0 — ЗАДНЯЯ стенка (растёт к фасаду), в сцене
+        // CRM z=0 — лицо фасада (растёт вглубь) → флип: zFront+Dc−b.cz
         resCore.parts.forEach(p=>{
           const b=p.box; if(!b)return;
-          const cx=ox+W/2+b.cx, cy=LH+b.cy, cz=zFront+b.cz;
+          const cx=ox+W/2+b.cx, cy=LH+b.cy, cz=zFront+Dc-b.cz;
           if(p.kind==='rod'){
             const g2=new THREE.CylinderGeometry(b.dz/2,b.dz/2,b.dx,16);
             const rm=new THREE.Mesh(g2,MR); rm.rotation.z=Math.PI/2;
@@ -2486,7 +2513,7 @@ function buildCoreTree(s){
         if(!nn) continue;
         const c = (nn.bottom + nn.top) / 2;
         if(c >= o.y0 && c <= o.y1){
-          return { type:'drawers', count: db.count||1, mount:'overlay' };
+          return { type:'drawers', count: db.count||1, mount:'overlay', frontDrop: s.drawerFrontDrop||0 };
         }
       }
       if(rodHere && s.rodHeight >= o.y0 && s.rodHeight <= o.y1){
@@ -2563,6 +2590,9 @@ function calcPartsCore(){
     const cfg = {
       width: W, height: H, depth: s.depth, legs: 0,
       panel: T, back: 3, edge: 1, gapFront: T, gapBack: 3,
+      shelfDepthOffset: s.shelfDepthOffset || 0,
+      sideExtraLeft: s.sideExtraLeft || 0,
+      sideExtraRight: s.sideExtraRight || 0,
       sections: buildCoreTree(s)
     };
     const res = WC.buildCarcass(cfg);

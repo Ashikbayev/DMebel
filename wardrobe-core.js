@@ -51,6 +51,11 @@
     gapBottom: 0,        // Отступ снизу
     shelfCount: 0,       // Кол-во стационарных полок (0 = без полок) [легаси, плоский оверлей]
     partitionCount: 0,   // Кол-во вертикальных перегородок (0 = без перегородок) [легаси]
+    // ── ПОПРАВКИ УРОВНЯ СЕКЦИИ (сверка заказа 98: стандарта нет,
+    //    оператор задаёт вручную; дефолт 0 = прежнее поведение) ──
+    shelfDepthOffset: 0, // Полка мельче корпуса по глубине, мм (98: 13/20)
+    sideExtraLeft: 0,    // Напуск глубины ЛЕВОЙ стойки, мм (± под стену)
+    sideExtraRight: 0,   // Напуск глубины ПРАВОЙ стойки, мм (98/A4: +3)
     // ── ДЕРЕВО СЕКЦИЙ (рекурсивное наполнение) ──────────────────
     // Если задано — заменяет плоские shelfCount/partitionCount.
     // Узел делит ОДНУ прямоугольную ячейку:
@@ -403,17 +408,20 @@
 
       // Перед / Зад: между боковинами.
       // inset: −1 (посадка, эталон 1: 285); overlay: РОВНО (эталон 2: 318)
+      // frontDrop: перед НИЖЕ зада на N мм (заказы 104/98: строго 20 на
+      // 5 независимых ящиках; причина ⚠ не выяснена — дефолт 0).
+      var fDrop = num(node.frontDrop, 0);
       var fbCut = boxW - 2 * panel - (mount === 'inset' ? edge : 0);
-      var fb = function (name, fkind, fcz) {
+      var fb = function (name, fkind, fcz, drop) {
         return mkPart({
           name: name, kind: fkind, material: 'ldsp', thick: panel,
-          cutL: fbCut, cutW: bH - edge,
+          cutL: fbCut, cutW: bH - edge - (drop || 0),
           edges: [{ side: 'top', len: fbCut }],
-          box: { cx: cx, cy: (bY0 + bY1) / 2, cz: fcz, dx: boxW - 2 * panel, dy: bH, dz: panel }
+          box: { cx: cx, cy: (bY0 + bY1) / 2 - (drop || 0) / 2, cz: fcz, dx: boxW - 2 * panel, dy: bH - (drop || 0), dz: panel }
         });
       };
-      parts.push(fb('ЯщикП_' + k, 'dfront', boxFrontZ - panel / 2));
-      parts.push(fb('ЯщикЗ_' + k, 'dback', boxFrontZ - boxDepth + panel / 2));
+      parts.push(fb('ЯщикП_' + k, 'dfront', boxFrontZ - panel / 2, fDrop));
+      parts.push(fb('ЯщикЗ_' + k, 'dback', boxFrontZ - boxDepth + panel / 2, 0));
 
       // Дно ХДФ: накладное снизу короба, отступ по краям bottomInset
       parts.push(mkPart({
@@ -539,16 +547,20 @@
       // Каждая полка режется РОВНО в ширину ячейки. Доли снизу вверх.
       // mkShelf(yBottom) — полка с нижней гранью на yBottom (общая фабрика
       // для промежуточных и граничных полок этапа D).
+      // Глубина полки = pd − shelfDepthOffset (сверка 98: полка мельче
+      // корпуса; дефолт 0). Полка прижата к ЗАДНЕЙ стенке — отступ спереди.
+      var shOff = ctx.shelfDepthOffset || 0;
+      var shPd = pd - shOff;
       var mkShelf = function (yBottom) {
         ctx.counters.shelf++;
         parts.push(mkPart({
           name: 'Полка_' + ctx.counters.shelf, kind: 'shelf',
           material: 'ldsp', thick: panel,
-          cutL: cellW, cutW: pd,
+          cutL: cellW, cutW: shPd,
           edges: [{ side: 'front', len: cellW }],
           box: {
-            cx: (cell.x0 + cell.x1) / 2, cy: yBottom + panel / 2, cz: cell.z,
-            dx: cellW, dy: panel, dz: pd
+            cx: (cell.x0 + cell.x1) / 2, cy: yBottom + panel / 2, cz: cell.z - shOff / 2,
+            dx: cellW, dy: panel, dz: shPd
           }
         }));
       };
@@ -677,11 +689,13 @@
     // Плоскость стойки — YZ (толщина по X). Раскрой: 1867 x 579.
     // Кромка стойки: только передний вертикальный торец.
     // Раскрой (sideCutH=1867) на 1 мм меньше геометрического проёма
-    // (clearH=1868) — подрезка. В 3D деталь занимает весь проём.
-    function sidePart(name, cx) {
+    // (clearH=1868) — подтверждено раскроем. В 3D деталь занимает весь проём.
+    // extra — напуск глубины ПОД СТЕНУ (sideExtraLeft/Right, сверка 98):
+    // только в раскрой (cutW), 3D-box не трогаем.
+    function sidePart(name, cx, extra) {
       return mkPart({
         name: name, kind: 'side', material: 'ldsp', thick: c.panel,
-        cutL: sideCutH, cutW: partDepth,
+        cutL: sideCutH, cutW: partDepth + (extra || 0),
         edges: [{ side: 'front', len: sideCutH }],
         box: {
           cx: cx, cy: c.legs + c.panel + clearH / 2, cz: partDepth / 2,
@@ -692,8 +706,8 @@
     // Левая стойка: внешний левый край корпуса на X = −corpusW/2
     var xL = -corpusW / 2 + c.panel / 2;
     var xR = corpusW / 2 - c.panel / 2;
-    parts.push(sidePart('Стойка_левая', xL));
-    parts.push(sidePart('Стойка_правая', xR));
+    parts.push(sidePart('Стойка_левая', xL, c.sideExtraLeft));
+    parts.push(sidePart('Стойка_правая', xR, c.sideExtraRight));
 
     // ── Крыша и дно (накладные) ─────────────────────────────────
     // Плоскость — XZ (горизонтальна, толщина по Y).
@@ -749,7 +763,7 @@
       // Корневая ячейка = чистовой проём корпуса:
       //   по X — между внутренними гранями стоек (±innerW/2),
       //   по Y — от верха дна до низа крыши (высота = clearH = 1868).
-      var ctx = { panel: c.panel, partDepth: partDepth, edge: edge, counters: { shelf: 0, panel: 0, rod: 0, drawerSec: 0, drawer: 0, cfacade: 0 } };
+      var ctx = { panel: c.panel, partDepth: partDepth, edge: edge, shelfDepthOffset: c.shelfDepthOffset || 0, counters: { shelf: 0, panel: 0, rod: 0, drawerSec: 0, drawer: 0, cfacade: 0 } };
       var rootCell = {
         x0: -innerW / 2, x1: innerW / 2,
         y0: c.legs + c.panel,               // верх дна
@@ -766,17 +780,18 @@
       // кромка только передний торец. Эквивалентно корневому shelves-узлу.
       var shelfCount = c.shelfCount;
       if (shelfCount > 0) {
+        var shOffL = c.shelfDepthOffset || 0;
         openingH = (clearH - shelfCount * c.panel) / (shelfCount + 1);
         var yCursor = c.legs + c.panel; // верх дна
         for (var si = 1; si <= shelfCount; si++) {
           yCursor += openingH;
           parts.push(mkPart({
             name: 'Полка_' + si, kind: 'shelf', material: 'ldsp', thick: c.panel,
-            cutL: shelfLen, cutW: partDepth,
+            cutL: shelfLen, cutW: partDepth - shOffL,
             edges: [{ side: 'front', len: shelfLen }],
             box: {
-              cx: 0, cy: yCursor + c.panel / 2, cz: partDepth / 2,
-              dx: shelfLen, dy: c.panel, dz: partDepth
+              cx: 0, cy: yCursor + c.panel / 2, cz: (partDepth - shOffL) / 2,
+              dx: shelfLen, dy: c.panel, dz: partDepth - shOffL
             }
           }));
           yCursor += c.panel;
