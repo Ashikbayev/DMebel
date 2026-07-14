@@ -623,6 +623,42 @@
     var cutH = geomH - 2 * edge;         // 1895
     var cyF = (zoneY0 + zoneY1) / 2;     // центр по высоте
 
+    // ── ЗОННЫЙ режим (fc.gapMid — число): gL/gR — зазоры всей зоны,
+    //    между дверьми gapMid; как «Параметры установки фасадов» в ПО.
+    //    Дефолты CRM (3/3/3/3/2) дают старую формулу: (W−12)/2, H−8.
+    if (typeof fc.gapMid === 'number') {
+      var innerZ = zoneW - gL - gR - (N - 1) * fc.gapMid;
+      var slotZ;
+      if (fc.sizes && fc.sizes.length) {
+        slotZ = splitSizes(fc.sizes, N, innerZ + 0, 0, 0);
+      } else {
+        // Целочисленное деление: остаток раздаётся первым дверям по +1мм
+        var baseZ = Math.floor(innerZ / N), remZ = Math.round(innerZ - baseZ * N);
+        slotZ = [];
+        for (var ri = 0; ri < N; ri++) slotZ.push(baseZ + (ri < remZ ? 1 : 0));
+      }
+      var xz = -zoneW / 2 + gL, iz, gwz, cwz;
+      for (iz = 0; iz < N; iz++) {
+        gwz = slotZ[iz];
+        cwz = gwz - 2 * edge;
+        parts.push(mkPart({
+          name: 'Фасад_' + (iz + 1), kind: 'facade',
+          material: mat, thick: thick, fine: true,
+          cutL: cutH, cutW: cwz,
+          edges: [
+            { side: 'top', len: cwz },
+            { side: 'bottom', len: cwz },
+            { side: 'left', len: cutH },
+            { side: 'right', len: cutH }
+          ],
+          box: { cx: xz + gwz / 2, cy: cyF, cz: cz, dx: gwz, dy: geomH, dz: thick }
+        }));
+        parts[parts.length - 1].opening = opening[iz] || (iz === 0 ? 'right' : 'left');
+        xz += gwz + fc.gapMid;
+      }
+      return;
+    }
+
     // Ширины слотов (без панелей между: panel=0) — sizes или поровну
     var slotW = splitSizes(fc.sizes, N, zoneW, 0, 0);
     var xcur = -zoneW / 2, i, sw, geomW, cutW, gcx;

@@ -572,6 +572,7 @@ function mkSection(){
     edgeFront:'2mm', edgeBack:'none',
     edgeTop:'auto', edgeBottom:'auto', edgeLeft:'auto', edgeRight:'auto',
     shelfDepthOffset:0, sideExtraLeft:0, sideExtraRight:0, drawerFrontDrop:0,
+    fGapLeft:3, fGapRight:3, fGapTop:3, fGapBottom:3, fGapMid:2,
     drawerBlocks:[],
     shelfId:0, divId:0
   };
@@ -1453,6 +1454,20 @@ function renderPanel(){
         ' onchange="upd(' + s.id + ',' + String.fromCharCode(39) + field + String.fromCharCode(39) + ',this.value)">' +
         '</div>';
     };
+    const fGapInp=(label,field,defVal)=>{
+      const cur=(s[field]==null?defVal:s[field]);
+      return '<div style="text-align:center"><div class="fl" style="margin:0;font-size:9px">' + label + '</div>' +
+        '<input type="number" step="1" value="' + cur + '" style="width:100%;min-width:0;padding:4px 2px;text-align:center"' +
+        ' onchange="upd(' + s.id + ',' + String.fromCharCode(39) + field + String.fromCharCode(39) + ',this.value)">' +
+        '</div>';
+    };
+    const fGapsHtml = s.facade.type==='none' ? '' :
+      '<div class="fl" style="margin-top:6px">Зазоры фасада, мм (минус = перекрытие)</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px">' +
+      fGapInp('Лев','fGapLeft',3) + fGapInp('Прав','fGapRight',3) +
+      fGapInp('Верх','fGapTop',3) + fGapInp('Низ','fGapBottom',3) +
+      fGapInp('Между','fGapMid',2) +
+      '</div>';
 
     // Бейджи с кол-вом элементов
     const shBadge = s.shelves.length ? `${s.shelves.length} шт` : '';
@@ -1562,7 +1577,7 @@ function renderPanel(){
             '<option value="mdfPlenka" '+(normFacadeMat(s.facade.material)==='mdfPlenka'?'selected':'')+'>МДФ Плёнка</option>' +
             '<option value="mdfKraska" '+(normFacadeMat(s.facade.material)==='mdfKraska'?'selected':'')+'>МДФ Краска</option>' +
           `</select></div>` +
-        `</div>` + texHtml,
+        `</div>` + texHtml + fGapsHtml,
         true
       ) +
 
@@ -2198,6 +2213,15 @@ function render3D(){
           sideExtraLeft:s.sideExtraLeft||0,
           sideExtraRight:s.sideExtraRight||0,
           sections:buildCoreTree(s)};
+        if(s.facade.type!=='none'){
+          cfgCore.facades={count:(s.facade.type==='doors3'?3:s.facade.type==='doors2'?2:1),
+            gapMid:(s.fGapMid==null?2:s.fGapMid),
+            gapLeft:(s.fGapLeft==null?3:s.fGapLeft),
+            gapRight:(s.fGapRight==null?3:s.fGapRight),
+            gapTop:(s.fGapTop==null?3:s.fGapTop),
+            gapBottom:(s.fGapBottom==null?3:s.fGapBottom),
+            thick:T};
+        }
         const resCore=window.WardrobeCore.buildCarcass(cfgCore);
         const shelfOrder3d=shelfOrderForSection(s);
         const MD3=new THREE.MeshStandardMaterial({color:0x8d9db6, roughness:0.6, metalness:0.1});
@@ -2213,12 +2237,13 @@ function render3D(){
             rm.position.set(cx,cy,cz); rm.castShadow=true; rm.userData={w:true}; scene.add(rm);
             return;
           }
-          let mat3d=ML, ud3d=null;
+          let mat3d=ML, ud3d=null, noEdge3d=false;
           if(p.kind==='bottom') mat3d=ML2;
           else if(p.kind==='back') mat3d=MH;
           else if(p.kind==='dside'||p.kind==='dfront'||p.kind==='dback') mat3d=MD3;
           else if(p.kind==='dbottom') mat3d=MH;
           else if(p.kind==='dfacade') mat3d=isMdfMaterial(s.facade.material)?MFM:MFL;
+          else if(p.kind==='facade'){ mat3d=isMdfMaterial(s.facade.material)?MFM:MFL; noEdge3d=true; }
           if(p.kind==='shelf'){
             const entry3d=shelfOrder3d[shelfSeen3d]; shelfSeen3d++;
             if(entry3d){
@@ -2227,7 +2252,7 @@ function render3D(){
                 sw:b.dx, sd:b.dz};
             }
           }
-          addBoard(cx-b.dx/2, cy-b.dy/2, cz-b.dz/2, b.dx, b.dy, b.dz, mat3d, false, ud3d);
+          addBoard(cx-b.dx/2, cy-b.dy/2, cz-b.dz/2, b.dx, b.dy, b.dz, mat3d, noEdge3d, ud3d);
         });
         coreOk3d=true;
       }catch(e3d){ console.warn('CORE ENGINE 3D: ошибка, откат на старый рендер', e3d); }
@@ -2299,7 +2324,7 @@ function render3D(){
         cap.position.set(lx,LH-3,lz); cap.castShadow=true; cap.userData={w:true}; scene.add(cap);
       });
     }
-    if(s.facade.type!=='none'){
+    if(s.facade.type!=='none' && !coreOk3d){
       const fm=isMdfMaterial(s.facade.material)?MFM:MFL;
       const count=s.facade.type==='doors3'?3:s.facade.type==='doors2'?2:1;
       const gap=4,thick=T,dw=(W-gap*(count+1))/count;
@@ -2654,18 +2679,36 @@ function calcPartsCore(){
       if(edgeSpec) addEdge(nm, pw, ph, edgeSpec[0], edgeSpec[1], edgeSpec[2], edgeSpec[3]);
     });
 
-    // Фасады секции (двери) — СТАРАЯ формула CRM, ядро не используется
+    // Фасады секции (двери) — через ЯДРО (зонный режим buildFacades).
+    // Дефолтные зазоры 3/3/3/3/2 дают старые цифры CRM: (W−12)/2 × (H−8).
+    // Зазоры настраиваются в секции (fGap*), отрицательные = перекрытие
+    // (заказ 98: накладные фасады шире корпуса). Фолбэк — старая формула.
     if(s.facade.type!=='none'){
       const count=s.facade.type==='doors3'?3:s.facade.type==='doors2'?2:1;
-      const gap=4,dw=Math.round((W-gap*(count+1))/count),dh=H-gap*2;
+      const secMat=normFacadeMat(s.facade.material);
+      let doorRows=null;
+      try{
+        const fparts=[];
+        const fc={count:count, gapMid:(s.fGapMid==null?2:s.fGapMid),
+          gapLeft:(s.fGapLeft==null?3:s.fGapLeft),
+          gapRight:(s.fGapRight==null?3:s.fGapRight),
+          gapTop:(s.fGapTop==null?3:s.fGapTop),
+          gapBottom:(s.fGapBottom==null?3:s.fGapBottom),
+          material:'ldsp', thick:T};
+        window.WardrobeCore.buildFacades(fc,{width:W,height:H,edge:1,panel:T},0,fparts);
+        if(fparts.length===count) doorRows=fparts.map(fp=>({w:fp.cutW,h:fp.cutL}));
+      }catch(eF){ doorRows=null; }
+      if(!doorRows){
+        const gap=4,dw=Math.round((W-gap*(count+1))/count),dh=H-gap*2;
+        doorRows=[]; for(let k=0;k<count;k++)doorRows.push({w:dw,h:dh});
+      }
       for(let k=0;k<count;k++){
-        const p={name:L+' Фасад '+(k+1),w:dw,h:dh,tex:s.facade.hasTexture};
-        const secMat=normFacadeMat(s.facade.material);
+        const p={name:L+' Фасад '+(k+1),w:doorRows[k].w,h:doorRows[k].h,tex:s.facade.hasTexture};
         if(secMat==='mdfKraska') facMdfKraska.push(p);
         else if(secMat==='mdfPlenka') facMdfPlenka.push(p);
         else facLdsp.push(p);
         if(secMat==='ldsp'){
-          addEdge(L+' Фасад '+(k+1),dw,dh,'vis','vis','vis','vis');
+          addEdge(L+' Фасад '+(k+1),doorRows[k].w,doorRows[k].h,'vis','vis','vis','vis');
         }
       }
     }
