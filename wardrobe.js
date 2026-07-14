@@ -1125,6 +1125,16 @@ function w2dEditNiche(sid,shid){
   updShelfGap(sid,shid,v);
 }
 // Клик по ширине колонки: правим ширину проёма, перегородки правее — равномерно
+// Клик по высоте фасада ящика: правим количество ящиков в блоке
+function w2dEditDrawers(sid,dbi){
+  const s=sections.find(x=>x.id===sid); if(!s)return;
+  const db=s.drawerBlocks[dbi]; if(!db)return;
+  const v=prompt('Ящиков в блоке (1-10):', db.count||1);
+  if(v==null)return;
+  const n=Math.max(1, Math.min(10, parseInt(v)||1));
+  db.count=n;
+  renderPanel(); render3D(); updateStats(); projMarkUnsaved();
+}
 function w2dEditColW(sid,ci){
   const s=sections.find(x=>x.id===sid); if(!s)return;
   const cols=getColumns(s);
@@ -1209,16 +1219,19 @@ function render2DFull(){
     });
     // ящики: фасады с ручками
     const niches=getNiches(s);
-    s.drawerBlocks.forEach(db=>{
+    s.drawerBlocks.forEach((db,dbi)=>{
       const n=niches[db.nicheIdx]; if(!n)return;
       const col=(db.col!=null&&cols[db.col])?cols[db.col]:{left:T,width:W-2*T};
       const dx=x0+col.left*sc, dw=col.width*sc;
       const yT=sy(n.top), hh2=(n.top-n.bottom)*sc;
       const cnt=db.count||1, fh=hh2/cnt;
+      const nicheH=n.top-n.bottom;
+      const drH=cnt>0?Math.floor((nicheH-(cnt+1)*4)/cnt):0;
       for(let i=0;i<cnt;i++){
         const fy=yT+fh*i;
         g+='<rect x="'+(dx+1.5)+'" y="'+(fy+1.5)+'" width="'+(dw-3)+'" height="'+(fh-3)+'" rx="2" fill="#f2f4f7" stroke="#b9c2cc" stroke-width="0.8"/>';
         g+='<line x1="'+(dx+dw/2-dw*0.14)+'" y1="'+(fy+fh*0.32)+'" x2="'+(dx+dw/2+dw*0.14)+'" y2="'+(fy+fh*0.32)+'" stroke="#7e8790" stroke-width="2" stroke-linecap="round"/>';
+        g+='<text x="'+(dx+dw/2)+'" y="'+(fy+fh*0.72)+'" font-size="10" fill="'+INK+'" text-anchor="middle" style="'+MONO+';cursor:pointer;paint-order:stroke;stroke:#f2f4f7;stroke-width:3.5px" onclick="w2dEditDrawers('+s.id+','+dbi+');event.stopPropagation()">'+drH+'</text>';
       }
     });
     // полки
@@ -4391,6 +4404,7 @@ window.w2dToggleMode=w2dToggleMode; window.w2dSetTool2=w2dSetTool2;
 window.w2dFullClick=w2dFullClick; window.w2dEditDim=w2dEditDim; window.w2dEditShelf=w2dEditShelf;
 window._ai_w2dLayout=()=>_w2dLayout;
 window.w2dEditNiche=w2dEditNiche; window.w2dEditColW=w2dEditColW;
+window.w2dEditDrawers=w2dEditDrawers;
 window.toggleRod=toggleRod;
 window.updFacade=updFacade; window.updEdge=updEdge;
 window.addDrawerBlock=addDrawerBlock; window.removeDrawerBlock=removeDrawerBlock; window.updDrawerBlock=updDrawerBlock;
