@@ -1063,7 +1063,7 @@ function ensure2DUI(){
     vp.appendChild(sw);
     const ov=document.createElement('div');
     ov.id='view2d';
-    ov.style.cssText='position:absolute;inset:0;display:none;background:#f2efe8;overflow:auto;z-index:20;padding:44px 14px 14px 14px;box-sizing:border-box';
+    ov.style.cssText='position:absolute;inset:0;display:none;background:linear-gradient(160deg,#262a2e 0%,#1f2327 100%);overflow:auto;z-index:20;padding:48px 18px 18px 18px;box-sizing:border-box';
     vp.appendChild(ov);
   }
   const b2=document.getElementById('w2d-btn2d'), b3=document.getElementById('w2d-btn3d');
@@ -1083,7 +1083,7 @@ function w2dSyncView(){
 function w2dToolBtn(id,label){
   const q=String.fromCharCode(39);
   const act=(_w2dTool===id);
-  return '<button onclick="w2dSetTool2('+q+id+q+')" style="padding:5px 10px;font-size:11px;border-radius:6px;cursor:pointer;border:1px solid '+(act?'#1a5252':'#ccc')+';background:'+(act?'#e8f5f0':'#fff')+';color:'+(act?'#1a5252':'#555')+';font-weight:'+(act?'600':'400')+'">'+label+'</button>';
+  return '<button class="w2db'+(act?' on':'')+'" onclick="w2dSetTool2('+q+id+q+')">'+label+'</button>';
 }
 function w2dSetTool2(t){ _w2dTool=t; w2dSyncView(); renderPanel(); }
 // Полка кликом: добавить в колонку и распределить ВСЕ полки колонки
@@ -1151,7 +1151,7 @@ function render2DFull(){
   const q=String.fromCharCode(39);
   const vp=document.getElementById('viewport');
   const cw=(vp&&vp.clientWidth)||1000, ch=(vp&&vp.clientHeight)||640;
-  const GAPX=30, ML_=70, MT_=46, MB_=64;
+  const GAPX=56, ML_=84, MT_=56, MB_=96;
   let totW=0, maxH=0;
   sections.forEach(s=>{
     totW+=s.width;
@@ -1160,11 +1160,34 @@ function render2DFull(){
   });
   totW+=GAPX*Math.max(0,sections.length-1);
   if(totW<100)totW=100; if(maxH<100)maxH=100;
-  const sc=Math.max(0.05, Math.min((cw-ML_-40)/totW, (ch-MT_-MB_-58)/maxH));
-  const pw=Math.round(totW*sc)+ML_+30, ph=Math.round(maxH*sc)+MT_+MB_;
+  const sc=Math.max(0.05, Math.min((cw-ML_-60)/totW, (ch-MT_-MB_-64)/maxH));
+  const pw=Math.round(totW*sc)+ML_+44, ph=Math.round(maxH*sc)+MT_+MB_;
   const floorY=MT_+maxH*sc;
   _w2dLayout=[];
-  let g='', ox=ML_;
+  const MONO='font-family:ui-monospace,SFMono-Regular,Consolas,monospace';
+  const INK='#1c4f9e', MUT='#9aa1a8', LINE='#2f3439', WOOD='#d9c096', WOODS='#b08a52', WOODD='#ccb182';
+  // чертёжные размерные линии (стрелки + число с «просветом»)
+  function dimV(x,yA,yB,label,click,edit){
+    const col=edit?INK:MUT, mk=edit?'w2dar':'w2darg';
+    let t='<line x1="'+x+'" y1="'+yA+'" x2="'+x+'" y2="'+yB+'" stroke="'+col+'" stroke-width="1" marker-start="url(#'+mk+')" marker-end="url(#'+mk+')"/>';
+    t+='<text x="'+x+'" y="'+((yA+yB)/2+3.5)+'" font-size="10.5" fill="'+col+'" text-anchor="middle" style="'+MONO+';paint-order:stroke;stroke:#fbf9f4;stroke-width:4px'+(edit?';cursor:pointer':'')+'"'+(click?' onclick="'+click+';event.stopPropagation()"':'')+'>'+label+'</text>';
+    return t;
+  }
+  function dimH(y,xA,xB,label,click,edit){
+    const col=edit?INK:MUT, mk=edit?'w2dar':'w2darg';
+    let t='<line x1="'+xA+'" y1="'+y+'" x2="'+xB+'" y2="'+y+'" stroke="'+col+'" stroke-width="1" marker-start="url(#'+mk+')" marker-end="url(#'+mk+')"/>';
+    t+='<text x="'+((xA+xB)/2)+'" y="'+(y+3.5)+'" font-size="10.5" fill="'+col+'" text-anchor="middle" style="'+MONO+';paint-order:stroke;stroke:#fbf9f4;stroke-width:4px'+(edit?';cursor:pointer':'')+'"'+(click?' onclick="'+click+';event.stopPropagation()"':'')+'>'+label+'</text>';
+    return t;
+  }
+  let g='<defs>'+
+    '<pattern id="w2dgrid" width="'+(100*sc)+'" height="'+(100*sc)+'" patternUnits="userSpaceOnUse">'+
+      '<path d="M '+(100*sc)+' 0 L 0 0 0 '+(100*sc)+'" fill="none" stroke="rgba(50,80,120,0.09)" stroke-width="1"/>'+
+    '</pattern>'+
+    '<marker id="w2dar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,1 L10,5 L0,9 z" fill="'+INK+'"/></marker>'+
+    '<marker id="w2darg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,1 L10,5 L0,9 z" fill="'+MUT+'"/></marker>'+
+  '</defs>';
+  g+='<rect x="0" y="0" width="'+pw+'" height="'+ph+'" fill="url(#w2dgrid)"/>';
+  let ox=ML_;
   sections.forEach((s,si)=>{
     const W=s.width,H=s.height;
     const antrH=(s.antresol&&s.antresol.enabled)?s.antresol.height:0;
@@ -1172,96 +1195,118 @@ function render2DFull(){
     _w2dLayout.push({sid:s.id, x0:x0, x1:x0+bw, floorY:floorY, sc:sc, H:H, antrH:antrH});
     const sy=mm=>(floorY-mm*sc);
     const cols=getColumns(s);
-    // корпус
-    g+='<rect x="'+x0+'" y="'+topY+'" width="'+bw+'" height="'+(H*sc)+'" fill="#fff" stroke="#333"/>';
-    g+='<rect x="'+x0+'" y="'+topY+'" width="'+(T*sc)+'" height="'+(H*sc)+'" fill="#d9c9a8"/>';
-    g+='<rect x="'+(x0+bw-T*sc)+'" y="'+topY+'" width="'+(T*sc)+'" height="'+(H*sc)+'" fill="#d9c9a8"/>';
-    g+='<rect x="'+x0+'" y="'+topY+'" width="'+bw+'" height="'+Math.max(1,T*sc)+'" fill="#d9c9a8"/>';
-    g+='<rect x="'+x0+'" y="'+(floorY-T*sc)+'" width="'+bw+'" height="'+Math.max(1,T*sc)+'" fill="#d9c9a8"/>';
+    // корпус: белое нутро + панели «дерево»
+    g+='<rect x="'+x0+'" y="'+topY+'" width="'+bw+'" height="'+(H*sc)+'" fill="#fff" stroke="'+LINE+'" stroke-width="1.2"/>';
+    g+='<rect x="'+x0+'" y="'+topY+'" width="'+(T*sc)+'" height="'+(H*sc)+'" fill="'+WOOD+'" stroke="'+WOODS+'" stroke-width="0.5"/>';
+    g+='<rect x="'+(x0+bw-T*sc)+'" y="'+topY+'" width="'+(T*sc)+'" height="'+(H*sc)+'" fill="'+WOOD+'" stroke="'+WOODS+'" stroke-width="0.5"/>';
+    g+='<rect x="'+x0+'" y="'+topY+'" width="'+bw+'" height="'+Math.max(1,T*sc)+'" fill="'+WOOD+'" stroke="'+WOODS+'" stroke-width="0.5"/>';
+    g+='<rect x="'+x0+'" y="'+(floorY-T*sc)+'" width="'+bw+'" height="'+Math.max(1,T*sc)+'" fill="'+WOOD+'" stroke="'+WOODS+'" stroke-width="0.5"/>';
     s.dividers.forEach(dv=>{
-      g+='<rect x="'+(x0+dv.pos*sc)+'" y="'+(topY+T*sc)+'" width="'+Math.max(1,T*sc)+'" height="'+((H-2*T)*sc)+'" fill="#c9b183"/>';
+      g+='<rect x="'+(x0+dv.pos*sc)+'" y="'+(topY+T*sc)+'" width="'+Math.max(1,T*sc)+'" height="'+((H-2*T)*sc)+'" fill="'+WOODD+'" stroke="'+WOODS+'" stroke-width="0.5"/>';
     });
+    // ящики: фасады с ручками
     const niches=getNiches(s);
     s.drawerBlocks.forEach(db=>{
       const n=niches[db.nicheIdx]; if(!n)return;
       const col=(db.col!=null&&cols[db.col])?cols[db.col]:{left:T,width:W-2*T};
       const dx=x0+col.left*sc, dw=col.width*sc;
       const yT=sy(n.top), hh2=(n.top-n.bottom)*sc;
-      g+='<rect x="'+dx+'" y="'+yT+'" width="'+dw+'" height="'+hh2+'" fill="rgba(90,130,220,0.16)" stroke="#5a82dc" stroke-width="0.8"/>';
-      const cnt=db.count||1;
-      for(let i=1;i<cnt;i++){
-        const ly=yT+hh2*i/cnt;
-        g+='<line x1="'+dx+'" y1="'+ly+'" x2="'+(dx+dw)+'" y2="'+ly+'" stroke="#5a82dc" stroke-width="0.8"/>';
+      const cnt=db.count||1, fh=hh2/cnt;
+      for(let i=0;i<cnt;i++){
+        const fy=yT+fh*i;
+        g+='<rect x="'+(dx+1.5)+'" y="'+(fy+1.5)+'" width="'+(dw-3)+'" height="'+(fh-3)+'" rx="2" fill="#f2f4f7" stroke="#b9c2cc" stroke-width="0.8"/>';
+        g+='<line x1="'+(dx+dw/2-dw*0.14)+'" y1="'+(fy+fh*0.32)+'" x2="'+(dx+dw/2+dw*0.14)+'" y2="'+(fy+fh*0.32)+'" stroke="#7e8790" stroke-width="2" stroke-linecap="round"/>';
       }
     });
+    // полки
     s.shelves.forEach(sh=>{
       const col=cols[Math.min(sh.col||0,cols.length-1)]||{left:T,width:W-2*T};
-      const shy=sy(sh.height+T);
-      g+='<rect x="'+(x0+col.left*sc)+'" y="'+shy+'" width="'+(col.width*sc)+'" height="'+Math.max(1.5,T*sc)+'" fill="#b8935a"/>';
+      g+='<rect x="'+(x0+col.left*sc)+'" y="'+sy(sh.height+T)+'" width="'+(col.width*sc)+'" height="'+Math.max(1.5,T*sc)+'" fill="'+WOODD+'" stroke="'+WOODS+'" stroke-width="0.5"/>';
     });
-    // проёмы (высоты ниш) по колонкам — кликабельные, как в ПО
+    // проёмы: размерные линии внутри колонок
     cols.forEach((col,ciL)=>{
+      const dimX=x0+(col.left+col.width)*sc-9;
       const midX=x0+(col.left+col.width/2)*sc;
       const colSh=s.shelves.filter(sh=>Math.min(sh.col||0,cols.length-1)===ciL).sort((a,b)=>a.height-b.height);
       let prevTop=T, prevBase=T;
       colSh.forEach(sh=>{
         const gap=sh.height-prevBase;
-        const midY=(sy(prevTop)+sy(sh.height))/2+3;
-        g+='<text x="'+midX+'" y="'+midY+'" font-size="10" fill="#1a5aa8" text-anchor="middle" style="cursor:pointer;text-decoration:underline" onclick="w2dEditNiche('+s.id+','+sh.id+');event.stopPropagation()">'+gap+'</text>';
+        g+=dimV(dimX, sy(sh.height), sy(prevTop), gap, 'w2dEditNiche('+s.id+','+sh.id+')', true);
         prevTop=sh.height+T; prevBase=sh.height;
       });
       if(colSh.length){
-        const topGap=Math.round((s.height-T)-prevTop);
-        const midY2=(sy(prevTop)+sy(s.height-T))/2+3;
-        g+='<text x="'+midX+'" y="'+midY2+'" font-size="10" fill="#aaa" text-anchor="middle">'+topGap+'</text>';
+        g+=dimV(dimX, sy(s.height-T), sy(prevTop), Math.round((s.height-T)-prevTop), null, false);
       }
       if(cols.length>1){
-        const wLbl=Math.round(col.width);
         const edit=(ciL<cols.length-1);
-        g+='<text x="'+midX+'" y="'+(topY+T*sc+11)+'" font-size="9" fill="'+(edit?'#1a5aa8':'#aaa')+'" text-anchor="middle"'+(edit?' style="cursor:pointer;text-decoration:underline" onclick="w2dEditColW('+s.id+','+ciL+');event.stopPropagation()"':'')+'>'+wLbl+'</text>';
+        g+=dimH(topY+T*sc+13, x0+col.left*sc+4, x0+(col.left+col.width)*sc-4, Math.round(col.width),
+          edit?('w2dEditColW('+s.id+','+ciL+')'):null, edit);
       }
     });
+    // штанга: линия с держателями
     if(s.hasRod){
       const rc=(s.rodCol!=null&&cols[s.rodCol])?cols[s.rodCol]:{left:T,width:W-2*T};
       const ry=sy(s.rodHeight||1600);
-      g+='<line x1="'+(x0+rc.left*sc+2)+'" y1="'+ry+'" x2="'+(x0+(rc.left+rc.width)*sc-2)+'" y2="'+ry+'" stroke="#7a5c2e" stroke-width="3" stroke-linecap="round"/>';
+      const rx1=x0+rc.left*sc+2, rx2=x0+(rc.left+rc.width)*sc-2;
+      g+='<line x1="'+rx1+'" y1="'+ry+'" x2="'+rx2+'" y2="'+ry+'" stroke="#7f858d" stroke-width="3.5" stroke-linecap="round"/>';
+      g+='<circle cx="'+rx1+'" cy="'+ry+'" r="3" fill="#565c63"/><circle cx="'+rx2+'" cy="'+ry+'" r="3" fill="#565c63"/>';
     }
-    // антресоль над корпусом
+    // антресоль
     if(antrH>0){
       const ay1=topY, ay0=topY-antrH*sc;
-      g+='<rect x="'+x0+'" y="'+ay0+'" width="'+bw+'" height="'+(antrH*sc)+'" fill="#fdfaf3" stroke="#333"/>';
-      g+='<rect x="'+x0+'" y="'+ay0+'" width="'+(T*sc)+'" height="'+(antrH*sc)+'" fill="#e4d7b8"/>';
-      g+='<rect x="'+(x0+bw-T*sc)+'" y="'+ay0+'" width="'+(T*sc)+'" height="'+(antrH*sc)+'" fill="#e4d7b8"/>';
+      g+='<rect x="'+x0+'" y="'+ay0+'" width="'+bw+'" height="'+(antrH*sc)+'" fill="#fff" stroke="'+LINE+'" stroke-width="1.2"/>';
+      g+='<rect x="'+x0+'" y="'+ay0+'" width="'+(T*sc)+'" height="'+(antrH*sc)+'" fill="'+WOOD+'" stroke="'+WOODS+'" stroke-width="0.5"/>';
+      g+='<rect x="'+(x0+bw-T*sc)+'" y="'+ay0+'" width="'+(T*sc)+'" height="'+(antrH*sc)+'" fill="'+WOOD+'" stroke="'+WOODS+'" stroke-width="0.5"/>';
       const ash=(s.antresol.shelves||[]);
       ash.forEach(sh=>{
-        const asy=ay1-(sh.height)*sc;
-        g+='<rect x="'+(x0+T*sc)+'" y="'+asy+'" width="'+(bw-2*T*sc)+'" height="'+Math.max(1.5,T*sc)+'" fill="#c9ab7c"/>';
+        g+='<rect x="'+(x0+T*sc)+'" y="'+(ay1-sh.height*sc)+'" width="'+(bw-2*T*sc)+'" height="'+Math.max(1.5,T*sc)+'" fill="'+WOODD+'"/>';
       });
-      g+='<text x="'+(x0+bw/2)+'" y="'+(ay0+12)+'" font-size="10" fill="#8a7448" text-anchor="middle" style="cursor:pointer" onclick="w2dEditDim('+s.id+',String.fromCharCode(97,110,116,114));event.stopPropagation()">антресоль '+antrH+'</text>';
+      g+='<text x="'+(x0+bw/2)+'" y="'+(ay0+13)+'" font-size="10" fill="'+INK+'" text-anchor="middle" style="'+MONO+';cursor:pointer;paint-order:stroke;stroke:#fff;stroke-width:3px" onclick="w2dEditDim('+s.id+',String.fromCharCode(97,110,116,114));event.stopPropagation()">антресоль '+antrH+'</text>';
     }
-    // подписи-размеры (кликабельные)
-    g+='<text x="'+(x0+bw/2)+'" y="'+(topY-antrH*sc-8)+'" font-size="11" fill="#333" text-anchor="middle" font-weight="600">Секция '+(si+1)+'</text>';
-    g+='<text x="'+(x0+bw/2)+'" y="'+(floorY+18)+'" font-size="11" fill="#1a5aa8" text-anchor="middle" style="cursor:pointer;text-decoration:underline" onclick="w2dEditDim('+s.id+',String.fromCharCode(119,105,100,116,104));event.stopPropagation()">Ш '+W+'</text>';
-    g+='<text x="'+(x0+bw/2)+'" y="'+(floorY+34)+'" font-size="10" fill="#1a5aa8" text-anchor="middle" style="cursor:pointer;text-decoration:underline" onclick="w2dEditDim('+s.id+',String.fromCharCode(100,101,112,116,104));event.stopPropagation()">Г '+s.depth+'</text>';
-    g+='<text x="'+(x0-8)+'" y="'+(topY+H*sc/2)+'" font-size="11" fill="#1a5aa8" text-anchor="end" style="cursor:pointer;text-decoration:underline" onclick="w2dEditDim('+s.id+',String.fromCharCode(104,101,105,103,104,116));event.stopPropagation()">В '+H+'</text>';
+    // подпись секции + внешние размеры (чертёжные линии)
+    g+='<text x="'+(x0+bw/2)+'" y="'+(topY-antrH*sc-10)+'" font-size="10.5" fill="#565c63" text-anchor="middle" font-weight="600" letter-spacing="1.4" style="text-transform:uppercase">Секция '+(si+1)+'</text>';
+    g+=dimH(floorY+18, x0, x0+bw, 'Ш '+W, 'w2dEditDim('+s.id+',String.fromCharCode(119,105,100,116,104))', true);
+    g+='<text x="'+(x0+bw/2)+'" y="'+(floorY+40)+'" font-size="10" fill="'+INK+'" text-anchor="middle" style="'+MONO+';cursor:pointer;paint-order:stroke;stroke:#fbf9f4;stroke-width:4px" onclick="w2dEditDim('+s.id+',String.fromCharCode(100,101,112,116,104));event.stopPropagation()">Г '+s.depth+'</text>';
+    g+=dimV(x0-14, topY, floorY, 'В '+H, 'w2dEditDim('+s.id+',String.fromCharCode(104,101,105,103,104,116))', true);
     ox+=bw+GAPX;
   });
-  g+='<text x="'+ML_+'" y="'+(ph-8)+'" font-size="10" fill="#888">Общая ширина: '+sections.reduce((a,s)=>a+s.width,0)+' мм · клик по схеме — инструмент · клик по синим числам — изменить размер</text>';
-  // тулбар
-  let tb='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;align-items:center">';
+  // чертёжный штамп (нижний правый угол листа)
+  const stW=196, stH=52, stX=pw-stW-10, stY=ph-stH-10;
+  const scaleN=Math.max(1,Math.round(1/sc));
+  g+='<g>'+
+    '<rect x="'+stX+'" y="'+stY+'" width="'+stW+'" height="'+stH+'" fill="#fff" stroke="'+LINE+'" stroke-width="1"/>'+
+    '<line x1="'+stX+'" y1="'+(stY+19)+'" x2="'+(stX+stW)+'" y2="'+(stY+19)+'" stroke="'+LINE+'" stroke-width="0.6"/>'+
+    '<line x1="'+(stX+118)+'" y1="'+(stY+19)+'" x2="'+(stX+118)+'" y2="'+(stY+stH)+'" stroke="'+LINE+'" stroke-width="0.6"/>'+
+    '<text x="'+(stX+8)+'" y="'+(stY+13.5)+'" font-size="10" fill="#b8963e" font-weight="800" letter-spacing="2.2">MEBELOFF</text>'+
+    '<text x="'+(stX+stW-7)+'" y="'+(stY+13.5)+'" font-size="8.5" fill="#565c63" text-anchor="end">чертёж · вид спереди</text>'+
+    '<text x="'+(stX+8)+'" y="'+(stY+33)+'" font-size="8.5" fill="#565c63">Секций: '+sections.length+'</text>'+
+    '<text x="'+(stX+8)+'" y="'+(stY+45)+'" font-size="8.5" fill="#565c63">Общая ширина: '+sections.reduce((a,s)=>a+s.width,0)+' мм</text>'+
+    '<text x="'+(stX+157)+'" y="'+(stY+40)+'" font-size="13" fill="'+LINE+'" text-anchor="middle" style="'+MONO+'" font-weight="700">М 1:'+scaleN+'</text>'+
+  '</g>';
+  // тулбар: антрацит + золото
+  let css='<style>'+
+    '.w2db{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;font-size:11.5px;border-radius:9px;cursor:pointer;border:1px solid #454b52;background:#2e3338;color:#c8cdd3;font-weight:500;letter-spacing:.2px;transition:border-color .15s,color .15s,background .15s}'+
+    '.w2db:hover{border-color:#c39a3b;color:#fff}'+
+    '.w2db.on{background:#c39a3b;border-color:#c39a3b;color:#1d2023;font-weight:700}'+
+    '.w2dsec{background:#c39a3b;border-color:#c39a3b;color:#1d2023;font-weight:700}'+
+    '.w2dsec:hover{background:#d4ab4c;color:#1d2023}'+
+    '.w2dsel{font-size:11px;padding:6px 8px;border-radius:8px;border:1px solid #454b52;background:#2e3338;color:#c8cdd3}'+
+  '</style>';
+  let tb=css+'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">';
   tb+=w2dToolBtn('shelf','▤ Полка')+w2dToolBtn('drawers','▦ Ящики')+w2dToolBtn('rod','⊢ Штанга')+
      w2dToolBtn('part','⊟ Перегородка')+w2dToolBtn('antr','⬒ Антресоль')+w2dToolBtn('auto','⚡ Авто-полки')+
      w2dToolBtn('del','✕ Удалить');
   tb+='<span style="flex:1"></span>';
+  tb+='<span style="font-size:10px;color:#8a9096;margin-right:4px">клик по схеме — инструмент · синие числа — размеры</span>';
   const utpl=loadUserTemplates();
   if(utpl.length){
-    tb+='<select id="w2d-tpl" style="font-size:11px;padding:4px;border-radius:6px;border:1px solid #ccc">';
+    tb+='<select id="w2d-tpl" class="w2dsel">';
     utpl.forEach(t=>{ tb+='<option value="'+t.id+'">'+t.name+'</option>'; });
     tb+='</select>'+w2dToolBtn('tpl','📐 Применить шаблон');
   }
-  tb+='<button onclick="addSection();w2dSyncView()" style="padding:5px 10px;font-size:11px;border-radius:6px;cursor:pointer;border:1px solid #1a5252;background:#1a5252;color:#fff">+ Секция</button>';
+  tb+='<button class="w2db w2dsec" onclick="addSection();w2dSyncView()">+ Секция</button>';
   tb+='</div>';
-  return tb+'<svg width="'+pw+'" height="'+ph+'" style="display:block;background:#fff;border:1px solid #ddd;border-radius:8px;cursor:crosshair" onclick="w2dFullClick(event)">'+g+'</svg>';
+  return tb+'<svg width="'+pw+'" height="'+ph+'" style="display:block;background:#fbf9f4;border:1px solid rgba(0,0,0,.35);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);cursor:crosshair" onclick="w2dFullClick(event)">'+g+'</svg>';
 }
 function w2dEditDim(sid,field){
   const s=sections.find(x=>x.id===sid); if(!s)return;
