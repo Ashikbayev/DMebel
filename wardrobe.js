@@ -573,6 +573,7 @@ function mkSection(){
     edgeTop:'auto', edgeBottom:'auto', edgeLeft:'auto', edgeRight:'auto',
     shelfDepthOffset:0, sideExtraLeft:0, sideExtraRight:0, drawerFrontDrop:0,
     fGapLeft:3, fGapRight:3, fGapTop:3, fGapBottom:3, fGapMid:2,
+    nicheDividers:[], ndivId:0,
     drawerBlocks:[],
     shelfId:0, divId:0
   };
@@ -933,6 +934,19 @@ function getNiches(s){
 // left/right — координаты относительно внутренней части секции (от T до W-T)
 // Перегородка рисуется как панель толщиной T, начинающаяся В ТОЧКЕ pos
 // (т.е. занимает [pos, pos+T]) — см. addBoard(ox+dv.pos,...,T,...) в render3D.
+// Проёмы (ниши) КОНКРЕТНОЙ колонки по её полкам: [{y0,y1}] снизу вверх
+function getColOpens(s,ci){
+  const cols=getColumns(s);
+  const cIdx=Math.min(ci, cols.length-1);
+  const hs=s.shelves.filter(sh=>Math.min(sh.col||0,cols.length-1)===cIdx)
+    .map(sh=>sh.height).sort((a,b)=>a-b);
+  const bounds=[T];
+  hs.forEach(h=>{ bounds.push(h); bounds.push(h+T); });
+  bounds.push(s.height-T);
+  const opens=[];
+  for(let k=0;k<bounds.length;k+=2) opens.push({y0:bounds[k], y1:bounds[k+1]});
+  return opens;
+}
 function getColumns(s){
   const W=s.width;
   const divX=[...s.dividers.map(d=>d.pos)].sort((a,b)=>a-b);
@@ -1217,6 +1231,12 @@ function render2DFull(){
     s.dividers.forEach(dv=>{
       g+='<rect x="'+(x0+dv.pos*sc)+'" y="'+(topY+T*sc)+'" width="'+Math.max(1,T*sc)+'" height="'+((H-2*T)*sc)+'" fill="'+WOODD+'" stroke="'+WOODS+'" stroke-width="0.5"/>';
     });
+    const ndDraw=s.nicheDividers||[];
+    ndDraw.forEach(nd=>{
+      const opensND=getColOpens(s, nd.col);
+      const o=opensND[nd.open]; if(!o)return;
+      g+='<rect x="'+(x0+nd.pos*sc)+'" y="'+sy(o.y1)+'" width="'+Math.max(1,T*sc)+'" height="'+((o.y1-o.y0)*sc)+'" fill="'+WOODD+'" stroke="'+WOODS+'" stroke-width="0.5"/>';
+    });
     // ящики: фасады с ручками
     const niches=getNiches(s);
     s.drawerBlocks.forEach((db,dbi)=>{
@@ -1363,7 +1383,27 @@ function w2dApplyTool(s,xm,ym){
     s.rodHeight=Math.max(T*3, Math.min(s.height-T*3, Math.round(ym/10)*10));
     s.rodCol=(cols.length>1?ci:null);
   }else if(_w2dTool==='part'){
-    w2dAddDividerEven(s);
+    const colShN=s.shelves.filter(sh=>Math.min(sh.col||0,cols.length-1)===ci).length;
+    if(colShN===0){
+      w2dAddDividerEven(s);
+    }else{
+      // колонка с полками: перегородка в КОНКРЕТНУЮ нишу, равномерно
+      if(!s.nicheDividers)s.nicheDividers=[];
+      if(s.ndivId==null)s.ndivId=0;
+      const opensP=getColOpens(s,ci);
+      let k=opensP.findIndex(o=>ym>=o.y0&&ym<=o.y1);
+      if(k<0)k=0;
+      const colP=cols[Math.min(ci,cols.length-1)];
+      const keep=s.nicheDividers.filter(nd=>!(nd.col===ci&&nd.open===k));
+      const n=(s.nicheDividers.length-keep.length)+1;
+      const slotW=(colP.width-n*T)/(n+1);
+      if(slotW<50){ alert('Слишком много перегородок для этой ниши'); return false; }
+      s.nicheDividers=keep;
+      for(let j=1;j<=n;j++){
+        s.nicheDividers.push({id:s.ndivId++, col:ci, open:k,
+          pos:Math.round(colP.left+j*slotW+(j-1)*T)});
+      }
+    }
   }else if(_w2dTool==='antr'){
     if(!s.antresol.enabled){ s.antresol.enabled=true; if(!s.antresol.height)s.antresol.height=400; }
     else s.antresol.enabled=false;
@@ -1382,6 +1422,16 @@ function w2dApplyTool(s,xm,ym){
       if(d<bd){bd=d;best=i;}
     });
     if(best>=0){ s.shelves.splice(best,1); return false; }
+    const ndList=(s.nicheDividers||[]);
+    let bn=-1,bnd=30;
+    ndList.forEach((nd,i)=>{
+      if(nd.col!==ci)return;
+      const oN=getColOpens(s,ci)[nd.open];
+      if(!oN||ym<oN.y0||ym>oN.y1)return;
+      const d=Math.abs(nd.pos+T/2-xm);
+      if(d<bnd){bnd=d;bn=i;}
+    });
+    if(bn>=0){ s.nicheDividers.splice(bn,1); return false; }
     let bp=-1,bpd=30;
     s.dividers.forEach((dv,i)=>{
       const d=Math.abs(dv.pos+T/2-xm);
@@ -2836,6 +2886,16 @@ function buildCoreTree(s){
         if(c >= o.y0 && c <= o.y1){
           return { type:'drawers', count: db.count||1, mount:'overlay', frontDrop: s.drawerFrontDrop||0 };
         }
+      }
+      // Перегородки В НИШЕ: вложенный panels-узел (режется ровно в проём)
+      const nds=(s.nicheDividers||[]).filter(nd=>nd.col===ci&&nd.open===k).sort((a,b)=>a.pos-b.pos);
+      if(nds.length){
+        const colLeft=cols[Math.min(ci,cols.length-1)].left;
+        const szs=[];
+        nds.forEach((nd,i)=>{ szs.push(i===0 ? nd.pos-colLeft : nd.pos-nds[i-1].pos-T); });
+        szs.push(null);
+        return { type:'panels', count:nds.length, sizes:szs,
+          children:nds.map(function(){return null;}).concat([null]) };
       }
       if(rodHere && s.rodHeight >= o.y0 && s.rodHeight <= o.y1){
         return { type:'rod', drop: Math.max(30, Math.round(o.y1 - s.rodHeight)) };
