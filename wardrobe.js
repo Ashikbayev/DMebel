@@ -1160,9 +1160,12 @@ function render2DFull(){
   });
   totW+=GAPX*Math.max(0,sections.length-1);
   if(totW<100)totW=100; if(maxH<100)maxH=100;
-  const sc=Math.max(0.05, Math.min((cw-ML_-60)/totW, (ch-MT_-MB_-64)/maxH));
-  const pw=Math.round(totW*sc)+ML_+44, ph=Math.round(maxH*sc)+MT_+MB_;
-  const floorY=MT_+maxH*sc;
+  // Лист — во всю рабочую зону; чертёж масштабируется и центрируется на нём
+  const pw=Math.max(560, cw-38);
+  const ph=Math.max(360, ch-118);
+  const sc=Math.max(0.05, Math.min((pw-ML_-60)/totW, (ph-MT_-MB_)/maxH));
+  const floorY=ph-MB_;
+  const startX=Math.max(ML_, (pw-totW*sc)/2);
   _w2dLayout=[];
   const MONO='font-family:ui-monospace,SFMono-Regular,Consolas,monospace';
   const INK='#1c4f9e', MUT='#9aa1a8', LINE='#2f3439', WOOD='#d9c096', WOODS='#b08a52', WOODD='#ccb182';
@@ -1187,7 +1190,7 @@ function render2DFull(){
     '<marker id="w2darg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,1 L10,5 L0,9 z" fill="'+MUT+'"/></marker>'+
   '</defs>';
   g+='<rect x="0" y="0" width="'+pw+'" height="'+ph+'" fill="url(#w2dgrid)"/>';
-  let ox=ML_;
+  let ox=startX;
   sections.forEach((s,si)=>{
     const W=s.width,H=s.height;
     const antrH=(s.antresol&&s.antresol.enabled)?s.antresol.height:0;
