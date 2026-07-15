@@ -1342,7 +1342,8 @@ function render2DFull(){
   }
   tb+='<button class="w2db w2dsec" onclick="addSection();w2dSyncView()">+ Секция</button>';
   tb+='</div>';
-  return tb+'<svg width="'+pw+'" height="'+ph+'" style="display:block;background:#fbf9f4;border:1px solid rgba(0,0,0,.35);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);cursor:crosshair" onclick="w2dFullClick(event)">'+g+'</svg>';
+  g+='<rect id="w2dhl" x="0" y="0" width="0" height="0" rx="3" fill="rgba(195,154,59,0.16)" stroke="#c39a3b" stroke-width="1.5" style="pointer-events:none" visibility="hidden"/>';
+  return tb+'<svg width="'+pw+'" height="'+ph+'" style="display:block;background:#fbf9f4;border:1px solid rgba(0,0,0,.35);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.45);cursor:crosshair" onclick="w2dFullClick(event)" onmousemove="w2dFullHover(event)" onmouseleave="w2dHlHide()">'+g+'</svg>';
 }
 function w2dEditDim(sid,field){
   const s=sections.find(x=>x.id===sid); if(!s)return;
@@ -1445,6 +1446,101 @@ function w2dApplyTool(s,xm,ym){
     if(bi>=0)s.drawerBlocks.splice(bi,1);
   }
   return false;
+}
+// ── Подсветка при наведении: что заденет клик текущим инструментом ──
+function w2dHlHide(){
+  const r=document.getElementById('w2dhl');
+  if(r)r.setAttribute('visibility','hidden');
+}
+function w2dHoverBox(s,lay,xm,ym){
+  const sc=lay.sc, x0=lay.x0;
+  const sy=mm=>(lay.floorY-mm*sc);
+  const topY=lay.floorY-s.height*sc;
+  const cols=getColumns(s);
+  let ci=cols.findIndex(cc=>xm>=cc.left&&xm<=cc.right);
+  if(ci<0) ci=(xm<T)?0:cols.length-1;
+  const col=cols[Math.min(ci,cols.length-1)];
+  const colBox={x:x0+col.left*sc, y:topY+T*sc, w:col.width*sc, h:(s.height-2*T)*sc};
+  const secBox={x:x0, y:topY-lay.antrH*sc, w:s.width*sc, h:(s.height+lay.antrH)*sc};
+  if(_w2dTool==='del'){
+    let best=null,bd=40;
+    s.shelves.forEach(sh=>{
+      const sci=Math.min(sh.col||0,cols.length-1);
+      if(sci!==ci)return;
+      const d=Math.abs(sh.height-ym);
+      if(d<bd){bd=d;best=sh;}
+    });
+    if(best){
+      const bc=cols[Math.min(best.col||0,cols.length-1)];
+      return {x:x0+bc.left*sc-2, y:sy(best.height+T)-2, w:bc.width*sc+4, h:Math.max(1.5,T*sc)+4};
+    }
+    const ndL=s.nicheDividers||[];
+    let bn=null,bnd=30;
+    ndL.forEach(nd=>{
+      if(nd.col!==ci)return;
+      const oN=getColOpens(s,ci)[nd.open];
+      if(!oN||ym<oN.y0||ym>oN.y1)return;
+      const d=Math.abs(nd.pos+T/2-xm);
+      if(d<bnd){bnd=d;bn={nd:nd,o:oN};}
+    });
+    if(bn)return {x:x0+bn.nd.pos*sc-2, y:sy(bn.o.y1)-2, w:Math.max(1,T*sc)+4, h:(bn.o.y1-bn.o.y0)*sc+4};
+    let bp=null,bpd=30;
+    s.dividers.forEach(dv=>{
+      const d=Math.abs(dv.pos+T/2-xm);
+      if(d<bpd){bpd=d;bp=dv;}
+    });
+    if(bp)return {x:x0+bp.pos*sc-2, y:topY+T*sc-2, w:Math.max(1,T*sc)+4, h:(s.height-2*T)*sc+4};
+    if(s.hasRod&&Math.abs((s.rodHeight||0)-ym)<60&&(s.rodCol==null||s.rodCol===ci)){
+      const rc=(s.rodCol!=null&&cols[s.rodCol])?cols[s.rodCol]:{left:T,width:s.width-2*T};
+      return {x:x0+rc.left*sc, y:sy(s.rodHeight||1600)-6, w:rc.width*sc, h:12};
+    }
+    const nichesD=getNiches(s);
+    const niD=nichesD.findIndex(n=>ym>=n.bottom&&ym<=n.top);
+    const db=s.drawerBlocks.find(b=>b.nicheIdx===niD&&(b.col==null||b.col===ci));
+    if(db){
+      const n=nichesD[db.nicheIdx];
+      const bc=(db.col!=null&&cols[db.col])?cols[db.col]:{left:T,width:s.width-2*T};
+      return {x:x0+bc.left*sc, y:sy(n.top), w:bc.width*sc, h:(n.top-n.bottom)*sc};
+    }
+    return null;
+  }
+  if(_w2dTool==='shelf'||_w2dTool==='rod') return colBox;
+  if(_w2dTool==='drawers'){
+    const nichesH=getNiches(s);
+    const niH=nichesH.findIndex(n=>ym>=n.bottom&&ym<=n.top);
+    const n=nichesH[niH<0?0:niH];
+    if(!n)return colBox;
+    return {x:x0+col.left*sc, y:sy(n.top), w:col.width*sc, h:(n.top-n.bottom)*sc};
+  }
+  if(_w2dTool==='part'){
+    const colShN=s.shelves.filter(sh=>Math.min(sh.col||0,cols.length-1)===ci).length;
+    if(colShN===0)return {x:x0+T*sc, y:topY+T*sc, w:(s.width-2*T)*sc, h:(s.height-2*T)*sc};
+    const opensH=getColOpens(s,ci);
+    let k=opensH.findIndex(o=>ym>=o.y0&&ym<=o.y1);
+    if(k<0)k=0;
+    const o=opensH[k];
+    return {x:x0+col.left*sc, y:sy(o.y1), w:col.width*sc, h:(o.y1-o.y0)*sc};
+  }
+  return secBox;
+}
+function w2dFullHover(evt){
+  const r=document.getElementById('w2dhl'); if(!r)return;
+  const svg=evt.currentTarget||evt.target;
+  const rc=svg.getBoundingClientRect?svg.getBoundingClientRect():{left:0,top:0};
+  const px=(evt.clientX!=null?evt.clientX-rc.left:evt.offsetX);
+  const py=(evt.clientY!=null?evt.clientY-rc.top:evt.offsetY);
+  const lay=_w2dLayout.find(l=>px>=l.x0&&px<=l.x1);
+  if(!lay){ r.setAttribute('visibility','hidden'); return; }
+  const s=sections.find(x=>x.id===lay.sid);
+  if(!s){ r.setAttribute('visibility','hidden'); return; }
+  const xm=(px-lay.x0)/lay.sc;
+  const ym=(lay.floorY-py)/lay.sc;
+  if(ym<-10||ym>s.height+lay.antrH+10){ r.setAttribute('visibility','hidden'); return; }
+  const box=w2dHoverBox(s,lay,xm,Math.min(ym,s.height));
+  if(!box){ r.setAttribute('visibility','hidden'); return; }
+  r.setAttribute('x',box.x); r.setAttribute('y',box.y);
+  r.setAttribute('width',Math.max(0,box.w)); r.setAttribute('height',Math.max(0,box.h));
+  r.setAttribute('visibility','visible');
 }
 function w2dFullClick(evt){
   const svg=evt.currentTarget||evt.target;
@@ -4463,6 +4559,7 @@ window.w2dSetTool=w2dSetTool; window.w2dClick=w2dClick;
 window.w2dToggleMode=w2dToggleMode; window.w2dSetTool2=w2dSetTool2;
 window.w2dFullClick=w2dFullClick; window.w2dEditDim=w2dEditDim; window.w2dEditShelf=w2dEditShelf;
 window._ai_w2dLayout=()=>_w2dLayout;
+window.w2dFullHover=w2dFullHover; window.w2dHlHide=w2dHlHide;
 window.w2dEditNiche=w2dEditNiche; window.w2dEditColW=w2dEditColW;
 window.w2dEditDrawers=w2dEditDrawers;
 window.toggleRod=toggleRod;
