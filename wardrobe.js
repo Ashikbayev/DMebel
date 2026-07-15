@@ -3015,6 +3015,10 @@ function render3D(){
           let hw=14,hh=140,hd=14,hx=cx,hy=cy;
           if(p.kind==='dfacade'){
             hh=14; hw=Math.min(170,b.dx*0.42);
+          }else{
+            // открывание вправо → ручка у ЛЕВОГО края (и наоборот), по центру высоты
+            const op=(s.facade&&s.facade.opening)||'right';
+            hx=(op==='left')?(cx+b.dx/2-32):(cx-b.dx/2+32);
           }
           if(hType==='knob'){ hw=26; hh=26; hd=22; }
           if(hType==='torec'){ hw=b.dx-8; hh=18; hd=16; hx=cx; hy=cy+b.dy/2-10; }
