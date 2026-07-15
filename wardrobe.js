@@ -82,6 +82,7 @@ function projSnapshot(){
     matChoice:  JSON.parse(JSON.stringify(matChoice)),
     confExtras: JSON.parse(JSON.stringify(confExtras)),
     confExtraId: confExtraId,
+    room: JSON.parse(JSON.stringify(_room)),
   };
 }
 
@@ -93,6 +94,7 @@ function projRestore(snap){
   Object.assign(matChoice, snap.matChoice || {});
   confExtras  = snap.confExtras  ? JSON.parse(JSON.stringify(snap.confExtras)) : [];
   confExtraId = snap.confExtraId || 0;
+  if(snap.room)Object.assign(_room, snap.room); else _room.enabled=false;
 }
 
 // Сохранить текущий проект
@@ -1064,7 +1066,9 @@ function w2dClick(sid,evt){
    Правит ТЕ ЖЕ данные — 3D и раскрой обновляются мгновенно.
 ============================================================ */
 let _viewMode='3d';
-let _facadeMode='ghost'; // ghost | solid | hidden
+let _facadeMode='ghost';
+let _room={enabled:false, len:3000, hei:2400, dep:600, offL:0, offR:0, offT:0,
+  plankL:0, plankR:0, plankT:0}; // ghost | solid | hidden
 function w2dFacadeMode(){
   _facadeMode=(_facadeMode==='ghost')?'solid':(_facadeMode==='solid')?'hidden':'ghost';
   const b=document.getElementById('w2d-btnfac');
@@ -1096,8 +1100,8 @@ const HANDLE_LIST=[
   {id:'leather', name:'Кожаная петля'}
 ];
 let _wiz={step:1, len:3000, hei:2400, dep:600, offL:0, offR:0, offT:0,
-  doors:6, antr:false, antrH:400, presets:[], mat:'ldsp', frez:'modern', handle:'railing'};
-function wizW(){ return Math.max(300,(parseInt(_wiz.len)||0)-(parseInt(_wiz.offL)||0)-(parseInt(_wiz.offR)||0)); }
+  doors:6, antr:false, antrH:400, presets:[], mat:'ldsp', frez:'modern', handle:'railing', plankL:0, plankR:0, plankT:0};
+function wizW(){ return Math.max(300,(parseInt(_wiz.len)||0)-(parseInt(_wiz.offL)||0)-(parseInt(_wiz.offR)||0)-(parseInt(_wiz.plankL)||0)-(parseInt(_wiz.plankR)||0)); }
 function wizH(){ return Math.max(600,(parseInt(_wiz.hei)||0)-(parseInt(_wiz.offT)||0)); }
 // Раскладка дверей по модулям: по 2, нечётный остаток — одним модулем на 3
 function wizModules(){
@@ -1185,6 +1189,8 @@ function wizRender(){
     body+='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px">'+inp('Длина (ширина), мм','len',_wiz.len,120)+inp('Высота, мм','hei',_wiz.hei,110)+inp('Глубина, мм','dep',_wiz.dep,100)+'</div>';
     body+='<div style="font-size:11.5px;color:#6a7076;margin:8px 0 6px 0;font-weight:600">Отступы от стен/потолка</div>';
     body+='<div style="display:flex;gap:14px;flex-wrap:wrap">'+inp('Слева, мм','offL',_wiz.offL,90)+inp('Справа, мм','offR',_wiz.offR,90)+inp('Сверху, мм','offT',_wiz.offT,90)+'</div>';
+    body+='<div style="font-size:11.5px;color:#6a7076;margin:12px 0 6px 0;font-weight:600">Фальш-планки по краям, мм (0 = нет)</div>';
+    body+='<div style="display:flex;gap:14px;flex-wrap:wrap">'+inp('Слева','plankL',_wiz.plankL,80)+inp('Справа','plankR',_wiz.plankR,80)+inp('Сверху','plankT',_wiz.plankT,80)+'</div>';
     body+='<div style="margin-top:14px;font-size:12.5px;color:#1d2023">Шкаф: <b style="font-family:ui-monospace,Consolas,monospace">'+W+' × '+H+' × '+(parseInt(_wiz.dep)||600)+'</b> мм</div>';
   }
   if(_wiz.step===2){
@@ -1307,10 +1313,20 @@ function wizBuild(){
     s.width=md.width; s.height=secH; s.depth=D;
     s.facade.type=(_wiz.mat==='none')?'none':(md.doors===3?'doors3':md.doors===2?'doors2':'full');
     if(_wiz.mat!=='none'){ s.facade.material=_wiz.mat; s.facade.frez=_wiz.frez; s.facade.handle=_wiz.handle; }
-    if(_wiz.antr){ s.antresol.enabled=true; s.antresol.height=_wiz.antrH; }
+    if(_wiz.antr){
+      s.antresol.enabled=true; s.antresol.height=_wiz.antrH;
+      if(_wiz.mat!=='none'){
+        s.antresol.facade.type=(md.doors>=2?'doors2':'full');
+        s.antresol.facade.material=_wiz.mat;
+      }
+    }
     wizApplyPreset(s,_wiz.presets[i]||'empty');
     sections.push(s);
   });
+  _room.enabled=true;
+  _room.len=parseInt(_wiz.len)||3000; _room.hei=parseInt(_wiz.hei)||2400; _room.dep=parseInt(_wiz.dep)||600;
+  _room.offL=parseInt(_wiz.offL)||0; _room.offR=parseInt(_wiz.offR)||0; _room.offT=parseInt(_wiz.offT)||0;
+  _room.plankL=parseInt(_wiz.plankL)||0; _room.plankR=parseInt(_wiz.plankR)||0; _room.plankT=parseInt(_wiz.plankT)||0;
   wizClose();
   renderPanel(); render3D(); updateStats(); projMarkUnsaved();
   _viewMode='2d'; ensure2DUI(); w2dSyncView();
@@ -2943,9 +2959,36 @@ function render3D(){
         const MFG3=new THREE.MeshStandardMaterial({color:0xdfe3e8, roughness:0.35, metalness:0.05, transparent:true, opacity:0.38});
         const MHD3=new THREE.MeshStandardMaterial({color:0x33373c, roughness:0.4, metalness:0.5});
         const hType=(s.facade&&s.facade.handle)||'railing';
+        const MFR3=new THREE.MeshStandardMaterial({color:0x9aa1a8, roughness:0.55, metalness:0.1, transparent:(_facadeMode==='ghost'), opacity:(_facadeMode==='ghost')?0.55:1});
+        const fType=(s.facade&&s.facade.frez)||'modern';
+        function addFrez3d(b,cx,cy,cz){
+          if(_facadeMode==='hidden'||fType==='modern')return;
+          const fz=cz-b.dz/2-2;
+          const put=(w,h,px,py)=>{
+            const gg=new THREE.BoxGeometry(w,h,3);
+            const mm2=new THREE.Mesh(gg,MFR3);
+            mm2.position.set(px,py,fz); mm2.userData={w:true}; scene.add(mm2);
+          };
+          if(fType==='volna'){
+            const n=Math.max(3,Math.floor(b.dx/60));
+            const stp=b.dx/(n+1);
+            for(let i=1;i<=n;i++)put(8,b.dy-24,cx-b.dx/2+stp*i,cy);
+            return;
+          }
+          const ins=(fType==='ampir'||fType==='verona')?86:70;
+          const iw=b.dx-2*ins, ih=b.dy-2*ins;
+          if(iw<60||ih<60)return;
+          put(iw,7,cx,cy+ih/2); put(iw,7,cx,cy-ih/2);
+          put(7,ih,cx-iw/2,cy); put(7,ih,cx+iw/2,cy);
+          if(fType==='venecia'||fType==='verona'){
+            const ins2=ins+34, iw2=b.dx-2*ins2, ih2=b.dy-2*ins2;
+            if(iw2>40&&ih2>40){ put(iw2,4,cx,cy+ih2/2); put(iw2,4,cx,cy-ih2/2); put(4,ih2,cx-iw2/2,cy); put(4,ih2,cx+iw2/2,cy); }
+          }
+        }
         function addHandle3d(p,b,cx,cy,cz){
           if(_facadeMode==='hidden')return;
           if(hType==='push'||hType==='gola')return;
+          if(p.kind==='dfacade'&&s.facade.type!=='none')return;
           const hz=cz-b.dz/2-9;
           let hw=14,hh=140,hd=14,hx=cx,hy=cy;
           if(p.kind==='dfacade'){
@@ -2986,6 +3029,7 @@ function render3D(){
           }
           addBoard(cx-b.dx/2, cy-b.dy/2, cz-b.dz/2, b.dx, b.dy, b.dz, mat3d, noEdge3d, ud3d);
           if(isFac3d) addHandle3d(p,b,cx,cy,cz);
+          if(p.kind==='facade') addFrez3d(b,cx,cy,cz);
         });
         coreOk3d=true;
       }catch(e3d){ console.warn('CORE ENGINE 3D: ошибка, откат на старый рендер', e3d); }
@@ -3061,6 +3105,30 @@ function render3D(){
     }
     ox+=W;
   });
+  // ── Комната (стены из мастера) ──
+  if(_room.enabled){
+    const RH=Math.max(_room.hei, 2400), RD=Math.max((_room.dep||600)+400, 1400);
+    const MW3=new THREE.MeshStandardMaterial({color:0xe9e5dd, roughness:0.95});
+    const wallX0=-(_room.offL||0)-(_room.plankL||0), wallX1=ox+(_room.offR||0)+(_room.plankR||0);
+    const mkWall=(x,y,z,w,h,d)=>{
+      const wg=new THREE.BoxGeometry(w,h,d);
+      const wm=new THREE.Mesh(wg,MW3);
+      wm.position.set(x+w/2,y+h/2,z+d/2);
+      wm.receiveShadow=true; wm.userData={w:true}; scene.add(wm);
+    };
+    mkWall(wallX0-60, 0, -80, 60, RH, RD+80);
+    mkWall(wallX1,   0, -80, 60, RH, RD+80);
+    mkWall(wallX0-60, 0, -80, wallX1-wallX0+120, RH, 60);
+  }
+  // ── Фальш-планки по краям (детали, есть и в раскрое) ──
+  if(_room.plankL>0||_room.plankR>0||_room.plankT>0){
+    const maxHpl=sections.reduce((a,ss)=>Math.max(a,ss.height+(ss.antresol&&ss.antresol.enabled?ss.antresol.height:0)),0);
+    const LHpl=100;
+    if(_room.plankL>0)addBoard(-_room.plankL, LHpl, 0, _room.plankL, maxHpl, T, ML2);
+    if(_room.plankR>0)addBoard(ox, LHpl, 0, _room.plankR, maxHpl, T, ML2);
+    if(_room.plankT>0)addBoard(-(_room.plankL||0), LHpl+maxHpl, 0,
+      ox+(_room.plankL||0)+(_room.plankR||0), _room.plankT, T, ML2);
+  }
   // ── Антресоль per-section ─────────────────────────────────
   {
     const LH=100; // высота ножек — константа
@@ -3523,6 +3591,13 @@ function calcPartsCore(){
   facLdsp.forEach(p=>p.num=n++);
   facMdfPlenka.forEach(p=>p.num=n++);
   facMdfKraska.forEach(p=>p.num=n++);
+  if(_room.plankL>0||_room.plankR>0||_room.plankT>0){
+    const maxHp=sections.reduce((a,ss)=>Math.max(a,ss.height+(ss.antresol&&ss.antresol.enabled?ss.antresol.height:0)),0);
+    const totWp=sections.reduce((a,ss)=>a+ss.width,0);
+    if(_room.plankL>0)ldsp.push({name:'Планка лев',w:_room.plankL,h:maxHp});
+    if(_room.plankR>0)ldsp.push({name:'Планка прав',w:_room.plankR,h:maxHp});
+    if(_room.plankT>0)ldsp.push({name:'Планка верх',w:totWp+(_room.plankL||0)+(_room.plankR||0),h:_room.plankT});
+  }
   return{ldsp,hdf,facLdsp,facMdfPlenka,facMdfKraska,edgeRows,totalPm04,totalPm2};
 }
 
@@ -3751,6 +3826,13 @@ function calcPartsLegacy(){
   facLdsp.forEach(p=>p.num=n++);
   facMdfPlenka.forEach(p=>p.num=n++);
   facMdfKraska.forEach(p=>p.num=n++);
+  if(_room.plankL>0||_room.plankR>0||_room.plankT>0){
+    const maxHp=sections.reduce((a,ss)=>Math.max(a,ss.height+(ss.antresol&&ss.antresol.enabled?ss.antresol.height:0)),0);
+    const totWp=sections.reduce((a,ss)=>a+ss.width,0);
+    if(_room.plankL>0)ldsp.push({name:'Планка лев',w:_room.plankL,h:maxHp});
+    if(_room.plankR>0)ldsp.push({name:'Планка прав',w:_room.plankR,h:maxHp});
+    if(_room.plankT>0)ldsp.push({name:'Планка верх',w:totWp+(_room.plankL||0)+(_room.plankR||0),h:_room.plankT});
+  }
   return{ldsp,hdf,facLdsp,facMdfPlenka,facMdfKraska,edgeRows,totalPm04,totalPm2};
 }
 
@@ -4850,7 +4932,7 @@ window.w2dFullHover=w2dFullHover; window.w2dHlHide=w2dHlHide;
 window.wizOpen=wizOpen; window.wizClose=wizClose; window.wizStep=wizStep;
 window.wizSet=wizSet; window.wizPreset=wizPreset; window.wizBuild=wizBuild;
 window._ai_wiz=()=>_wiz;
-window.w2dFacadeMode=w2dFacadeMode; window._ai_facadeMode=()=>_facadeMode;
+window.w2dFacadeMode=w2dFacadeMode; window._ai_facadeMode=()=>_facadeMode; window._ai_room=()=>_room;
 window.w2dEditNiche=w2dEditNiche; window.w2dEditColW=w2dEditColW;
 window.w2dEditDrawers=w2dEditDrawers;
 window.toggleRod=toggleRod;

@@ -126,5 +126,67 @@ ok(S.every(function (x) { return x.facade.frez === 'volna' && x.facade.handle ==
 var r = win._calcParts();
 ok(r.ldsp.length > 25, 'раскрой построился (' + r.ldsp.length + ' деталей)');
 
+
+
+// ══ Дополнение: исправления по скрину пользователя ══
+// 7) ручки ящиков НЕ рисуются, когда секция закрыта дверьми
+var s7 = win._ai_mkSection();
+s7.width = 800; s7.height = 2000; s7.depth = 600;
+s7.facade.type = 'doors2'; s7.facade.handle = 'railing';
+s7.shelves.push({ id: s7.shelfId++, height: 800, col: 0 });
+s7.drawerBlocks.push({ nicheIdx: 0, count: 2, brand: 'En-7' });
+win._ai_sections = [s7];
+added.length = 0; win._ai_render3D2();
+var drawerHandles = added.filter(function (o) { return o.geometry && o.geometry.h === 14 && o.geometry.w > 100 && o.geometry.w < 200; });
+eq(drawerHandles.length, 0, 'ручки ящиков скрыты за дверьми');
+s7.facade.type = 'none';
+added.length = 0; win._ai_render3D2();
+drawerHandles = added.filter(function (o) { return o.geometry && o.geometry.h === 14 && o.geometry.w > 100 && o.geometry.w < 200; });
+eq(drawerHandles.length, 2, 'без дверей ручки ящиков видны (2)');
+
+// 8) фрезеровка рисуется в 3D: Венеция → двойная рамка (16 планок на 2 двери)
+s7.facade.type = 'doors2'; s7.facade.frez = 'venecia';
+added.length = 0; win._ai_render3D2();
+var frez = added.filter(function (o) { return o.geometry && o.geometry.d === 3 && (o.geometry.w <= 8 || o.geometry.h <= 8); });
+eq(frez.length, 16, 'Венеция: 2 двери × (4+4) планок рамки');
+s7.facade.frez = 'volna';
+added.length = 0; win._ai_render3D2();
+var waves = added.filter(function (o) { return o.geometry && o.geometry.d === 3 && o.geometry.w === 8; });
+ok(waves.length >= 6, 'Волна: вертикальные рёбра (' + waves.length + ')');
+s7.facade.frez = 'modern';
+added.length = 0; win._ai_render3D2();
+frez = added.filter(function (o) { return o.geometry && o.geometry.d === 3 && (o.geometry.w <= 8 || o.geometry.h <= 8); });
+eq(frez.length, 0, 'Модерн: гладкий, без накладок');
+
+// 9) мастер: антресоль получает фасад, комната+планки включаются
+win.wizOpen();
+win.wizSet('len', '3000'); win.wizSet('hei', '2600'); win.wizSet('offL', '30'); win.wizSet('offR', '30');
+win.wizSet('plankL', '80'); win.wizSet('plankR', '80'); win.wizSet('plankT', '60');
+win.wizSet('doors', '4');
+win.wizStep(1);
+win.wizSet('antr', true); win.wizSet('antrH', '500');
+win.wizStep(1); win.wizStep(1);
+win.confirm = function () { return true; };
+win.wizBuild();
+var S9 = win._ai_sections;
+eq(S9[0].antresol.facade.type, 'doors2', 'антресоль: фасад doors2 из мастера');
+eq(S9[0].antresol.facade.material, 'ldsp', 'антресоль: материал');
+var room = win._ai_room();
+ok(room.enabled, 'комната включена');
+eq(room.plankL, 80, 'планка слева 80');
+// ширина шкафа: 3000−30−30−80−80 = 2780
+eq(S9.reduce(function (a, s) { return a + s.width; }, 0), 2780, 'ширина: минус отступы И планки');
+// планки в раскрое
+var r9 = win._calcParts();
+var pl = r9.ldsp.filter(function (p) { return p.name.indexOf('Планка') >= 0; });
+eq(pl.length, 3, '3 планки в раскрое');
+var plv = r9.ldsp.find(function (p) { return p.name === 'Планка лев'; });
+eq(plv.w, 80, 'планка лев: ширина 80');
+eq(plv.h, 2100 + 500, 'планка лев: высота = секция+антресоль (2600)');
+// стены в 3D
+added.length = 0; win._ai_render3D2();
+var walls = added.filter(function (o) { return o.geometry && o.geometry.type === 'box' && (o.geometry.w === 60 || o.geometry.d === 60) && o.geometry.h >= 2400; });
+eq(walls.length, 3, '3 стены в 3D (лев/прав/задняя)');
+
 console.log('Пройдено: ' + passed + ', провалено: ' + failed);
 process.exit(failed > 0 ? 1 : 0);
