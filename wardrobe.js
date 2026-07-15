@@ -3444,7 +3444,9 @@ function calcPartsCore(){
       if(bR==='vis') visLen+=h; else if(bR==='hid') hidLen+=h;
       const pm04=((ef==='04mm'?visLen:0)+(eb==='04mm'?hidLen:0))/1000;
       const pm2=((ef==='2mm'?visLen:0)+(eb==='2mm'?hidLen:0))/1000;
-      if(pm04>0||pm2>0) edgeRows.push({name,pm04,pm2});
+      const band=function(bk){ return bk==='vis'?ef:(bk==='hid'?eb:'none'); };
+      const sides={t:band(bT), b:band(bB), l:band(bL), r:band(bR)};
+      if(pm04>0||pm2>0) edgeRows.push({name,pm04,pm2,sides});
     }
 
     const cfg = {
@@ -3571,7 +3573,9 @@ function calcPartsCore(){
       if(bR==='vis') visLen+=h; else if(bR==='hid') hidLen+=h;
       const pm04=((aef==='04mm'?visLen:0)+(aeb==='04mm'?hidLen:0))/1000;
       const pm2=((aef==='2mm'?visLen:0)+(aeb==='2mm'?hidLen:0))/1000;
-      if(pm04>0||pm2>0) edgeRows.push({name,pm04,pm2});
+      const band=function(bk){ return bk==='vis'?aef:(bk==='hid'?aeb:'none'); };
+      const sides={t:band(bT), b:band(bB), l:band(bL), r:band(bR)};
+      if(pm04>0||pm2>0) edgeRows.push({name,pm04,pm2,sides});
     }
     const antrShelves=s.antresol.shelves||[];
     const cfgA = {
@@ -3691,7 +3695,9 @@ function calcPartsLegacy(){
       if(bR==='vis') visLen+=h; else if(bR==='hid') hidLen+=h;
       const pm04=((ef==='04mm'?visLen:0)+(eb==='04mm'?hidLen:0))/1000;
       const pm2=((ef==='2mm'?visLen:0)+(eb==='2mm'?hidLen:0))/1000;
-      if(pm04>0||pm2>0) edgeRows.push({name,pm04,pm2});
+      const band=function(bk){ return bk==='vis'?ef:(bk==='hid'?eb:'none'); };
+      const sides={t:band(bT), b:band(bB), l:band(bL), r:band(bR)};
+      if(pm04>0||pm2>0) edgeRows.push({name,pm04,pm2,sides});
     }
 
     // Боковины: видимые — передний торец (Hc) и верхний (Dc), скрытые — задний (Hc) и нижний (Dc)
@@ -3823,7 +3829,9 @@ function calcPartsLegacy(){
       if(bR==='vis') visLen+=h; else if(bR==='hid') hidLen+=h;
       const pm04=((aef==='04mm'?visLen:0)+(aeb==='04mm'?hidLen:0))/1000;
       const pm2=((aef==='2mm'?visLen:0)+(aeb==='2mm'?hidLen:0))/1000;
-      if(pm04>0||pm2>0) edgeRows.push({name,pm04,pm2});
+      const band=function(bk){ return bk==='vis'?aef:(bk==='hid'?aeb:'none'); };
+      const sides={t:band(bT), b:band(bB), l:band(bL), r:band(bR)};
+      if(pm04>0||pm2>0) edgeRows.push({name,pm04,pm2,sides});
     }
 
     ldsp.push({name:`${L} Бок лев`,w:ADc,h:AHc,tex:false,edgeFront:aef,edgeBack:aeb});
@@ -4602,6 +4610,8 @@ function sheetHasGrain(sh){ return sh.items.some(it=>it.tex&&!it.rotated); }
 function cutSwitchTab(tab){
   document.getElementById('cut-pane-sheets').style.display=tab==='sheets'?'':'none';
   document.getElementById('cut-pane-list').style.display=tab==='list'?'':'none';
+  const pf=document.getElementById('cut-pane-furn');
+  if(pf) pf.style.display=tab==='furn'?'':'none';
   document.querySelectorAll('.cut-tab').forEach(el=>{
     el.classList.toggle('active',el.dataset.tab===tab);
   });
@@ -4690,6 +4700,9 @@ function showCut(){
   if(facMdfPlenka.length) listHtml+=buildDetailTable(facMdfPlenka,'МДФ Плёнка фасад','#fff0d4');
   if(facMdfKraska.length) listHtml+=buildDetailTable(facMdfKraska,'МДФ Краска фасад','#e8dcc8');
 
+  let valHtml='', furnHtml='';
+  try{ valHtml=validationHtml(); }catch(e){ console.warn('validator:',e); }
+  try{ furnHtml=hardwareHtml(); }catch(e){ console.warn('hardware:',e); }
   const html=`
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;padding:8px 10px;background:#f7f7f7;border-radius:6px;border:1px solid #e5e5e5">
       <div><div style="font-size:10px;color:#888;margin-bottom:2px">Обрезка листа, мм</div>
@@ -4702,9 +4715,17 @@ function showCut(){
     <div class="cut-tabs">
       <button class="cut-tab active" data-tab="sheets" onclick="cutSwitchTab('sheets')">📐 Раскрой листов</button>
       <button class="cut-tab" data-tab="list" onclick="cutSwitchTab('list')">📋 Список деталей</button>
+      <button class="cut-tab" data-tab="furn" onclick="cutSwitchTab('furn')">🔧 Фурнитура</button>
+    </div>
+    ${valHtml}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="btn" onclick="printLabels()">🏷 Печать бирок</button>
+      <button class="btn" onclick="exportCutCsv()">⬇ Раскрой в CSV</button>
+      <button class="btn" onclick="exportHardwareCsv()">⬇ Фурнитура в CSV</button>
     </div>
     <div id="cut-pane-sheets">${sheetsHtml}</div>
-    <div id="cut-pane-list" style="display:none">${listHtml}</div>`;
+    <div id="cut-pane-list" style="display:none">${listHtml}</div>
+    <div id="cut-pane-furn" style="display:none">${furnHtml}</div>`;
 
   document.getElementById('cut-content').innerHTML=html;
   document.getElementById('cut-modal').style.display='block';
@@ -4992,6 +5013,255 @@ window.projNew=projNew; window.projSave=projSave; window.projSwitchTo=projSwitch
 window.projDelete=projDelete; window.projDuplicate=projDuplicate;
 window.projModalOpen=projModalOpen; window.projModalClose=projModalClose;
 window.projMetaChanged=projMetaChanged;
+/* ============================================================
+   ИНСТРУМЕНТЫ ЦЕХА
+   валидатор · бирки · экспорт CSV · ведомость фурнитуры
+============================================================ */
+
+// единый плоский список деталей из всех материалов
+function cutAllParts(){
+  const r=calcParts();
+  const out=[];
+  function push(arr,mat){
+    if(!arr)return;
+    arr.forEach(function(p){
+      out.push({num:p.num||'', name:p.name, mat:mat, w:p.w, h:p.h, tex:!!p.tex,
+        edgeFront:p.edgeFront||'none', edgeBack:p.edgeBack||'none'});
+    });
+  }
+  push(r.ldsp,'ЛДСП корпус');
+  push(r.hdf,'ХДФ');
+  push(r.facLdsp,'ЛДСП фасад');
+  push(r.facMdfPlenka,'МДФ Плёнка');
+  push(r.facMdfKraska,'МДФ Краска');
+  return {parts:out, edgeRows:r.edgeRows||[]};
+}
+
+/* ── 1. ВАЛИДАТОР ───────────────────────────── */
+const SHELF_SPAN_MAX = 900;   // ЛДСП 16мм без опоры
+const ROD_SPAN_MAX   = 1000;  // штанга без центрального держателя
+const SEC_SPAN_MAX   = 1200;  // дно/крыша без перегородки
+
+function validateProject(){
+  const out=[];
+  function add(lvl,msg){ out.push({lvl:lvl, msg:msg}); }
+  if(!sections.length){ add('err','В проекте нет ни одной секции'); return out; }
+  let data;
+  try{ data=cutAllParts(); }
+  catch(e){ add('err','Раскрой не считается: '+e.message); return out; }
+  const trim=CUT_EDGE_TRIM_MM||0;
+  data.parts.forEach(function(p){
+    if(!(p.w>0)||!(p.h>0)){ add('err','Деталь «'+p.name+'»: нулевой или отрицательный размер '+p.w+'×'+p.h); return; }
+    const isHdf=(p.mat.indexOf('ХДФ')>=0);
+    const SW=isHdf?HDF_W:LDSP_W, SH=isHdf?HDF_H:LDSP_H;
+    const big=Math.max(SW,SH)-trim*2, small=Math.min(SW,SH)-trim*2;
+    const a=Math.max(p.w,p.h), b=Math.min(p.w,p.h);
+    if(a>big||b>small) add('err','Деталь «'+p.name+'» '+p.w+'×'+p.h+' не помещается в лист '+p.mat+' ('+SW+'×'+SH+' минус обрезка '+trim+')');
+    if(p.name.indexOf('Полка')>=0 && !isHdf){
+      const span=Math.max(p.w,p.h);
+      if(span>SHELF_SPAN_MAX) add('warn','Полка «'+p.name+'» пролётом '+span+' мм — прогнётся (норма до '+SHELF_SPAN_MAX+'). Нужна перегородка или толще материал');
+    }
+  });
+  sections.forEach(function(s,i){
+    const L='С'+(i+1);
+    if(s.width>SEC_SPAN_MAX && (!s.dividers||!s.dividers.length))
+      add('warn',L+': ширина '+s.width+' мм без перегородки — дно и крыша прогнутся (норма до '+SEC_SPAN_MAX+')');
+    if(s.hasRod){
+      const cols=getColumns(s);
+      const c=(s.rodCol!=null&&cols[s.rodCol])?cols[s.rodCol]:cols[0];
+      if(c&&c.width>ROD_SPAN_MAX)
+        add('warn',L+': штанга '+Math.round(c.width)+' мм — длиннее '+ROD_SPAN_MAX+', нужен центральный держатель');
+    }
+    if(s.drawerBlocks&&s.drawerBlocks.length&&s.depth<300)
+      add('warn',L+': глубина '+s.depth+' мм — для ящиков мало (направляющие от 300)');
+    if(s.facade&&s.facade.type!=='none'){
+      const gl=(s.fGapLeft==null?3:s.fGapLeft), gr=(s.fGapRight==null?3:s.fGapRight);
+      if(gl<0||gr<0) add('warn',L+': фасад перекрывает соседнюю секцию (зазоры '+gl+'/'+gr+') — проверьте стык');
+      const doorCnt=(s.facade.type==='doors3'?3:s.facade.type==='doors2'?2:1);
+      const doorW=Math.round(s.width/doorCnt);
+      if(doorW>600) add('warn',L+': створка шириной ~'+doorW+' мм — петли перегружены, фасад провиснет (норма до 600)');
+    }
+    if(s.antresol&&s.antresol.enabled&&s.antresol.height<200)
+      add('warn',L+': антресоль '+s.antresol.height+' мм — ниже 200, фасад и петли не встанут');
+    if(s.depth>0&&s.depth<350&&s.hasRod)
+      add('warn',L+': глубина '+s.depth+' мм со штангой — плечики не влезут (норма от 500)');
+  });
+  return out;
+}
+
+function validationHtml(){
+  const list=validateProject();
+  if(!list.length) return '<div style="padding:8px 10px;border-radius:6px;background:#eaf6ec;border:1px solid #bcdcc4;color:#1a5252;font-size:12px;margin-bottom:10px">✓ Проверка пройдена: ошибок и рисков не найдено</div>';
+  const errs=list.filter(function(x){return x.lvl==='err';});
+  const warns=list.filter(function(x){return x.lvl==='warn';});
+  let h='<div style="margin-bottom:10px;border-radius:6px;border:1px solid '+(errs.length?'#e0b4b4':'#e8d9a8')+';background:'+(errs.length?'#fdf1f1':'#fdfaef')+';padding:8px 10px">';
+  h+='<div style="font-size:12px;font-weight:700;color:#1d2023;margin-bottom:4px">Проверка проекта: '+errs.length+' ошибок, '+warns.length+' предупреждений</div>';
+  list.forEach(function(x){
+    const col=(x.lvl==='err')?'#c0392b':'#a9791b';
+    const ic=(x.lvl==='err')?'✖':'⚠';
+    h+='<div style="font-size:11.5px;color:'+col+';padding:2px 0">'+ic+' '+x.msg+'</div>';
+  });
+  h+='</div>';
+  return h;
+}
+
+/* ── 2. БИРКИ НА ПЕЧАТЬ ─────────────────────── */
+function edgeSidesFor(name){
+  const d=cutAllParts();
+  const row=d.edgeRows.find(function(r){ return r.name===name; });
+  if(!row||!row.sides) return null;
+  return row.sides;
+}
+
+function bandLabel(v){
+  if(v==='2mm') return '1мм';
+  if(v==='04mm') return '0.4мм';
+  return '—';
+}
+
+function printLabels(){
+  const d=cutAllParts();
+  if(!d.parts.length){ alert('Нет деталей для бирок'); return; }
+  const sidesMap={};
+  d.edgeRows.forEach(function(r){ if(r.sides) sidesMap[r.name]=r.sides; });
+  const proj=(typeof projectName!=='undefined'&&projectName)?projectName:'MebelOFF';
+  const dt=new Date().toLocaleDateString('ru-RU');
+  let cards='';
+  d.parts.forEach(function(p){
+    const sd=sidesMap[p.name];
+    let edgeTxt;
+    if(sd){
+      edgeTxt='В '+bandLabel(sd.t)+' · Н '+bandLabel(sd.b)+' · Л '+bandLabel(sd.l)+' · П '+bandLabel(sd.r);
+    }else{
+      edgeTxt='без кромки';
+    }
+    cards+='<div class="lb">'
+      +'<div class="lb-h"><span class="lb-n">#'+p.num+'</span><span class="lb-m">'+p.mat+'</span></div>'
+      +'<div class="lb-name">'+p.name+'</div>'
+      +'<div class="lb-dim">'+p.w+' × '+p.h+' мм</div>'
+      +'<div class="lb-e">Кромка: '+edgeTxt+'</div>'
+      +'<div class="lb-f">'+proj+' · '+dt+(p.tex?' · ↕ текстура':'')+'</div>'
+      +'</div>';
+  });
+  const css='@page{size:A4;margin:8mm}'
+    +'body{font-family:Arial,Helvetica,sans-serif;margin:0}'
+    +'.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:4mm}'
+    +'.lb{border:1px solid #333;border-radius:2mm;padding:3mm;height:32mm;box-sizing:border-box;page-break-inside:avoid}'
+    +'.lb-h{display:flex;justify-content:space-between;font-size:9pt;color:#555}'
+    +'.lb-n{font-weight:700;color:#000}'
+    +'.lb-name{font-size:13pt;font-weight:700;margin:1mm 0}'
+    +'.lb-dim{font-size:16pt;font-weight:700;letter-spacing:.5px}'
+    +'.lb-e{font-size:9pt;color:#333;margin-top:1mm}'
+    +'.lb-f{font-size:7.5pt;color:#888;margin-top:1mm}'
+    +'@media print{.noprint{display:none}}';
+  const html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Бирки деталей</title><style>'+css+'</style></head><body>'
+    +'<div class="noprint" style="padding:8px;background:#f2f2f2;margin-bottom:6px">'
+    +'<button onclick="window.print()">Печать</button> Бирок: '+d.parts.length+'</div>'
+    +'<div class="grid">'+cards+'</div></body></html>';
+  const w=window.open('','_blank');
+  if(!w){ alert('Браузер заблокировал окно. Разрешите всплывающие окна.'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+/* ── 3. ЭКСПОРТ РАСКРОЯ → CSV ─────────────── */
+function csvCell(v){
+  const s=String(v==null?'':v);
+  if(s.indexOf(';')>=0||s.indexOf('"')>=0||s.indexOf('\n')>=0) return '"'+s.split('"').join('""')+'"';
+  return s;
+}
+
+function downloadFile(name,text,mime){
+  const blob=new Blob(['\ufeff'+text],{type:mime+';charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=name;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); },1000);
+}
+
+function exportCutCsv(){
+  const d=cutAllParts();
+  if(!d.parts.length){ alert('Нет деталей для экспорта'); return; }
+  const sidesMap={};
+  d.edgeRows.forEach(function(r){ if(r.sides) sidesMap[r.name]=r.sides; });
+  const head=['№','Деталь','Материал','Ширина','Высота','Кол-во',
+    'Кромка верх','Кромка низ','Кромка лев','Кромка прав','Текстура'];
+  const lines=[head.map(csvCell).join(';')];
+  d.parts.forEach(function(p){
+    const sd=sidesMap[p.name]||{};
+    lines.push([p.num,p.name,p.mat,p.w,p.h,1,
+      bandLabel(sd.t),bandLabel(sd.b),bandLabel(sd.l),bandLabel(sd.r),
+      p.tex?'да':'нет'].map(csvCell).join(';'));
+  });
+  const proj=(typeof projectName!=='undefined'&&projectName)?projectName:'raskroy';
+  downloadFile(proj+'_раскрой.csv', lines.join('\r\n'), 'text/csv');
+}
+
+function exportHardwareCsv(){
+  const rows=hardwareRows();
+  if(!rows.length){ alert('Фурнитуры нет'); return; }
+  const lines=[['Позиция','Бренд / тип','Кол-во','Ед.','Цена','Сумма'].map(csvCell).join(';')];
+  rows.forEach(function(r){
+    lines.push([r.name,r.spec,r.qty,r.unit,Math.round(r.price),Math.round(r.sum)].map(csvCell).join(';'));
+  });
+  const proj=(typeof projectName!=='undefined'&&projectName)?projectName:'furnitura';
+  downloadFile(proj+'_фурнитура.csv', lines.join('\r\n'), 'text/csv');
+}
+
+/* ── 4. ВЕДОМОСТЬ ФУРНИТУРЫ ───────────── */
+function hardwareRows(){
+  let d;
+  try{ d=calcAllCosts(); }catch(e){ return []; }
+  const rows=[];
+  function add(name,spec,qty,unit,price){
+    if(!qty)return;
+    rows.push({name:name, spec:spec, qty:qty, unit:unit, price:price, sum:qty*price});
+  }
+  add('Петля накладная', activehingeBrand, d.totalHinges, 'шт', hingePrice());
+  add('Ручка', 'двери + ящики', d.totalHandles, 'шт', prices.handle);
+  const slides=d.slideDetails||[];
+  slides.forEach(function(sl){
+    add('Направляющая', sl.brand+' '+sl.type+' '+sl.length+'мм', sl.count, 'компл', sl.price);
+  });
+  add('Штанга с держателями', 'овал/круглая', d.totalRods, 'компл', d.rodPrice);
+  add('Ножка регулируемая', 'высота 100', d.totalLegs, 'шт', d.legPrice);
+  return rows;
+}
+
+function hardwareHtml(){
+  const rows=hardwareRows();
+  if(!rows.length) return '<p style="color:#888;text-align:center;padding:30px">Фурнитуры нет</p>';
+  let total=0;
+  let h='<table class="cut-tbl" style="width:100%;border-collapse:collapse;font-size:12px">';
+  h+='<thead><tr style="background:#f2f0eb;text-align:left">'
+    +'<th style="padding:6px">Позиция</th><th style="padding:6px">Бренд / тип</th>'
+    +'<th style="padding:6px;text-align:right">Кол-во</th><th style="padding:6px">Ед.</th>'
+    +'<th style="padding:6px;text-align:right">Цена</th><th style="padding:6px;text-align:right">Сумма</th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    total+=r.sum;
+    h+='<tr style="border-top:1px solid #eee">'
+      +'<td style="padding:6px"><b>'+r.name+'</b></td>'
+      +'<td style="padding:6px;color:#666">'+r.spec+'</td>'
+      +'<td style="padding:6px;text-align:right">'+r.qty+'</td>'
+      +'<td style="padding:6px;color:#888">'+r.unit+'</td>'
+      +'<td style="padding:6px;text-align:right">'+fmt(r.price)+'</td>'
+      +'<td style="padding:6px;text-align:right"><b>'+fmt(r.sum)+'</b></td></tr>';
+  });
+  h+='</tbody><tfoot><tr style="border-top:2px solid #c39a3b;background:#faf8f3">'
+    +'<td colspan="5" style="padding:7px;text-align:right;font-weight:700">Итого фурнитуры</td>'
+    +'<td style="padding:7px;text-align:right;font-weight:700">'+fmt(total)+'</td></tr></tfoot></table>';
+  h+='<div style="margin-top:10px"><button class="btn" onclick="exportHardwareCsv()">⬇ Скачать CSV</button></div>';
+  return h;
+}
+
+window.validateProject=validateProject;
+window.printLabels=printLabels;
+window.exportCutCsv=exportCutCsv;
+window.exportHardwareCsv=exportHardwareCsv;
+window.hardwareRows=hardwareRows;
+
 // Экспорт для интеграции с калькулятором
 window.calcAllCosts = calcAllCosts;
 window._getMatChoice = () => matChoice;
