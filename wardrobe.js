@@ -566,7 +566,7 @@ function mkSection(){
     id:secId++, width:800, height:2200, depth:600,
     shelves:[], dividers:[],
     hasRod:false, rodHeight:1600, rodCol:null,
-    facade:{type:'none', material:'ldsp', hasTexture:false},
+    facade:{type:'none', material:'ldsp', hasTexture:false, frez:'modern', handle:'railing'},
     facadeDoors:[],
     antresol:{enabled:false, height:400, facade:{type:'none', material:'ldsp'}, shelves:[], shelfId:0},
     edgeFront:'2mm', edgeBack:'none',
@@ -1064,14 +1064,39 @@ function w2dClick(sid,evt){
    Правит ТЕ ЖЕ данные — 3D и раскрой обновляются мгновенно.
 ============================================================ */
 let _viewMode='3d';
+let _facadeMode='ghost'; // ghost | solid | hidden
+function w2dFacadeMode(){
+  _facadeMode=(_facadeMode==='ghost')?'solid':(_facadeMode==='solid')?'hidden':'ghost';
+  const b=document.getElementById('w2d-btnfac');
+  if(b)b.textContent=(_facadeMode==='ghost')?'👁 Фасады: прозр.':(_facadeMode==='solid')?'👁 Фасады: сплошн.':'👁 Фасады: скрыты';
+  render3D();
+}
 let _w2dLayout=[];
 /* ============================================================
    МАСТЕР БЫСТРОГО СТАРТА (4 шага): стена → двери (авто-разбивка
    на секции) → наполнение (библиотека пресетов) → фасад → Построить.
    Строит секции CRM поверх ядра и открывает 2D для доводки.
 ============================================================ */
+const FREZ_LIST=[
+  {id:'modern',      name:'Модерн',      price:16000},
+  {id:'alexandria',  name:'Александрия', price:19000},
+  {id:'ampir',       name:'Ампир',       price:19000},
+  {id:'volna',       name:'Волна',       price:18000},
+  {id:'venecia',     name:'Венеция',     price:21000},
+  {id:'florencia',   name:'Флоренция',   price:19500},
+  {id:'valensia',    name:'Валенсия',    price:18500},
+  {id:'verona',      name:'Верона',      price:21500}
+];
+const HANDLE_LIST=[
+  {id:'push',    name:'Push-to-open (без ручек)'},
+  {id:'gola',    name:'Скрытая Gola-профиль'},
+  {id:'railing', name:'Рейлинг вертикальный'},
+  {id:'knob',    name:'Кнопка круглая'},
+  {id:'torec',   name:'Торцевая (алюм. профиль)'},
+  {id:'leather', name:'Кожаная петля'}
+];
 let _wiz={step:1, len:3000, hei:2400, dep:600, offL:0, offR:0, offT:0,
-  doors:6, antr:false, antrH:400, presets:[], mat:'ldsp'};
+  doors:6, antr:false, antrH:400, presets:[], mat:'ldsp', frez:'modern', handle:'railing'};
 function wizW(){ return Math.max(300,(parseInt(_wiz.len)||0)-(parseInt(_wiz.offL)||0)-(parseInt(_wiz.offR)||0)); }
 function wizH(){ return Math.max(600,(parseInt(_wiz.hei)||0)-(parseInt(_wiz.offT)||0)); }
 // Раскладка дверей по модулям: по 2, нечётный остаток — одним модулем на 3
@@ -1109,7 +1134,7 @@ function wizOpen(){
 }
 function wizClose(){ const m=document.getElementById('w2dwiz'); if(m)m.style.display='none'; }
 function wizSet(f,v){
-  _wiz[f]=(f==='antr')?!!v:(f==='mat'?v:parseInt(v)||0);
+  _wiz[f]=(f==='antr')?!!v:((f==='mat'||f==='frez'||f==='handle')?v:parseInt(v)||0);
   if(f==='len'||f==='offL'||f==='offR')_wiz.doors=Math.max(1,Math.round(wizW()/500));
   wizRender();
 }
@@ -1129,6 +1154,11 @@ function wizPrevSvg(p){
   if(p==='shelves5'){ for(let i=1;i<=5;i++)inner+='<line x1="5" y1="'+(8+i*9)+'" x2="41" y2="'+(8+i*9)+'" stroke="#b08a52" stroke-width="2"/>'; }
   else if(p==='rod'){ inner+='<line x1="7" y1="16" x2="39" y2="16" stroke="#7f858d" stroke-width="2.5"/><circle cx="7" cy="16" r="2" fill="#565c63"/><circle cx="39" cy="16" r="2" fill="#565c63"/>'; }
   else if(p==='rod2shelf'){ inner+='<line x1="5" y1="14" x2="41" y2="14" stroke="#b08a52" stroke-width="2"/><line x1="7" y1="26" x2="39" y2="26" stroke="#7f858d" stroke-width="2.5"/>'; }
+  else if(p==='shelves3'){ for(let i=1;i<=3;i++)inner+='<line x1="5" y1="'+(4+i*16)+'" x2="41" y2="'+(4+i*16)+'" stroke="#b08a52" stroke-width="2"/>'; }
+  else if(p==='penal7'){ for(let i=1;i<=7;i++)inner+='<line x1="5" y1="'+(3+i*8)+'" x2="41" y2="'+(3+i*8)+'" stroke="#b08a52" stroke-width="2"/>'; }
+  else if(p==='split2t5p'){ inner+='<line x1="23" y1="2" x2="23" y2="68" stroke="#b08a52" stroke-width="2.5"/><line x1="4" y1="14" x2="21" y2="14" stroke="#7f858d" stroke-width="2.5"/>'; for(let i=1;i<=5;i++)inner+='<line x1="25" y1="'+(6+i*10)+'" x2="42" y2="'+(6+i*10)+'" stroke="#b08a52" stroke-width="2"/>'; }
+  else if(p==='rodDrawers'){ inner+='<line x1="7" y1="12" x2="39" y2="12" stroke="#7f858d" stroke-width="2.5"/><line x1="5" y1="42" x2="41" y2="42" stroke="#b08a52" stroke-width="2"/><rect x="6" y="45" width="34" height="10" fill="#eef1f5" stroke="#8ea2c0"/><rect x="6" y="56" width="34" height="10" fill="#eef1f5" stroke="#8ea2c0"/>'; }
+  else if(p==='shoe4'){ for(let i=1;i<=4;i++)inner+='<line x1="5" y1="'+(38+i*7)+'" x2="41" y2="'+(38+i*7)+'" stroke="#b08a52" stroke-width="2"/>'; }
   else if(p==='shDrawers'){ inner+='<line x1="5" y1="22" x2="41" y2="22" stroke="#b08a52" stroke-width="2"/><line x1="5" y1="40" x2="41" y2="40" stroke="#b08a52" stroke-width="2"/><rect x="6" y="43" width="34" height="11" fill="#eef1f5" stroke="#8ea2c0"/><rect x="6" y="55" width="34" height="11" fill="#eef1f5" stroke="#8ea2c0"/><line x1="17" y1="48" x2="29" y2="48" stroke="#7e8790" stroke-width="1.6"/><line x1="17" y1="60" x2="29" y2="60" stroke="#7e8790" stroke-width="1.6"/>'; }
   return '<svg width="46" height="70" style="display:block"><rect x="1" y="1" width="44" height="68" fill="#fff" stroke="#3a3f45"/>'+inner+'</svg>';
 }
@@ -1177,7 +1207,9 @@ function wizRender(){
   }
   if(_wiz.step===3){
     body+='<div style="font-size:12.5px;color:#565c63;margin-bottom:12px">Наполнение каждой секции — тап по картинке. Потом всё правится в 2D.</div>';
-    const PRE=[['empty','Пусто'],['shelves5','5 полок'],['rod','Штанга'],['rod2shelf','Штанга + полка'],['shDrawers','Полки + ящики']];
+    const PRE=[['empty','Пусто'],['shelves3','3 полки'],['shelves5','5 полок'],['penal7','Пенал 7 полок'],
+      ['rod','Штанга'],['rod2shelf','Штанга + полка'],['split2t5p','Штанга | 5 полок'],
+      ['rodDrawers','Штанга + ящики'],['shDrawers','Полки + ящики'],['shoe4','Обувница']];
     mods.forEach((md,i)=>{
       body+='<div style="margin-bottom:12px"><div style="font-size:11.5px;font-weight:600;color:#1d2023;margin-bottom:6px">Секция '+(i+1)+' · '+md.width+' мм</div><div style="display:flex;gap:8px;flex-wrap:wrap">';
       PRE.forEach(pp=>{
@@ -1196,6 +1228,20 @@ function wizRender(){
       body+='<div onclick="wizSet('+q+'mat'+q+','+q+mm[0]+q+')" style="cursor:pointer;border:2px solid '+(act?'#c39a3b':'#e2dfd7')+';border-radius:10px;padding:14px 18px;background:'+(act?'#faf3e2':'#fff')+';font-size:12.5px;font-weight:600;color:#1d2023">'+mm[1]+'</div>';
     });
     body+='</div>';
+    if(_wiz.mat!=='none'){
+      body+='<div style="font-size:11.5px;color:#6a7076;margin:14px 0 6px 0;font-weight:600">Фрезеровка</div><div style="display:flex;gap:8px;flex-wrap:wrap">';
+      FREZ_LIST.forEach(fz=>{
+        const act=(_wiz.frez===fz.id);
+        body+='<div onclick="wizSet('+q+'frez'+q+','+q+fz.id+q+')" style="cursor:pointer;border:2px solid '+(act?'#c39a3b':'#e2dfd7')+';border-radius:9px;padding:8px 12px;background:'+(act?'#faf3e2':'#fff')+';text-align:center"><div style="font-size:11.5px;font-weight:600;color:#1d2023">'+fz.name+'</div><div style="font-size:10px;color:#8a8f96;font-family:ui-monospace,Consolas,monospace">'+fz.price+' ₸/м²</div></div>';
+      });
+      body+='</div>';
+      body+='<div style="font-size:11.5px;color:#6a7076;margin:14px 0 6px 0;font-weight:600">Ручки</div><div style="display:flex;gap:8px;flex-wrap:wrap">';
+      HANDLE_LIST.forEach(hh=>{
+        const act=(_wiz.handle===hh.id);
+        body+='<div onclick="wizSet('+q+'handle'+q+','+q+hh.id+q+')" style="cursor:pointer;border:2px solid '+(act?'#c39a3b':'#e2dfd7')+';border-radius:9px;padding:8px 12px;background:'+(act?'#faf3e2':'#fff')+';font-size:11.5px;font-weight:600;color:#1d2023">'+hh.name+'</div>';
+      });
+      body+='</div>';
+    }
     body+='<div style="margin-top:14px;font-size:12px;color:#6a7076">Итого: '+mods.length+' секц., '+_wiz.doors+' дв., '+W+'×'+H+' мм'+(_wiz.antr?', антресоль '+_wiz.antrH:'')+'</div>';
   }
   let btns='<div style="display:flex;gap:10px;margin-top:20px">';
@@ -1216,6 +1262,25 @@ function wizApplyPreset(s,p){
     for(let i=1;i<=n;i++)s.shelves.push({id:s.shelfId++, height:T+step*i, col:0});
   };
   if(p==='shelves5'){ even(5); }
+  else if(p==='shelves3'){ even(3); }
+  else if(p==='penal7'){ even(7); }
+  else if(p==='split2t5p'){
+    s.dividers.push({id:s.divId++, pos:Math.round(s.width/2)-T/2});
+    s.hasRod=true; s.rodHeight=Math.max(T*3,h-116); s.rodCol=0;
+    const st=Math.round((h-2*T)/6);
+    for(let i=1;i<=5;i++)s.shelves.push({id:s.shelfId++, height:T+st*i, col:1});
+  }
+  else if(p==='rodDrawers'){
+    const mid=Math.round((h*0.42)/10)*10;
+    s.shelves.push({id:s.shelfId++, height:mid, col:0});
+    s.drawerBlocks.push({nicheIdx:0, count:2, brand:'En-7'});
+    s.hasRod=true; s.rodHeight=Math.max(T*3,h-116);
+  }
+  else if(p==='shoe4'){
+    const zone=Math.min(1100,Math.round(h*0.5));
+    const st=Math.round((zone-T)/5);
+    for(let i=1;i<=4;i++)s.shelves.push({id:s.shelfId++, height:T+st*i, col:0});
+  }
   else if(p==='rod'){ s.hasRod=true; s.rodHeight=Math.max(T*3, h-116); }
   else if(p==='rod2shelf'){
     const sh=Math.round((h-366)/10)*10;
@@ -1241,7 +1306,7 @@ function wizBuild(){
     const s=mkSection();
     s.width=md.width; s.height=secH; s.depth=D;
     s.facade.type=(_wiz.mat==='none')?'none':(md.doors===3?'doors3':md.doors===2?'doors2':'full');
-    if(_wiz.mat!=='none')s.facade.material=_wiz.mat;
+    if(_wiz.mat!=='none'){ s.facade.material=_wiz.mat; s.facade.frez=_wiz.frez; s.facade.handle=_wiz.handle; }
     if(_wiz.antr){ s.antresol.enabled=true; s.antresol.height=_wiz.antrH; }
     wizApplyPreset(s,_wiz.presets[i]||'empty');
     sections.push(s);
@@ -1258,6 +1323,7 @@ function ensure2DUI(){
     sw.id='w2d-switch';
     sw.style.cssText='position:absolute;top:10px;left:10px;z-index:30;display:flex;gap:0;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.25)';
     sw.innerHTML='<button onclick="wizOpen()" style="padding:6px 13px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:#c39a3b;color:#1d2023">✨ Мастер</button>'+
+      '<button id="w2d-btnfac" onclick="w2dFacadeMode()" style="padding:6px 11px;border:none;cursor:pointer;font-size:11px;background:#3a3f45;color:#c8cdd3">👁 Фасады: прозр.</button>'+
       '<button id="w2d-btn2d" onclick="w2dToggleMode(String.fromCharCode(50,100))" style="padding:6px 14px;border:none;cursor:pointer;font-size:12px;font-weight:600">2D</button>'+
       '<button id="w2d-btn3d" onclick="w2dToggleMode(String.fromCharCode(51,100))" style="padding:6px 14px;border:none;cursor:pointer;font-size:12px;font-weight:600">3D</button>';
     vp.appendChild(sw);
@@ -2258,6 +2324,14 @@ function renderPanel(){
         ' onchange="upd(' + s.id + ',' + String.fromCharCode(39) + field + String.fromCharCode(39) + ',this.value)">' +
         '</div>';
     };
+    const fSel=(label,field,list,cur)=>{
+      let o='<div style="margin-top:6px"><div class="fl" style="margin:0 0 2px 0">'+label+'</div><select style="width:100%" onchange="updFacade('+s.id+','+String.fromCharCode(39)+field+String.fromCharCode(39)+',this.value)">';
+      list.forEach(it=>{ o+='<option value="'+it.id+'"'+(cur===it.id?' selected':'')+'>'+it.name+(it.price?(' · '+it.price+' ₸/м²'):'')+'</option>'; });
+      return o+'</select></div>';
+    };
+    const fExtraHtml = s.facade.type==='none' ? '' :
+      fSel('Фрезеровка','frez',FREZ_LIST,s.facade.frez||'modern') +
+      fSel('Ручки','handle',HANDLE_LIST,s.facade.handle||'railing');
     const fGapsHtml = s.facade.type==='none' ? '' :
       '<div class="fl" style="margin-top:6px">Зазоры фасада, мм (минус = перекрытие)</div>' +
       '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px">' +
@@ -2377,7 +2451,7 @@ function renderPanel(){
             '<option value="mdfPlenka" '+(normFacadeMat(s.facade.material)==='mdfPlenka'?'selected':'')+'>МДФ Плёнка</option>' +
             '<option value="mdfKraska" '+(normFacadeMat(s.facade.material)==='mdfKraska'?'selected':'')+'>МДФ Краска</option>' +
           `</select></div>` +
-        `</div>` + texHtml + fGapsHtml,
+        `</div>` + texHtml + fExtraHtml + fGapsHtml,
         true
       ) +
 
@@ -2866,6 +2940,28 @@ function render3D(){
         }
         const resCore=window.WardrobeCore.buildCarcass(cfgCore);
         const MD3=new THREE.MeshStandardMaterial({color:0x8d9db6, roughness:0.6, metalness:0.1});
+        const MFG3=new THREE.MeshStandardMaterial({color:0xdfe3e8, roughness:0.35, metalness:0.05, transparent:true, opacity:0.38});
+        const MHD3=new THREE.MeshStandardMaterial({color:0x33373c, roughness:0.4, metalness:0.5});
+        const hType=(s.facade&&s.facade.handle)||'railing';
+        function addHandle3d(p,b,cx,cy,cz){
+          if(_facadeMode==='hidden')return;
+          if(hType==='push'||hType==='gola')return;
+          const hz=cz-b.dz/2-9;
+          let hw=14,hh=140,hd=14,hx=cx,hy=cy;
+          if(p.kind==='dfacade'){
+            hh=14; hw=Math.min(170,b.dx*0.42);
+          }else{
+            const op=p.opening||'right';
+            hx=(op==='left')?(cx+b.dx/2-32):(cx-b.dx/2+32);
+          }
+          if(hType==='knob'){ hw=26; hh=26; hd=22; }
+          if(hType==='torec'){ hw=b.dx-8; hh=18; hd=16; hx=cx; hy=cy+b.dy/2-10; }
+          if(hType==='leather'){ hw=22; hh=(p.kind==='dfacade')?22:80; hd=10; }
+          const hg=new THREE.BoxGeometry(hw,hh,hd);
+          const hm=new THREE.Mesh(hg,MHD3);
+          hm.position.set(hx,hy,hz); hm.castShadow=true; hm.userData={w:true};
+          scene.add(hm);
+        }
         // Ось Z: в ядре z=0 — ЗАДНЯЯ стенка (растёт к фасаду), в сцене
         // CRM z=0 — лицо фасада (растёт вглубь) → флип: zFront+Dc−b.cz
         resCore.parts.forEach(p=>{
@@ -2877,14 +2973,19 @@ function render3D(){
             rm.position.set(cx,cy,cz); rm.castShadow=true; rm.userData={w:true}; scene.add(rm);
             return;
           }
+          const isFac3d=(p.kind==='facade'||p.kind==='dfacade');
+          if(isFac3d && _facadeMode==='hidden') return;
           let mat3d=ML, ud3d=null, noEdge3d=false;
           if(p.kind==='bottom') mat3d=ML2;
           else if(p.kind==='back') mat3d=MH;
           else if(p.kind==='dside'||p.kind==='dfront'||p.kind==='dback') mat3d=MD3;
           else if(p.kind==='dbottom') mat3d=MH;
-          else if(p.kind==='dfacade') mat3d=isMdfMaterial(s.facade.material)?MFM:MFL;
-          else if(p.kind==='facade'){ mat3d=isMdfMaterial(s.facade.material)?MFM:MFL; noEdge3d=true; }
+          else if(isFac3d){
+            mat3d=(_facadeMode==='ghost')?MFG3:(isMdfMaterial(s.facade.material)?MFM:MFL);
+            noEdge3d=(p.kind==='facade');
+          }
           addBoard(cx-b.dx/2, cy-b.dy/2, cz-b.dz/2, b.dx, b.dy, b.dz, mat3d, noEdge3d, ud3d);
+          if(isFac3d) addHandle3d(p,b,cx,cy,cz);
         });
         coreOk3d=true;
       }catch(e3d){ console.warn('CORE ENGINE 3D: ошибка, откат на старый рендер', e3d); }
@@ -2952,7 +3053,7 @@ function render3D(){
         cap.position.set(lx,LH-3,lz); cap.castShadow=true; cap.userData={w:true}; scene.add(cap);
       });
     }
-    if(s.facade.type!=='none' && !coreOk3d){
+    if(s.facade.type!=='none' && !coreOk3d && _facadeMode!=='hidden'){
       const fm=isMdfMaterial(s.facade.material)?MFM:MFL;
       const count=s.facade.type==='doors3'?3:s.facade.type==='doors2'?2:1;
       const gap=4,thick=T,dw=(W-gap*(count+1))/count;
@@ -4749,6 +4850,7 @@ window.w2dFullHover=w2dFullHover; window.w2dHlHide=w2dHlHide;
 window.wizOpen=wizOpen; window.wizClose=wizClose; window.wizStep=wizStep;
 window.wizSet=wizSet; window.wizPreset=wizPreset; window.wizBuild=wizBuild;
 window._ai_wiz=()=>_wiz;
+window.w2dFacadeMode=w2dFacadeMode; window._ai_facadeMode=()=>_facadeMode;
 window.w2dEditNiche=w2dEditNiche; window.w2dEditColW=w2dEditColW;
 window.w2dEditDrawers=w2dEditDrawers;
 window.toggleRod=toggleRod;
