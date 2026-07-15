@@ -568,7 +568,7 @@ function mkSection(){
     id:secId++, width:800, height:2200, depth:600,
     shelves:[], dividers:[],
     hasRod:false, rodHeight:1600, rodCol:null,
-    facade:{type:'none', material:'ldsp', hasTexture:false, frez:'modern', handle:'railing'},
+    facade:{type:'none', material:'ldsp', hasTexture:false, frez:'modern', handle:'railing', opening:'auto'},
     facadeDoors:[],
     antresol:{enabled:false, height:400, facade:{type:'none', material:'ldsp'}, shelves:[], shelfId:0},
     edgeFront:'2mm', edgeBack:'none',
@@ -1105,6 +1105,11 @@ const HANDLE_LIST=[
   {id:'knob',    name:'Кнопка круглая'},
   {id:'torec',   name:'Торцевая (алюм. профиль)'},
   {id:'leather', name:'Кожаная петля'}
+];
+const OPEN_LIST=[
+  {id:'auto',  name:'Авто (зеркально, ручки к центру)'},
+  {id:'left',  name:'Петли слева (ручка справа)'},
+  {id:'right', name:'Петли справа (ручка слева)'}
 ];
 let _wiz={step:1, len:3000, hei:2400, dep:600, offL:0, offR:0, offT:0,
   doors:6, antr:false, antrH:400, presets:[], mat:'ldsp', frez:'modern', handle:'railing', plankL:0, plankR:0, plankT:0};
@@ -2369,7 +2374,8 @@ function renderPanel(){
     };
     const fExtraHtml = s.facade.type==='none' ? '' :
       fSel('Фрезеровка','frez',FREZ_LIST,s.facade.frez||'modern') +
-      fSel('Ручки','handle',HANDLE_LIST,s.facade.handle||'railing');
+      fSel('Ручки','handle',HANDLE_LIST,s.facade.handle||'railing') +
+      fSel('Открывание','opening',OPEN_LIST,s.facade.opening||'auto');
     const fGapsHtml = s.facade.type==='none' ? '' :
       '<div class="fl" style="margin-top:6px">Зазоры фасада, мм (минус = перекрытие)</div>' +
       '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px">' +
