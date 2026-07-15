@@ -1306,6 +1306,20 @@ function wizApplyPreset(s,p){
   }
   s.shelves.sort((a,b)=>a.height-b.height);
 }
+// Подгон комнаты под фактически построенный шкаф.
+// Высота стены = ножки(100) + макс. высота секции с антресолью + верх. планка + отступ.
+// Длина стены = сумма ширин секций + планки + отступы. Глубина ниши = макс. глубина секции.
+function roomFitToCabinet(){
+  if(!sections.length) return;
+  const LEG=100;
+  const totW=sections.reduce((a,s)=>a+(s.width||0),0);
+  const secTot=s=>(s.height||0)+(s.antresol&&s.antresol.enabled?(s.antresol.height||0):0);
+  const maxH=sections.reduce((a,s)=>Math.max(a,secTot(s)),0);
+  const maxD=sections.reduce((a,s)=>Math.max(a,s.depth||600),600);
+  _room.len=totW+(_room.offL||0)+(_room.offR||0)+(_room.plankL||0)+(_room.plankR||0);
+  _room.hei=LEG+maxH+(_room.plankT||0)+(_room.offT||0);
+  _room.dep=maxD;
+}
 function wizBuild(){
   const hasContent=sections.some(x=>x.shelves.length||x.dividers.length||x.drawerBlocks.length||x.hasRod);
   if(sections.length>1||hasContent){
@@ -1331,9 +1345,9 @@ function wizBuild(){
     sections.push(s);
   });
   _room.enabled=true;
-  _room.len=parseInt(_wiz.len)||3000; _room.hei=parseInt(_wiz.hei)||2400; _room.dep=parseInt(_wiz.dep)||600;
   _room.offL=parseInt(_wiz.offL)||0; _room.offR=parseInt(_wiz.offR)||0; _room.offT=parseInt(_wiz.offT)||0;
   _room.plankL=parseInt(_wiz.plankL)||0; _room.plankR=parseInt(_wiz.plankR)||0; _room.plankT=parseInt(_wiz.plankT)||0;
+  roomFitToCabinet();
   wizClose();
   renderPanel(); render3D(); updateStats(); projMarkUnsaved();
   _viewMode='2d'; ensure2DUI(); w2dSyncView();
@@ -3117,12 +3131,15 @@ function render3D(){
   // Ось Z: 0 — лицо фасада, растёт ВГЛУБЬ. Задняя стена — за корпусом
   // (z = глубина шкафа), боковые идут от фасада до задней стены.
   if(_room.enabled && _wallMode!=='hidden'){
-    const RH=Math.max(_room.hei, 2400);
+    const RH=Math.max(_room.hei||0, 600);
     const zBack=sections.reduce((a,ss)=>Math.max(a,ss.depth||600),600);
     const ghostW=(_wallMode==='ghost');
     const MW3=new THREE.MeshStandardMaterial({color:0xe9e5dd, roughness:0.95,
       transparent:ghostW, opacity:ghostW?0.3:1});
-    const wallX0=-(_room.offL||0)-(_room.plankL||0), wallX1=ox+(_room.offR||0)+(_room.plankR||0);
+    // ВАЖНО: секции центрированы, ox стартует с -totalW/2. Левый край шкафа
+    // это ox-totalW, а не 0 — иначе левая стена встаёт посреди корпуса.
+    const wallX0=ox-totalW-(_room.offL||0)-(_room.plankL||0);
+    const wallX1=ox+(_room.offR||0)+(_room.plankR||0);
     const mkWall=(x,y,z,w,h,d)=>{
       const wg=new THREE.BoxGeometry(w,h,d);
       const wm=new THREE.Mesh(wg,MW3);
@@ -3137,10 +3154,11 @@ function render3D(){
   if(_room.plankL>0||_room.plankR>0||_room.plankT>0){
     const maxHpl=sections.reduce((a,ss)=>Math.max(a,ss.height+(ss.antresol&&ss.antresol.enabled?ss.antresol.height:0)),0);
     const LHpl=100;
-    if(_room.plankL>0)addBoard(-_room.plankL, LHpl, 0, _room.plankL, maxHpl, T, ML2);
+    const plX0=ox-totalW;
+    if(_room.plankL>0)addBoard(plX0-_room.plankL, LHpl, 0, _room.plankL, maxHpl, T, ML2);
     if(_room.plankR>0)addBoard(ox, LHpl, 0, _room.plankR, maxHpl, T, ML2);
-    if(_room.plankT>0)addBoard(-(_room.plankL||0), LHpl+maxHpl, 0,
-      ox+(_room.plankL||0)+(_room.plankR||0), _room.plankT, T, ML2);
+    if(_room.plankT>0)addBoard(plX0-(_room.plankL||0), LHpl+maxHpl, 0,
+      totalW+(_room.plankL||0)+(_room.plankR||0), _room.plankT, T, ML2);
   }
   // ── Антресоль per-section ─────────────────────────────────
   {
