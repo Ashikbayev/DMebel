@@ -183,10 +183,29 @@ eq(pl.length, 3, '3 планки в раскрое');
 var plv = r9.ldsp.find(function (p) { return p.name === 'Планка лев'; });
 eq(plv.w, 80, 'планка лев: ширина 80');
 eq(plv.h, 2100 + 500, 'планка лев: высота = секция+антресоль (2600)');
-// стены в 3D
+// стены в 3D: за шкафом, не перед фасадом
 added.length = 0; win._ai_render3D2();
 var walls = added.filter(function (o) { return o.geometry && o.geometry.type === 'box' && (o.geometry.w === 60 || o.geometry.d === 60) && o.geometry.h >= 2400; });
 eq(walls.length, 3, '3 стены в 3D (лев/прав/задняя)');
+ok(walls.every(function (o) { return o.material && o.material.transparent === true; }), 'стены полупрозрачные (не загораживают шкаф)');
+var backW = walls.find(function (o) { return o.geometry.d === 60; });
+var sideW = walls.filter(function (o) { return o.geometry.w === 60; });
+eq(sideW.length, 2, 'две боковые стены');
+ok(backW.position.z > 600, 'задняя стена ЗА шкафом (z=' + backW.position.z + ' > глубины), а не перед фасадом');
+ok(sideW.every(function (o) { return o.position.z > 0; }), 'боковые стены идут вглубь от фасада, не в минус');
+// режимы стен
+eq(win._ai_wallMode(), 'ghost', 'дефолт: прозрачные');
+win.w2dWallMode();
+eq(win._ai_wallMode(), 'solid', '→ сплошные');
+added.length = 0; win._ai_render3D2();
+var wallsS = added.filter(function (o) { return o.geometry && o.geometry.type === 'box' && (o.geometry.w === 60 || o.geometry.d === 60) && o.geometry.h >= 2400; });
+ok(wallsS.length === 3 && !wallsS[0].material.transparent, 'solid: стены непрозрачные');
+win.w2dWallMode();
+eq(win._ai_wallMode(), 'hidden', '→ скрыты');
+added.length = 0; win._ai_render3D2();
+var wallsH = added.filter(function (o) { return o.geometry && o.geometry.type === 'box' && (o.geometry.w === 60 || o.geometry.d === 60) && o.geometry.h >= 2400; });
+eq(wallsH.length, 0, 'hidden: стен нет');
+win.w2dWallMode();
 
 console.log('Пройдено: ' + passed + ', провалено: ' + failed);
 process.exit(failed > 0 ? 1 : 0);

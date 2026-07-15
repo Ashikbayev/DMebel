@@ -1067,6 +1067,13 @@ function w2dClick(sid,evt){
 ============================================================ */
 let _viewMode='3d';
 let _facadeMode='ghost';
+let _wallMode='ghost'; // ghost | solid | hidden
+function w2dWallMode(){
+  _wallMode=(_wallMode==='ghost')?'solid':(_wallMode==='solid')?'hidden':'ghost';
+  const b=document.getElementById('w2d-btnwall');
+  if(b)b.textContent=(_wallMode==='ghost')?'🧱 Стены: прозр.':(_wallMode==='solid')?'🧱 Стены: сплошн.':'🧱 Стены: скрыты';
+  render3D();
+}
 let _room={enabled:false, len:3000, hei:2400, dep:600, offL:0, offR:0, offT:0,
   plankL:0, plankR:0, plankT:0}; // ghost | solid | hidden
 function w2dFacadeMode(){
@@ -1340,6 +1347,7 @@ function ensure2DUI(){
     sw.style.cssText='position:absolute;top:10px;left:10px;z-index:30;display:flex;gap:0;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.25)';
     sw.innerHTML='<button onclick="wizOpen()" style="padding:6px 13px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:#c39a3b;color:#1d2023">✨ Мастер</button>'+
       '<button id="w2d-btnfac" onclick="w2dFacadeMode()" style="padding:6px 11px;border:none;cursor:pointer;font-size:11px;background:#3a3f45;color:#c8cdd3">👁 Фасады: прозр.</button>'+
+      '<button id="w2d-btnwall" onclick="w2dWallMode()" style="padding:6px 11px;border:none;cursor:pointer;font-size:11px;background:#3a3f45;color:#c8cdd3">🧱 Стены: прозр.</button>'+
       '<button id="w2d-btn2d" onclick="w2dToggleMode(String.fromCharCode(50,100))" style="padding:6px 14px;border:none;cursor:pointer;font-size:12px;font-weight:600">2D</button>'+
       '<button id="w2d-btn3d" onclick="w2dToggleMode(String.fromCharCode(51,100))" style="padding:6px 14px;border:none;cursor:pointer;font-size:12px;font-weight:600">3D</button>';
     vp.appendChild(sw);
@@ -3106,19 +3114,24 @@ function render3D(){
     ox+=W;
   });
   // ── Комната (стены из мастера) ──
-  if(_room.enabled){
-    const RH=Math.max(_room.hei, 2400), RD=Math.max((_room.dep||600)+400, 1400);
-    const MW3=new THREE.MeshStandardMaterial({color:0xe9e5dd, roughness:0.95});
+  // Ось Z: 0 — лицо фасада, растёт ВГЛУБЬ. Задняя стена — за корпусом
+  // (z = глубина шкафа), боковые идут от фасада до задней стены.
+  if(_room.enabled && _wallMode!=='hidden'){
+    const RH=Math.max(_room.hei, 2400);
+    const zBack=sections.reduce((a,ss)=>Math.max(a,ss.depth||600),600);
+    const ghostW=(_wallMode==='ghost');
+    const MW3=new THREE.MeshStandardMaterial({color:0xe9e5dd, roughness:0.95,
+      transparent:ghostW, opacity:ghostW?0.3:1});
     const wallX0=-(_room.offL||0)-(_room.plankL||0), wallX1=ox+(_room.offR||0)+(_room.plankR||0);
     const mkWall=(x,y,z,w,h,d)=>{
       const wg=new THREE.BoxGeometry(w,h,d);
       const wm=new THREE.Mesh(wg,MW3);
       wm.position.set(x+w/2,y+h/2,z+d/2);
-      wm.receiveShadow=true; wm.userData={w:true}; scene.add(wm);
+      wm.receiveShadow=!ghostW; wm.userData={w:true}; scene.add(wm);
     };
-    mkWall(wallX0-60, 0, -80, 60, RH, RD+80);
-    mkWall(wallX1,   0, -80, 60, RH, RD+80);
-    mkWall(wallX0-60, 0, -80, wallX1-wallX0+120, RH, 60);
+    mkWall(wallX0-60, 0, 0, 60, RH, zBack+60);            // левая
+    mkWall(wallX1,    0, 0, 60, RH, zBack+60);            // правая
+    mkWall(wallX0-60, 0, zBack, wallX1-wallX0+120, RH, 60); // задняя — ЗА шкафом
   }
   // ── Фальш-планки по краям (детали, есть и в раскрое) ──
   if(_room.plankL>0||_room.plankR>0||_room.plankT>0){
@@ -4933,6 +4946,7 @@ window.wizOpen=wizOpen; window.wizClose=wizClose; window.wizStep=wizStep;
 window.wizSet=wizSet; window.wizPreset=wizPreset; window.wizBuild=wizBuild;
 window._ai_wiz=()=>_wiz;
 window.w2dFacadeMode=w2dFacadeMode; window._ai_facadeMode=()=>_facadeMode; window._ai_room=()=>_room;
+window.w2dWallMode=w2dWallMode; window._ai_wallMode=()=>_wallMode;
 window.w2dEditNiche=w2dEditNiche; window.w2dEditColW=w2dEditColW;
 window.w2dEditDrawers=w2dEditDrawers;
 window.toggleRod=toggleRod;
