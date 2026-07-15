@@ -1065,6 +1065,191 @@ function w2dClick(sid,evt){
 ============================================================ */
 let _viewMode='3d';
 let _w2dLayout=[];
+/* ============================================================
+   МАСТЕР БЫСТРОГО СТАРТА (4 шага): стена → двери (авто-разбивка
+   на секции) → наполнение (библиотека пресетов) → фасад → Построить.
+   Строит секции CRM поверх ядра и открывает 2D для доводки.
+============================================================ */
+let _wiz={step:1, len:3000, hei:2400, dep:600, offL:0, offR:0, offT:0,
+  doors:6, antr:false, antrH:400, presets:[], mat:'ldsp'};
+function wizW(){ return Math.max(300,(parseInt(_wiz.len)||0)-(parseInt(_wiz.offL)||0)-(parseInt(_wiz.offR)||0)); }
+function wizH(){ return Math.max(600,(parseInt(_wiz.hei)||0)-(parseInt(_wiz.offT)||0)); }
+// Раскладка дверей по модулям: по 2, нечётный остаток — одним модулем на 3
+function wizModules(){
+  const N=Math.max(1,parseInt(_wiz.doors)||1);
+  const per=[];
+  let rest=N;
+  while(rest>0){
+    if(rest===1){per.push(1);rest=0;}
+    else if(rest===3){per.push(3);rest=0;}
+    else {per.push(2);rest-=2;}
+  }
+  const W=wizW(), dw=W/N, out=[];
+  let used=0;
+  per.forEach((k,i)=>{
+    const w=(i===per.length-1)?(W-used):Math.round(dw*k);
+    out.push({doors:k, width:w});
+    used+=w;
+  });
+  return out;
+}
+function wizOpen(){
+  const vp=document.getElementById('viewport'); if(!vp)return;
+  let m=document.getElementById('w2dwiz');
+  if(!m){
+    m=document.createElement('div');
+    m.id='w2dwiz';
+    m.style.cssText='position:absolute;inset:0;z-index:40;display:none;background:rgba(20,22,25,0.66);overflow:auto;padding:26px;box-sizing:border-box';
+    vp.appendChild(m);
+  }
+  _wiz.step=1;
+  _wiz.doors=Math.max(1,Math.round(wizW()/500));
+  m.style.display='block';
+  wizRender();
+}
+function wizClose(){ const m=document.getElementById('w2dwiz'); if(m)m.style.display='none'; }
+function wizSet(f,v){
+  _wiz[f]=(f==='antr')?!!v:(f==='mat'?v:parseInt(v)||0);
+  if(f==='len'||f==='offL'||f==='offR')_wiz.doors=Math.max(1,Math.round(wizW()/500));
+  wizRender();
+}
+function wizStep(d){
+  _wiz.step=Math.max(1,Math.min(4,_wiz.step+d));
+  if(_wiz.step===3){
+    const M=wizModules().length;
+    while(_wiz.presets.length<M)_wiz.presets.push('empty');
+    _wiz.presets.length=M;
+  }
+  wizRender();
+}
+function wizPreset(i,p){ _wiz.presets[i]=p; wizRender(); }
+// Мини-превью пресета (46×70)
+function wizPrevSvg(p){
+  let inner='';
+  if(p==='shelves5'){ for(let i=1;i<=5;i++)inner+='<line x1="5" y1="'+(8+i*9)+'" x2="41" y2="'+(8+i*9)+'" stroke="#b08a52" stroke-width="2"/>'; }
+  else if(p==='rod'){ inner+='<line x1="7" y1="16" x2="39" y2="16" stroke="#7f858d" stroke-width="2.5"/><circle cx="7" cy="16" r="2" fill="#565c63"/><circle cx="39" cy="16" r="2" fill="#565c63"/>'; }
+  else if(p==='rod2shelf'){ inner+='<line x1="5" y1="14" x2="41" y2="14" stroke="#b08a52" stroke-width="2"/><line x1="7" y1="26" x2="39" y2="26" stroke="#7f858d" stroke-width="2.5"/>'; }
+  else if(p==='shDrawers'){ inner+='<line x1="5" y1="22" x2="41" y2="22" stroke="#b08a52" stroke-width="2"/><line x1="5" y1="40" x2="41" y2="40" stroke="#b08a52" stroke-width="2"/><rect x="6" y="43" width="34" height="11" fill="#eef1f5" stroke="#8ea2c0"/><rect x="6" y="55" width="34" height="11" fill="#eef1f5" stroke="#8ea2c0"/><line x1="17" y1="48" x2="29" y2="48" stroke="#7e8790" stroke-width="1.6"/><line x1="17" y1="60" x2="29" y2="60" stroke="#7e8790" stroke-width="1.6"/>'; }
+  return '<svg width="46" height="70" style="display:block"><rect x="1" y="1" width="44" height="68" fill="#fff" stroke="#3a3f45"/>'+inner+'</svg>';
+}
+function wizRender(){
+  const m=document.getElementById('w2dwiz'); if(!m)return;
+  const q=String.fromCharCode(39);
+  const W=wizW(), H=wizH();
+  const mods=wizModules();
+  const dw=Math.round(W/Math.max(1,parseInt(_wiz.doors)||1));
+  let dots='<div style="display:flex;gap:8px;align-items:center;margin:10px 0 18px 0">';
+  const names=['Стена и размеры','Двери и модули','Наполнение','Фасад'];
+  for(let i=1;i<=4;i++){
+    dots+='<div style="display:flex;align-items:center;gap:6px"><div style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;'+(i===_wiz.step?'background:#c39a3b;color:#1d2023':'background:#eceae4;color:#8a8f96')+'">'+i+'</div><span style="font-size:11px;color:'+(i===_wiz.step?'#1d2023':'#9aa1a8')+'">'+names[i-1]+'</span></div>';
+    if(i<4)dots+='<div style="flex:1;height:1px;background:#e2dfd7"></div>';
+  }
+  dots+='</div>';
+  const inp=(label,f,val,w)=>{
+    return '<div><div style="font-size:11px;color:#6a7076;margin-bottom:4px">'+label+'</div>'+
+      '<input type="number" value="'+val+'" style="width:'+(w||100)+'px;padding:8px;border:1px solid #d5d1c8;border-radius:8px;font-size:13px" onchange="wizSet('+q+f+q+',this.value)"></div>';
+  };
+  let body='';
+  if(_wiz.step===1){
+    body+='<div style="font-size:12.5px;color:#565c63;margin-bottom:12px">Размеры стены/проёма и отступы — ширина шкафа посчитается сама.</div>';
+    body+='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px">'+inp('Длина (ширина), мм','len',_wiz.len,120)+inp('Высота, мм','hei',_wiz.hei,110)+inp('Глубина, мм','dep',_wiz.dep,100)+'</div>';
+    body+='<div style="font-size:11.5px;color:#6a7076;margin:8px 0 6px 0;font-weight:600">Отступы от стен/потолка</div>';
+    body+='<div style="display:flex;gap:14px;flex-wrap:wrap">'+inp('Слева, мм','offL',_wiz.offL,90)+inp('Справа, мм','offR',_wiz.offR,90)+inp('Сверху, мм','offT',_wiz.offT,90)+'</div>';
+    body+='<div style="margin-top:14px;font-size:12.5px;color:#1d2023">Шкаф: <b style="font-family:ui-monospace,Consolas,monospace">'+W+' × '+H+' × '+(parseInt(_wiz.dep)||600)+'</b> мм</div>';
+  }
+  if(_wiz.step===2){
+    body+='<div style="font-size:12.5px;color:#565c63;margin-bottom:12px">Сколько дверей? Модули подберутся автоматически.</div>';
+    body+='<div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px">';
+    body+=inp('Сколько дверей · ширина ≈ '+dw+' мм','doors',_wiz.doors,110);
+    body+='<div><div style="font-size:11px;color:#6a7076;margin-bottom:4px">Антресоль</div>'+
+      '<label style="display:flex;align-items:center;gap:7px;font-size:12.5px;padding:8px 0"><input type="checkbox" '+(_wiz.antr?'checked':'')+' onchange="wizSet('+q+'antr'+q+',this.checked)"> есть, высота</label></div>';
+    body+=inp('мм','antrH',_wiz.antrH,80);
+    body+='</div>';
+    body+='<div style="font-size:11.5px;color:#6a7076;margin:10px 0 6px 0;font-weight:600">Модули: ширина × высота</div>';
+    body+='<div style="display:flex;gap:10px;flex-wrap:wrap">';
+    mods.forEach(md=>{
+      body+='<div style="border:1px solid #d5d1c8;border-radius:10px;padding:10px 14px;text-align:center;background:#fff">'+
+        '<div style="font-family:ui-monospace,Consolas,monospace;font-size:13px;font-weight:700">'+md.width+' × '+(H-(_wiz.antr?_wiz.antrH:0))+'</div>'+
+        '<div style="font-size:10.5px;color:#8a8f96">'+md.doors+' дв.</div></div>';
+    });
+    body+='</div>';
+    if(_wiz.antr)body+='<div style="margin-top:10px;font-size:11.5px;color:#6a7076">Высота шкафа: <b>'+H+'</b> мм (низ '+(H-_wiz.antrH)+' + антресоль '+_wiz.antrH+')</div>';
+  }
+  if(_wiz.step===3){
+    body+='<div style="font-size:12.5px;color:#565c63;margin-bottom:12px">Наполнение каждой секции — тап по картинке. Потом всё правится в 2D.</div>';
+    const PRE=[['empty','Пусто'],['shelves5','5 полок'],['rod','Штанга'],['rod2shelf','Штанга + полка'],['shDrawers','Полки + ящики']];
+    mods.forEach((md,i)=>{
+      body+='<div style="margin-bottom:12px"><div style="font-size:11.5px;font-weight:600;color:#1d2023;margin-bottom:6px">Секция '+(i+1)+' · '+md.width+' мм</div><div style="display:flex;gap:8px;flex-wrap:wrap">';
+      PRE.forEach(pp=>{
+        const act=(_wiz.presets[i]===pp[0]);
+        body+='<div onclick="wizPreset('+i+','+q+pp[0]+q+')" style="cursor:pointer;border:2px solid '+(act?'#c39a3b':'#e2dfd7')+';border-radius:9px;padding:6px;background:'+(act?'#faf3e2':'#fff')+';text-align:center">'+wizPrevSvg(pp[0])+'<div style="font-size:9.5px;color:'+(act?'#8a6a1e':'#6a7076')+';margin-top:3px;max-width:52px">'+pp[1]+'</div></div>';
+      });
+      body+='</div></div>';
+    });
+  }
+  if(_wiz.step===4){
+    body+='<div style="font-size:12.5px;color:#565c63;margin-bottom:12px">Материал фасадов. Зазоры и всё остальное — потом в 2D.</div>';
+    const MATS=[['ldsp','ЛДСП'],['mdfPlenka','МДФ Плёнка'],['mdfKraska','МДФ Краска'],['none','Без фасадов']];
+    body+='<div style="display:flex;gap:10px;flex-wrap:wrap">';
+    MATS.forEach(mm=>{
+      const act=(_wiz.mat===mm[0]);
+      body+='<div onclick="wizSet('+q+'mat'+q+','+q+mm[0]+q+')" style="cursor:pointer;border:2px solid '+(act?'#c39a3b':'#e2dfd7')+';border-radius:10px;padding:14px 18px;background:'+(act?'#faf3e2':'#fff')+';font-size:12.5px;font-weight:600;color:#1d2023">'+mm[1]+'</div>';
+    });
+    body+='</div>';
+    body+='<div style="margin-top:14px;font-size:12px;color:#6a7076">Итого: '+mods.length+' секц., '+_wiz.doors+' дв., '+W+'×'+H+' мм'+(_wiz.antr?', антресоль '+_wiz.antrH:'')+'</div>';
+  }
+  let btns='<div style="display:flex;gap:10px;margin-top:20px">';
+  if(_wiz.step>1)btns+='<button onclick="wizStep(-1)" style="padding:9px 18px;border:1px solid #d5d1c8;background:#fff;border-radius:9px;font-size:12.5px;cursor:pointer">Назад</button>';
+  btns+='<span style="flex:1"></span>';
+  if(_wiz.step<4)btns+='<button onclick="wizStep(1)" style="padding:9px 22px;border:none;background:#c39a3b;color:#1d2023;border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer">Далее</button>';
+  else btns+='<button onclick="wizBuild()" style="padding:9px 22px;border:none;background:#c39a3b;color:#1d2023;border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer">Построить →</button>';
+  btns+='</div>';
+  m.innerHTML='<div style="max-width:720px;margin:0 auto;background:#fbf9f4;border-radius:14px;padding:22px 26px;box-shadow:0 18px 50px rgba(0,0,0,.5)">'+
+    '<div style="display:flex;align-items:center"><div style="font-size:15px;font-weight:800;letter-spacing:1.5px;color:#b8963e">MEBELOFF</div><div style="font-size:13px;color:#565c63;margin-left:10px">· Мастер быстрого старта</div><span style="flex:1"></span><button onclick="wizClose()" style="border:none;background:none;font-size:20px;cursor:pointer;color:#8a8f96">×</button></div>'+
+    dots+body+btns+'</div>';
+}
+// Пресеты наполнения → модель секции
+function wizApplyPreset(s,p){
+  const h=s.height;
+  const even=n=>{
+    const step=Math.round((h-2*T)/(n+1));
+    for(let i=1;i<=n;i++)s.shelves.push({id:s.shelfId++, height:T+step*i, col:0});
+  };
+  if(p==='shelves5'){ even(5); }
+  else if(p==='rod'){ s.hasRod=true; s.rodHeight=Math.max(T*3, h-116); }
+  else if(p==='rod2shelf'){
+    const sh=Math.round((h-366)/10)*10;
+    s.shelves.push({id:s.shelfId++, height:sh, col:0});
+    s.hasRod=true; s.rodHeight=Math.max(T*3, sh-100);
+  }
+  else if(p==='shDrawers'){
+    even(2);
+    s.drawerBlocks.push({nicheIdx:0, count:2, brand:'En-7'});
+  }
+  s.shelves.sort((a,b)=>a.height-b.height);
+}
+function wizBuild(){
+  const hasContent=sections.some(x=>x.shelves.length||x.dividers.length||x.drawerBlocks.length||x.hasRod);
+  if(sections.length>1||hasContent){
+    if(!confirm('Мастер заменит текущие секции проекта. Продолжить?'))return;
+  }
+  const W=wizW(), H=wizH(), D=parseInt(_wiz.dep)||600;
+  const mods=wizModules();
+  const secH=H-(_wiz.antr?_wiz.antrH:0);
+  sections.length=0;
+  mods.forEach((md,i)=>{
+    const s=mkSection();
+    s.width=md.width; s.height=secH; s.depth=D;
+    s.facade.type=(_wiz.mat==='none')?'none':(md.doors===3?'doors3':md.doors===2?'doors2':'full');
+    if(_wiz.mat!=='none')s.facade.material=_wiz.mat;
+    if(_wiz.antr){ s.antresol.enabled=true; s.antresol.height=_wiz.antrH; }
+    wizApplyPreset(s,_wiz.presets[i]||'empty');
+    sections.push(s);
+  });
+  wizClose();
+  renderPanel(); render3D(); updateStats(); projMarkUnsaved();
+  _viewMode='2d'; ensure2DUI(); w2dSyncView();
+}
 function ensure2DUI(){
   const vp=document.getElementById('viewport'); if(!vp)return;
   if(!document.getElementById('w2d-switch')){
@@ -1072,7 +1257,8 @@ function ensure2DUI(){
     const sw=document.createElement('div');
     sw.id='w2d-switch';
     sw.style.cssText='position:absolute;top:10px;left:10px;z-index:30;display:flex;gap:0;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.25)';
-    sw.innerHTML='<button id="w2d-btn2d" onclick="w2dToggleMode(String.fromCharCode(50,100))" style="padding:6px 14px;border:none;cursor:pointer;font-size:12px;font-weight:600">2D</button>'+
+    sw.innerHTML='<button onclick="wizOpen()" style="padding:6px 13px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:#c39a3b;color:#1d2023">✨ Мастер</button>'+
+      '<button id="w2d-btn2d" onclick="w2dToggleMode(String.fromCharCode(50,100))" style="padding:6px 14px;border:none;cursor:pointer;font-size:12px;font-weight:600">2D</button>'+
       '<button id="w2d-btn3d" onclick="w2dToggleMode(String.fromCharCode(51,100))" style="padding:6px 14px;border:none;cursor:pointer;font-size:12px;font-weight:600">3D</button>';
     vp.appendChild(sw);
     const ov=document.createElement('div');
@@ -4560,6 +4746,9 @@ window.w2dToggleMode=w2dToggleMode; window.w2dSetTool2=w2dSetTool2;
 window.w2dFullClick=w2dFullClick; window.w2dEditDim=w2dEditDim; window.w2dEditShelf=w2dEditShelf;
 window._ai_w2dLayout=()=>_w2dLayout;
 window.w2dFullHover=w2dFullHover; window.w2dHlHide=w2dHlHide;
+window.wizOpen=wizOpen; window.wizClose=wizClose; window.wizStep=wizStep;
+window.wizSet=wizSet; window.wizPreset=wizPreset; window.wizBuild=wizBuild;
+window._ai_wiz=()=>_wiz;
 window.w2dEditNiche=w2dEditNiche; window.w2dEditColW=w2dEditColW;
 window.w2dEditDrawers=w2dEditDrawers;
 window.toggleRod=toggleRod;
