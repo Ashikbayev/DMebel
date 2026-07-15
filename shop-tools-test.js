@@ -19,7 +19,7 @@ win.__THREE__ = mkStub();
 win.eval(fs.readFileSync('wardrobe-core.js', 'utf8'));
 var src = fs.readFileSync('wardrobe.js', 'utf8');
 src = src.replace("import * as THREE from 'three';", 'const THREE = window.__THREE__;');
-src += '\nrenderer={};camera={};scene={children:[],add:function(){},remove:function(){}};ML={};ML2={};MH={};MR={};MFL={};MFM={};ME={};window._ai_renderPanel=renderPanel;window._ai_cutAllParts=cutAllParts;window._ai_validationHtml=validationHtml;window._ai_hardwareHtml=hardwareHtml;\n';
+src += '\nrenderer={};camera={};scene={children:[],add:function(){},remove:function(){}};ML={};ML2={};MH={};MR={};MFL={};MFM={};ME={};window._ai_renderPanel=renderPanel;window._ai_cutAllParts=cutAllParts;window._ai_validationHtml=validationHtml;window._ai_hardwareHtml=hardwareHtml;window._ai_calcAll=calcAllCosts;\n';
 win.eval(src);
 
 console.log('── Кромка по сторонам в edgeRows (для бирок/CSV) ──');
@@ -107,9 +107,9 @@ var leg = rows.find(function (r) { return r.name.indexOf('Ножка') >= 0; });
 eq(leg.qty, 4, 'ножки: 4 на секцию');
 var rod = rows.find(function (r) { return r.name.indexOf('Штанга') >= 0; });
 eq(rod.qty, 1, 'штанга: 1');
-ok(rows.every(function (r) { return r.sum === r.qty * r.price; }), 'сумма = кол-во × цена во всех строках');
+ok(rows.every(function (r) { return r.price === undefined && r.sum === undefined; }), 'в ведомости НЕТ цен — только количества');
 var hh = win._ai_hardwareHtml();
-ok(hh.indexOf('Итого фурнитуры') >= 0, 'HTML: строка итога');
+ok(hh.indexOf('₸') < 0, 'HTML ведомости: ни одного тенге');
 ok(hh.indexOf('exportHardwareCsv') >= 0, 'HTML: кнопка выгрузки CSV');
 
 console.log('── Экспорт CSV ──');
@@ -153,6 +153,94 @@ ok(html.indexOf('Открывание') >= 0, 'селект «Открывани
 ok(html.indexOf('value="auto" selected') >= 0, 'auto выбран по умолчанию');
 win.updFacade(s8.id, 'opening', 'left');
 eq(s8.facade.opening, 'left', 'updFacade пишет opening');
+
+console.log('── Фрезеровка: только м², без цен ──');
+var sf = win._ai_mkSection();
+sf.width = 800; sf.height = 2000; sf.depth = 600;
+sf.facade.type = 'doors2';
+sf.facade.material = 'mdfKraska';
+sf.facade.frez = 'venecia';
+win._ai_sections = [sf];
+var cv = win._ai_calcAll();
+eq(cv.frezM2ByType.length, 1, 'Венеция: одна строка м² по рисунку');
+eq(cv.frezM2ByType[0].name, 'Венеция', 'название рисунка');
+ok(cv.frezM2 > 0, 'м² фрезеровки посчитан (' + cv.frezM2.toFixed(2) + ')');
+ok(cv.frezM2ByType[0].cost === undefined && cv.frezCost === undefined, 'цены фрезеровки НЕТ');
+
+// ЛДСП не фрезеруется
+sf.facade.material = 'ldsp';
+var cl = win._ai_calcAll();
+eq(cl.frezM2, 0, 'ЛДСП + Венеция: фрезеровка не считается');
+
+console.log('── Денег в конфигураторе нет вообще ──');
+var money = ['total','matTotal','workTotal','ldspCost','hdfCost','edgeCost','hingeCost',
+  'handleCost','slideCost','mdfCost','facLdspCost','rodCost','legCost','frezCost',
+  'hardwareCost','ldspPricePerSheet','hdfPricePerSheet','rodPrice','legPrice'];
+var leaked = money.filter(function (k) { return cl[k] !== undefined; });
+eq(leaked.length, 0, 'calcAllCosts не отдаёт денежных полей' + (leaked.length ? ': ' + leaked.join(', ') : ''));
+eq(typeof win.confShowKP, 'undefined', 'КП из конфигуратора удалён');
+eq(typeof win.prices, 'undefined', 'объекта prices больше нет');
+
+console.log('── Провод в калькулятор цел (main.js читает это) ──');
+var s9 = win._ai_mkSection();
+s9.width = 800; s9.height = 2000; s9.depth = 600;
+s9.facade.type = 'doors2'; s9.hasRod = true;
+s9.shelves.push({ id: s9.shelfId++, height: 800, col: 0 });
+s9.drawerBlocks.push({ nicheIdx: 0, count: 2, brand: 'En-7' });
+win._ai_sections = [s9];
+var dd = win._ai_calcAll();
+['ldspEquiv','hdfEquiv','totalPm2','totalPm04','totalHinges','totalHandles',
+ 'totalRods','totalLegs','slideDetails','facadeVariants'].forEach(function (k) {
+  ok(dd[k] !== undefined, 'поле для калькулятора на месте: d.' + k);
+});
+ok(dd.facadeVariants.ldsp.equiv !== undefined, 'facadeVariants.ldsp.equiv (листы) на месте');
+ok(dd.facadeVariants.mdfPlenka.m2 !== undefined, 'facadeVariants.mdfPlenka.m2 на месте');
+ok(dd.slideDetails.every(function (sl) { return sl.count > 0; }), 'slideDetails[].count — ящики для телескопов');
+eq(dd.totalRods, 1, 'штанга штучно, не в метраже');
+eq(dd.totalLegs, 4, 'ножки штучно');
+ok(win._getMatChoice && win._getMatChoice() !== undefined, 'мост _getMatChoice (названия декоров) цел');
+
+console.log('── Кромка планок ──');
+win.wizOpen();
+win.wizSet('len', '3000'); win.wizSet('hei', '2600');
+win.wizSet('offL', '30'); win.wizSet('offR', '30');
+win.wizSet('plankL', '80'); win.wizSet('plankR', '80'); win.wizSet('plankT', '60');
+win.wizSet('doors', '4');
+win.wizStep(1); win.wizStep(1); win.wizStep(1);
+win.confirm = function () { return true; };
+win.wizBuild();
+
+var rp = win._calcParts();
+var planks = rp.ldsp.filter(function (p) { return p.name.indexOf('Планка') >= 0; });
+eq(planks.length, 3, '3 планки в раскрое');
+ok(planks.every(function (p) { return p.edgeFront === '2mm'; }), 'планки помечены лицевой кромкой');
+
+var peL = rp.edgeRows.find(function (r) { return r.name === 'Планка лев'; });
+ok(!!peL, 'планка лев: кромка теперь считается (было пропущено)');
+eq(peL.sides.r, '2mm', 'планка лев: внутренний (правый) торец в кромке');
+eq(peL.sides.l, 'none', 'планка лев: наружный торец к стене — без кромки');
+eq(peL.sides.t, '2mm', 'планка лев: верх в кромке');
+// пм: верх 80 + низ 80 + правый 2600 = 2760 мм
+ok(Math.abs(peL.pm2 - 2.76) < 0.001, 'планка лев: 2.76 пм (80+80+2600), получено ' + peL.pm2.toFixed(3));
+
+var peR = rp.edgeRows.find(function (r) { return r.name === 'Планка прав'; });
+eq(peR.sides.l, '2mm', 'планка прав: внутренний (левый) торец в кромке');
+eq(peR.sides.r, 'none', 'планка прав: наружный торец — без кромки');
+
+var peT = rp.edgeRows.find(function (r) { return r.name === 'Планка верх'; });
+eq(peT.sides.t, '2mm', 'планка верх: верхний торец в кромке');
+eq(peT.sides.l, 'none', 'планка верх: торцы к стенам — без кромки');
+// пм: верх 2940 + низ 2940 = 5880
+ok(Math.abs(peT.pm2 - 5.88) < 0.001, 'планка верх: 5.88 пм, получено ' + peT.pm2.toFixed(3));
+
+// планки теперь влияют на итог кромки
+var pmPlanks = peL.pm2 + peR.pm2 + peT.pm2;
+ok(pmPlanks > 11, 'планки добавили ' + pmPlanks.toFixed(2) + ' пм кромки (раньше терялись)');
+ok(rp.totalPm2 > pmPlanks, 'пм планок вошли в общий итог totalPm2');
+
+// бирки и CSV теперь знают про планки
+var dp = win._ai_cutAllParts();
+ok(dp.parts.some(function (p) { return p.name === 'Планка верх'; }), 'планка попала в бирки/CSV');
 
 console.log('');
 console.log('Пройдено: ' + passed + ', провалено: ' + failed);
