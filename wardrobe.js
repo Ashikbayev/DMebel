@@ -4095,8 +4095,11 @@ function moduleSvg(s, parts, W, H){
     if(!p.box) return;
     if(p.material==='metal') return;
     const x0=p.box.cx-p.box.dx/2, y0=p.box.cy-p.box.dy/2;
-    const fill=(p.kind==='facade'||p.kind==='dfacade')?'#f2ede1'
-      :(p.kind==='back')?'#faf8f4':'#ffffff';
+    const KF={facade:'#f2ede1',dfacade:'#f2ede1',back:'#faf8f4',
+      side:'#ddd8cb',top:'#ddd8cb',bottom:'#ddd8cb',vert:'#ddd8cb',
+      shelf:'#e9e5da',dside:'#f0ece2',dfront:'#f0ece2',dback:'#f0ece2',
+      dbottom:'#faf8f4',dpost:'#ddd8cb',drail:'#e9e5da'};
+    const fill=KF[p.kind]||'#ffffff';
     g+='<rect x="'+X(x0).toFixed(1)+'" y="'+Y(y0+p.box.dy).toFixed(1)
       +'" width="'+(p.box.dx*sc).toFixed(1)+'" height="'+(p.box.dy*sc).toFixed(1)
       +'" fill="'+fill+'" stroke="#1d2023" stroke-width="0.7"/>';
@@ -4134,11 +4137,15 @@ function moduleSvg(s, parts, W, H){
       +'<circle cx="'+m.lx.toFixed(1)+'" cy="'+m.ly.toFixed(1)+'" r="'+R+'" fill="#fff" stroke="#1d2023" stroke-width="0.7"/>'
       +'<text x="'+m.lx.toFixed(1)+'" y="'+(m.ly+3).toFixed(1)+'" font-size="9" text-anchor="middle" fill="#1d2023">'+m.pos+'</text>';
   });
-  // размерные линии
+  // размерные линии с засечками
   const bY=Y(0)+18, lX=X(0)-18;
+  function tickH(x){ return '<line x1="'+x+'" y1="'+(bY-4)+'" x2="'+x+'" y2="'+(bY+4)+'" stroke="#1d2023" stroke-width="0.6"/>'; }
+  function tickV(y){ return '<line x1="'+(lX-4)+'" y1="'+y+'" x2="'+(lX+4)+'" y2="'+y+'" stroke="#1d2023" stroke-width="0.6"/>'; }
   g+='<line x1="'+X(0)+'" y1="'+bY+'" x2="'+X(W)+'" y2="'+bY+'" stroke="#1d2023" stroke-width="0.5"/>'
+    +tickH(X(0))+tickH(X(W))
     +'<text x="'+((X(0)+X(W))/2).toFixed(1)+'" y="'+(bY+12)+'" font-size="10" text-anchor="middle" fill="#1d2023">'+W+'</text>';
   g+='<line x1="'+lX+'" y1="'+Y(0)+'" x2="'+lX+'" y2="'+Y(H)+'" stroke="#1d2023" stroke-width="0.5"/>'
+    +tickV(Y(0))+tickV(Y(H))
     +'<text x="'+(lX-6)+'" y="'+((Y(0)+Y(H))/2).toFixed(1)+'" font-size="10" text-anchor="middle" fill="#1d2023" transform="rotate(-90 '+(lX-6)+' '+((Y(0)+Y(H))/2).toFixed(1)+')">'+H+'</text>';
   return '<svg viewBox="0 0 '+VW+' '+VH+'" width="100%" xmlns="http://www.w3.org/2000/svg">'+g+'</svg>';
 }
@@ -4173,6 +4180,13 @@ function moduleHardware(s){
     add('Направляющая'+(sl?' '+sl.brand+' '+sl.length+'мм':''), drawers, 'компл');
   }
   add('Штанга', s.hasRod?1:0, 'шт');
+  add('Штангодержатель', s.hasRod?2:0, 'шт');
+  // крепёж: крыша+дно по 4, каждая полка/перегородка 4, ящик 8
+  let antrSh=0, antrTB=0;
+  if(s.antresol&&s.antresol.enabled){ antrSh=(s.antresol.shelves||[]).length; antrTB=2; }
+  const conf=(s.shelves.length+s.dividers.length+2+antrSh+antrTB)*4 + drawers*8;
+  add('Конфирмат 7×50', conf, 'шт');
+  add('Заглушка конфирмата', conf, 'шт');
   add('Ножка регулируемая', 4, 'шт');
   return rows;
 }
@@ -4205,20 +4219,173 @@ function drawStamp(meta, title, sub, gab){
     +'</div>';
 }
 
+// Створки секции и антресоли как псевдо-детали для чертежа.
+// Размеры — точные из calcParts (та же формула, что в раскрое),
+// позиции — равномерная раскладка по ширине.
+function sectionFacadeSynth(s, idx){
+  let r=null;
+  try{ r=calcParts(); }catch(e){ return []; }
+  const pref='С'+(idx+1)+' Фасад';
+  const prefA='С'+(idx+1)+'А Фасад';
+  const pool=r.facLdsp.concat(r.facMdfPlenka||[], r.facMdfKraska||[]);
+  const main=pool.filter(function(p){ return p.name.indexOf(pref)===0; });
+  const antr=pool.filter(function(p){ return p.name.indexOf(prefA)===0; });
+  const out=[];
+  function lay(list, yBase, zoneH){
+    const n=list.length;
+    if(!n) return;
+    const cw=s.width/n;
+    list.forEach(function(p,j){
+      out.push({kind:'facade', cutL:p.h, cutW:p.w, material:'facade',
+        box:{cx:j*cw+cw/2, cy:yBase+zoneH/2, dx:p.w, dy:p.h, cz:8, dz:16}});
+    });
+  }
+  if(main.length) lay(main, (s.height-main[0].h)/2, main[0].h);
+  if(antr.length&&s.antresol&&s.antresol.enabled)
+    lay(antr, s.height+(s.antresol.height-antr[0].h)/2, antr[0].h);
+  return out;
+}
+
+// Антресоль как отдельный корпус над секцией (для чертежа и изометрии)
+function antresolParts(s){
+  if(!s.antresol||!s.antresol.enabled||!window.WardrobeCore) return [];
+  const nA=(s.antresol.shelves||[]).length;
+  const cfgA={width:s.width, height:s.antresol.height, depth:s.depth, legs:0,
+    panel:T, back:3, edge:1, gapFront:T, gapBack:3};
+  if(nA>0) cfgA.sections={type:'shelves', count:nA};
+  let rA=null;
+  try{ rA=window.WardrobeCore.buildCarcass(cfgA); }catch(e){ return []; }
+  return rA.parts.map(function(p){
+    const q=Object.assign({}, p);
+    if(q.box){ q.box=Object.assign({}, q.box); q.box.cy+=s.height; }
+    return q;
+  });
+}
+
+// Все коробки шкафа в мировых координатах для изометрии
+function isoBoxes(){
+  const boxes=[];
+  let offX=0;
+  sections.forEach(function(s, si){
+    let res=null;
+    try{ res=window.WardrobeCore.buildCarcass(coreCfgFor(s)); }catch(e){}
+    if(res){
+      res.parts.forEach(function(p){
+        if(!p.box||p.material==='metal') return;
+        boxes.push({x0:offX+p.box.cx-p.box.dx/2, x1:offX+p.box.cx+p.box.dx/2,
+          y0:p.box.cy-p.box.dy/2, y1:p.box.cy+p.box.dy/2,
+          z0:p.box.cz-p.box.dz/2, z1:p.box.cz+p.box.dz/2, kind:p.kind});
+      });
+    }
+    antresolParts(s).concat(sectionFacadeSynth(s, si)).forEach(function(p){
+      if(!p.box||p.material==='metal') return;
+      boxes.push({x0:offX+p.box.cx-p.box.dx/2, x1:offX+p.box.cx+p.box.dx/2,
+        y0:p.box.cy-p.box.dy/2, y1:p.box.cy+p.box.dy/2,
+        z0:p.box.cz-p.box.dz/2, z1:p.box.cz+p.box.dz/2, kind:p.kind});
+    });
+    offX+=s.width;
+  });
+  return boxes;
+}
+
+// Изометрия всего шкафа (косоугольная, глубина вверх-вправо)
+function coverSvg(){
+  const boxes=isoBoxes();
+  if(!boxes.length) return '<div class="empty">Нет данных</div>';
+  const KX=0.45, KY=0.28;
+  function PX(x,z){ return x+z*KX; }
+  function PY(y,z){ return -y-z*KY; }
+  let mnX=1e12,mxX=-1e12,mnY=1e12,mxY=-1e12;
+  boxes.forEach(function(b){
+    const zz=[b.z0,b.z1];
+    zz.forEach(function(z){
+      const xa=PX(b.x0,z), xb=PX(b.x1,z);
+      if(xa<mnX)mnX=xa; if(xb>mxX)mxX=xb;
+      const ya=PY(b.y0,z), yb=PY(b.y1,z);
+      if(yb<mnY)mnY=yb; if(ya>mxY)mxY=ya;
+    });
+  });
+  const VW=660, VH=540, PAD=58;
+  const sc=Math.min((VW-PAD*2)/(mxX-mnX), (VH-PAD*2-40)/(mxY-mnY));
+  function MX(x,z){ return PAD+(PX(x,z)-mnX)*sc; }
+  function MY(y,z){ return PAD+(PY(y,z)-mnY)*sc; }
+  function poly(pts,fill,op){
+    let d='';
+    pts.forEach(function(p,i){ d+=(i?' ':'')+p[0].toFixed(1)+','+p[1].toFixed(1); });
+    return '<polygon points="'+d+'" fill="'+fill+'" fill-opacity="'+op+'" stroke="#1d2023" stroke-width="0.45"/>';
+  }
+  boxes.sort(function(a,b){ return (b.z0-a.z0)||(a.x0-b.x0)||(a.y0-b.y0); });
+  let g='';
+  boxes.forEach(function(b){
+    const fac=(b.kind==='facade'||b.kind==='dfacade');
+    const op=fac?0.35:1;
+    g+=poly([[MX(b.x1,b.z0),MY(b.y0,b.z0)],[MX(b.x1,b.z0),MY(b.y1,b.z0)],[MX(b.x1,b.z1),MY(b.y1,b.z1)],[MX(b.x1,b.z1),MY(b.y0,b.z1)]], fac?'#e3d9c2':'#d6d0c2', op);
+    g+=poly([[MX(b.x0,b.z0),MY(b.y1,b.z0)],[MX(b.x1,b.z0),MY(b.y1,b.z0)],[MX(b.x1,b.z1),MY(b.y1,b.z1)],[MX(b.x0,b.z1),MY(b.y1,b.z1)]], fac?'#f4ecd9':'#f5f1e8', op);
+    g+=poly([[MX(b.x0,b.z0),MY(b.y0,b.z0)],[MX(b.x1,b.z0),MY(b.y0,b.z0)],[MX(b.x1,b.z0),MY(b.y1,b.z0)],[MX(b.x0,b.z0),MY(b.y1,b.z0)]], fac?'#efe7d2':'#efe9dd', op);
+  });
+  // ширины модулей + общая под изометрией
+  const bx=[0]; let acc=0;
+  sections.forEach(function(s){ acc+=s.width; bx.push(acc); });
+  const dy=MY(0,0)+18;
+  g+='<line x1="'+MX(0,0).toFixed(1)+'" y1="'+dy.toFixed(1)+'" x2="'+MX(acc,0).toFixed(1)+'" y2="'+dy.toFixed(1)+'" stroke="#1d2023" stroke-width="0.5"/>';
+  bx.forEach(function(x){
+    g+='<line x1="'+MX(x,0).toFixed(1)+'" y1="'+(dy-4).toFixed(1)+'" x2="'+MX(x,0).toFixed(1)+'" y2="'+(dy+4).toFixed(1)+'" stroke="#1d2023" stroke-width="0.6"/>';
+  });
+  sections.forEach(function(s,i){
+    const cx=(MX(bx[i],0)+MX(bx[i+1],0))/2;
+    g+='<text x="'+cx.toFixed(1)+'" y="'+(dy+11).toFixed(1)+'" font-size="8.5" text-anchor="middle" fill="#565c63">'+s.width+'</text>';
+  });
+  g+='<text x="'+((MX(0,0)+MX(acc,0))/2).toFixed(1)+'" y="'+(dy+24).toFixed(1)+'" font-size="10.5" font-weight="700" text-anchor="middle" fill="#1d2023">'+acc+'</text>';
+  // высота слева
+  const hMax=sections.reduce(function(a,s){ return Math.max(a, s.height+((s.antresol&&s.antresol.enabled)?s.antresol.height:0)); },0);
+  const lx=MX(0,0)-16;
+  g+='<line x1="'+lx.toFixed(1)+'" y1="'+MY(0,0).toFixed(1)+'" x2="'+lx.toFixed(1)+'" y2="'+MY(hMax,0).toFixed(1)+'" stroke="#1d2023" stroke-width="0.5"/>'
+    +'<line x1="'+(lx-4).toFixed(1)+'" y1="'+MY(0,0).toFixed(1)+'" x2="'+(lx+4).toFixed(1)+'" y2="'+MY(0,0).toFixed(1)+'" stroke="#1d2023" stroke-width="0.6"/>'
+    +'<line x1="'+(lx-4).toFixed(1)+'" y1="'+MY(hMax,0).toFixed(1)+'" x2="'+(lx+4).toFixed(1)+'" y2="'+MY(hMax,0).toFixed(1)+'" stroke="#1d2023" stroke-width="0.6"/>'
+    +'<text x="'+(lx-6).toFixed(1)+'" y="'+((MY(0,0)+MY(hMax,0))/2).toFixed(1)+'" font-size="10" text-anchor="middle" fill="#1d2023" transform="rotate(-90 '+(lx-6).toFixed(1)+' '+((MY(0,0)+MY(hMax,0))/2).toFixed(1)+')">'+hMax+'</text>';
+  return '<svg viewBox="0 0 '+VW+' '+VH+'" width="100%" xmlns="http://www.w3.org/2000/svg">'+g+'</svg>';
+}
+
+function fillSummary(s){
+  const items=[];
+  if(s.shelves.length) items.push('полок '+s.shelves.length);
+  const dr=(s.drawerBlocks||[]).reduce(function(a,db){ return a+db.count; },0);
+  if(dr) items.push('ящиков '+dr);
+  if(s.hasRod) items.push('штанга');
+  if(s.facade.type!=='none') items.push('дверей '+(s.facade.type==='doors3'?3:s.facade.type==='doors2'?2:1));
+  if(s.antresol&&s.antresol.enabled) items.push('антресоль '+s.antresol.height);
+  return items.join(' · ')||'—';
+}
+
 function showAssemblyDrawing(){
   if(!sections.length){ alert('Нет секций'); return; }
   if(!window.WardrobeCore){ alert('Ядро не загружено'); return; }
   const meta=drawMeta();
   let pages='';
-  let pageNo=0;
-  const total=sections.length*2;
+  let pageNo=1;
+  const total=sections.length*2+1;
+  // ── Лист 1: общий вид ──
+  const covW=sections.reduce(function(a,s){ return a+s.width; },0);
+  const covH=sections.reduce(function(a,s){ return Math.max(a, s.height+((s.antresol&&s.antresol.enabled)?s.antresol.height:0)); },0);
+  const covD=sections.reduce(function(a,s){ return Math.max(a, s.depth); },0);
+  const modRows=sections.map(function(s,i){ return [i+1, s.width+'×'+s.height+'×'+s.depth, fillSummary(s)]; });
+  const modTbl=drawTable(['№','Габариты (Ш×В×Г)','Наполнение'], modRows);
+  pages+='<div class="page">'
+    +drawStamp(meta,'Общий вид','Модулей: '+sections.length, covW+'×'+covH+'×'+covD)
+    +'<div class="body"><div class="col-svg" style="flex:1.8">'+coverSvg()+'</div>'
+    +'<div class="col-tbl"><div class="tbl-h">Состав изделия</div>'+modTbl
+    +'<div class="note">Глубина макс.: '+covD+' мм<br>Листов в комплекте: '+total+'</div></div></div>'
+    +'<div class="foot">Лист 1 / '+total+'</div></div>';
 
   sections.forEach(function(s,i){
     const res=window.WardrobeCore.buildCarcass(coreCfgFor(s));
-    const all=res.parts;
+    const antrH=(s.antresol&&s.antresol.enabled)?s.antresol.height:0;
+    const fullH=s.height+antrH;
+    const all=res.parts.concat(antresolParts(s));
     const carcass=all.filter(function(p){ return p.kind!=='facade'&&p.kind!=='dfacade'&&p.material!=='metal'; });
-    const facades=all.filter(function(p){ return p.kind==='facade'||p.kind==='dfacade'; });
-    const gab=s.width+'×'+s.height+'×'+s.depth;
+    const facades=all.filter(function(p){ return p.kind==='facade'||p.kind==='dfacade'; })
+      .concat(sectionFacadeSynth(s,i));
+    const gab=s.width+'×'+fullH+'×'+s.depth;
 
     // ── Лист 1: сборка ──
     pageNo++;
@@ -4230,7 +4397,7 @@ function showAssemblyDrawing(){
       hw.map(function(r){ return [r.n, r.q, r.u]; }));
     pages+='<div class="page">'
       +drawStamp(meta,'Сборочный чертёж','Модуль №'+(i+1),gab)
-      +'<div class="body"><div class="col-svg">'+moduleSvg(s,carcass,s.width,s.height)+'</div>'
+      +'<div class="body"><div class="col-svg">'+moduleSvg(s,carcass,s.width,fullH)+'</div>'
       +'<div class="col-tbl"><div class="tbl-h">Деталировка</div>'+detail
       +'<div class="tbl-h">Фурнитура</div>'+hwTbl+'</div></div>'
       +'<div class="foot">Лист '+pageNo+' / '+total+'</div></div>';
@@ -4245,7 +4412,7 @@ function showAssemblyDrawing(){
       const fm=normFacadeMat(s.facade.material);
       const fmRu=(fm==='mdfKraska')?'МДФ Краска':(fm==='mdfPlenka')?'МДФ Плёнка':'ЛДСП';
       const frz=FREZ_LIST.find(function(x){ return x.id===(s.facade.frez||'modern'); });
-      fBody='<div class="col-svg">'+moduleSvg(s,facades,s.width,s.height)+'</div>'
+      fBody='<div class="col-svg">'+moduleSvg(s,facades,s.width,fullH)+'</div>'
         +'<div class="col-tbl"><div class="tbl-h">Фасады</div>'+fTbl
         +'<div class="note">Материал: '+fmRu+'<br>Фрезеровка: '+(frz?frz.name:'—')
         +'<br>Открывание: '+((s.facade.opening==='left')?'петли слева':(s.facade.opening==='right')?'петли справа':'зеркально')+'</div></div>';
@@ -4292,6 +4459,7 @@ window.showAssemblyDrawing=showAssemblyDrawing;
 window._ai_moduleHardware=moduleHardware;
 window._ai_posTableFor=posTableFor;
 window._ai_coreCfgFor=coreCfgFor;
+window._ai_sectionFacadeSynth=sectionFacadeSynth;
 
 // Фрезеровка — только МДФ, только м² по рисунку.
 // Цены здесь нет и быть не должно: деньги считает калькулятор.
