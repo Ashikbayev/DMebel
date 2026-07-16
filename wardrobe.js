@@ -4151,6 +4151,99 @@ function moduleSvg(s, parts, W, H){
 }
 
 // Фурнитура конкретного модуля
+// 3D-вид модуля с выносками — как в производственном ПО:
+// каркасный косоугольный вид, подписи [поз] Имя Ш×В×Т - N шт
+// по бокам, просветы ниш внутри.
+function module3dSvg(s, parts, rows){
+  const KX=0.45, KY=0.28;
+  function PX(x,z){ return x+z*KX; }
+  function PY(y,z){ return -y-z*KY; }
+  const boxes=[];
+  parts.forEach(function(p){
+    if(!p.box||p.material==='metal') return;
+    boxes.push({x0:p.box.cx-p.box.dx/2, x1:p.box.cx+p.box.dx/2,
+      y0:p.box.cy-p.box.dy/2, y1:p.box.cy+p.box.dy/2,
+      z0:p.box.cz-p.box.dz/2, z1:p.box.cz+p.box.dz/2});
+  });
+  if(!boxes.length) return '<div class="empty">Нет деталей</div>';
+  let mnX=1e12,mxX=-1e12,mnY=1e12,mxY=-1e12;
+  boxes.forEach(function(b){
+    const zz=[b.z0,b.z1];
+    zz.forEach(function(z){
+      const xa=PX(b.x0,z), xb=PX(b.x1,z);
+      if(xa<mnX)mnX=xa; if(xb>mxX)mxX=xb;
+      const ya=PY(b.y0,z), yb=PY(b.y1,z);
+      if(yb<mnY)mnY=yb; if(ya>mxY)mxY=ya;
+    });
+  });
+  const VW=780, VH=584, PADL=225, PADR=225, PADT=26, PADB=26;
+  const sc=Math.min((VW-PADL-PADR)/(mxX-mnX), (VH-PADT-PADB)/(mxY-mnY));
+  function MX(x,z){ return PADL+(PX(x,z)-mnX)*sc; }
+  function MY(y,z){ return PADT+(PY(y,z)-mnY)*sc; }
+  function poly(pts){
+    let d='';
+    pts.forEach(function(p,i){ d+=(i?' ':'')+p[0].toFixed(1)+','+p[1].toFixed(1); });
+    return '<polygon points="'+d+'" fill="#ffffff" fill-opacity="0.72" stroke="#3a3d40" stroke-width="0.55"/>';
+  }
+  boxes.sort(function(a,b){ return (b.z0-a.z0)||(a.x0-b.x0)||(a.y0-b.y0); });
+  let g='';
+  boxes.forEach(function(b){
+    g+=poly([[MX(b.x1,b.z0),MY(b.y0,b.z0)],[MX(b.x1,b.z0),MY(b.y1,b.z0)],[MX(b.x1,b.z1),MY(b.y1,b.z1)],[MX(b.x1,b.z1),MY(b.y0,b.z1)]]);
+    g+=poly([[MX(b.x0,b.z0),MY(b.y1,b.z0)],[MX(b.x1,b.z0),MY(b.y1,b.z0)],[MX(b.x1,b.z1),MY(b.y1,b.z1)],[MX(b.x0,b.z1),MY(b.y1,b.z1)]]);
+    g+=poly([[MX(b.x0,b.z0),MY(b.y0,b.z0)],[MX(b.x1,b.z0),MY(b.y0,b.z0)],[MX(b.x1,b.z0),MY(b.y1,b.z0)],[MX(b.x0,b.z0),MY(b.y1,b.z0)]]);
+  });
+  // просветы ниш по колонкам (как "361 mm" в ПО)
+  const cols=getColumns(s);
+  cols.forEach(function(c,ci){
+    const hs=s.shelves.filter(function(sh){ return (sh.col||0)===ci; })
+      .map(function(sh){ return sh.height; }).sort(function(a,b){ return a-b; });
+    if(!hs.length) return;
+    const stops=[T].concat(hs).concat([s.height-T]);
+    const cx=(c.left+c.right)/2;
+    for(let k=0;k+1<stops.length;k++){
+      const niche=Math.round(stops[k+1]-stops[k]-T);
+      if(niche<=40) continue;
+      const my=(stops[k]+stops[k+1])/2;
+      g+='<text x="'+MX(cx,0).toFixed(1)+'" y="'+MY(my,0).toFixed(1)
+        +'" font-size="8.5" text-anchor="middle" fill="#565c63">'+niche+' мм</text>';
+    }
+  });
+  // выноски: [поз] Имя / Ш×В×Т - N шт, две колонки
+  const marks=rows.map(function(r){
+    const p=r.parts[0];
+    const th=(r.mat&&r.mat.indexOf('ХДФ')>=0)?3:16;
+    return {pos:r.pos, l1:'['+r.pos+'] '+r.name, l2:r.w+'×'+r.h+'×'+th+' - '+r.qty+' шт',
+      x:MX(p.box.cx, p.box.cz), y:MY(p.box.cy, p.box.cz)};
+  });
+  marks.sort(function(a,b){ return a.y-b.y; });
+  const left=[], right=[];
+  marks.forEach(function(m,i){ if(i%2===0) left.push(m); else right.push(m); });
+  const STEP=30;
+  function place(list){
+    let prev=-1e9;
+    list.forEach(function(m){
+      m.ly=Math.max(m.y, prev+STEP);
+      prev=m.ly;
+    });
+  }
+  place(left); place(right);
+  left.forEach(function(m){
+    const tx=PADL-10;
+    g+='<line x1="'+m.x.toFixed(1)+'" y1="'+m.y.toFixed(1)+'" x2="'+(tx+4)+'" y2="'+m.ly.toFixed(1)+'" stroke="#8a8f96" stroke-width="0.45"/>'
+      +'<circle cx="'+m.x.toFixed(1)+'" cy="'+m.y.toFixed(1)+'" r="1.4" fill="#1d2023"/>'
+      +'<text x="'+tx+'" y="'+(m.ly-2).toFixed(1)+'" font-size="9" font-weight="700" text-anchor="end" fill="#1d2023">'+m.l1+'</text>'
+      +'<text x="'+tx+'" y="'+(m.ly+8.5).toFixed(1)+'" font-size="8.5" text-anchor="end" fill="#3a3d40">'+m.l2+'</text>';
+  });
+  right.forEach(function(m){
+    const tx=VW-PADR+10;
+    g+='<line x1="'+m.x.toFixed(1)+'" y1="'+m.y.toFixed(1)+'" x2="'+(tx-4)+'" y2="'+m.ly.toFixed(1)+'" stroke="#8a8f96" stroke-width="0.45"/>'
+      +'<circle cx="'+m.x.toFixed(1)+'" cy="'+m.y.toFixed(1)+'" r="1.4" fill="#1d2023"/>'
+      +'<text x="'+tx+'" y="'+(m.ly-2).toFixed(1)+'" font-size="9" font-weight="700" fill="#1d2023">'+m.l1+'</text>'
+      +'<text x="'+tx+'" y="'+(m.ly+8.5).toFixed(1)+'" font-size="8.5" fill="#3a3d40">'+m.l2+'</text>';
+  });
+  return '<svg viewBox="0 0 '+VW+' '+VH+'" width="100%" xmlns="http://www.w3.org/2000/svg">'+g+'</svg>';
+}
+
 function moduleHardware(s){
   const rows=[];
   function add(n,q,u){ if(q>0) rows.push({n:n,q:q,u:u}); }
@@ -4390,16 +4483,13 @@ function showAssemblyDrawing(){
     // ── Лист 1: сборка ──
     pageNo++;
     const posRows=posTableFor(carcass);
-    const detail=drawTable(['Поз.','Название','Размер','Кол.','Материал'],
-      posRows.map(function(r){ return [r.pos, r.name, r.w+'×'+r.h, r.qty, r.mat]; }));
     const hw=moduleHardware(s);
     const hwTbl=drawTable(['Фурнитура','Кол.','Ед.'],
       hw.map(function(r){ return [r.n, r.q, r.u]; }));
     pages+='<div class="page">'
       +drawStamp(meta,'Сборочный чертёж','Модуль №'+(i+1),gab)
-      +'<div class="body"><div class="col-svg">'+moduleSvg(s,carcass,s.width,fullH)+'</div>'
-      +'<div class="col-tbl"><div class="tbl-h">Деталировка</div>'+detail
-      +'<div class="tbl-h">Фурнитура</div>'+hwTbl+'</div></div>'
+      +'<div class="body"><div class="col-svg" style="flex:3;border:none">'+module3dSvg(s,carcass,posRows)+'</div>'
+      +'<div class="col-tbl" style="flex:0.9"><div class="tbl-h">Фурнитура</div>'+hwTbl+'</div></div>'
       +'<div class="foot">Лист '+pageNo+' / '+total+'</div></div>';
 
     // ── Лист 2: фасады ──
