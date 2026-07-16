@@ -2610,8 +2610,8 @@ function initThree(){
   resize(); new ResizeObserver(resize).observe(vp);
 
   scene=new THREE.Scene();
-  scene.background=new THREE.Color(0xf0ede8);
-  scene.fog=new THREE.Fog(0xf0ede8,8000,22000);
+  scene.background=new THREE.Color(0x1e2126);
+  scene.fog=new THREE.Fog(0x1e2126,9000,24000);
   camera=new THREE.PerspectiveCamera(42,vp.clientWidth/vp.clientHeight,1,40000);
 
   // Освещение
@@ -2630,19 +2630,19 @@ function initThree(){
   dl3.position.set(0,800,3000); scene.add(dl3);
 
   // Пол — паркет
-  const floorMat=new THREE.MeshStandardMaterial({color:0xc8a878,roughness:0.8,metalness:0.0});
+  const floorMat=new THREE.MeshStandardMaterial({color:0x24272c,roughness:0.92,metalness:0.0});
   const floor=new THREE.Mesh(new THREE.PlaneGeometry(30000,30000),floorMat);
   floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
 
   // Стены (фон комнаты)
-  const wallMat=new THREE.MeshStandardMaterial({color:0xede8e0,roughness:1.0,metalness:0.0});
+  const wallMat=new THREE.MeshStandardMaterial({color:0x2b2f35,roughness:1.0,metalness:0.0});
   const wallBack=new THREE.Mesh(new THREE.PlaneGeometry(16000,6000),wallMat);
   wallBack.position.set(0,3000,7000); wallBack.rotation.y=Math.PI; wallBack.receiveShadow=true; scene.add(wallBack);
   const wallLeft=new THREE.Mesh(new THREE.PlaneGeometry(14000,6000),wallMat);
   wallLeft.position.set(-8000,3000,0); wallLeft.rotation.y=Math.PI/2; wallLeft.receiveShadow=true; scene.add(wallLeft);
 
   // Тонкая сетка пола
-  const grid=new THREE.GridHelper(10000,50,0xb0a090,0xccc4b8); grid.position.y=2; grid.material.opacity=0.3; grid.material.transparent=true; scene.add(grid);
+  const grid=new THREE.GridHelper(10000,50,0x454b53,0x30353c); grid.position.y=2; grid.material.opacity=0.4; grid.material.transparent=true; scene.add(grid);
 
   let isDrag=false,lx=0,ly=0,theta=35,phi=25,radius=4500;
   const target=new THREE.Vector3(0,900,0);

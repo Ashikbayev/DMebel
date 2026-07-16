@@ -290,11 +290,11 @@
 
 <!-- 3D КОНФИГУРАТОР ШКАФА -->
 <div class="pg" id="pg-conf" style="min-height:100vh">
-  <div style="background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 12px;display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:50">
-    <button onclick="page('calc')" style="background:none;border:1px solid #e0e0e0;border-radius:6px;padding:5px 10px;font-size:12px;color:#666;cursor:pointer">← Назад</button>
-    <span style="font-size:13px;font-weight:700;color:#0a2e2e">3D Конфигуратор шкафа</span>
-    <button onclick="sendConfToCalc()" id="send-to-calc-btn" style="margin-left:auto;background:linear-gradient(135deg,#1D9E75,#148060);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px">
-      <i class="ti ti-arrow-right"></i> В расчёт →
+  <div class="conf-topbar">
+    <button onclick="page('calc')" class="mo-btn mo-ghost">← Назад</button>
+    <span class="conf-topbar-title">3D Конфигуратор шкафа</span>
+    <button onclick="sendConfToCalc()" id="send-to-calc-btn" class="mo-btn mo-accent" style="margin-left:auto">
+      <i class="ti ti-arrow-right"></i> В расчёт
     </button>
   </div>
   <div id="app">
@@ -447,22 +447,19 @@
       </div>
     </div>
     <div id="panel-footer">
-      <button class="footer-btn" id="preview3d-btn" onclick="showPreview3D()" style="background:#f5f0e8;color:#7a5c2e;border-color:#e0cfa0">
+      <button class="footer-btn" id="preview3d-btn" onclick="showPreview3D()">
         <i class="ti ti-cube"></i> 3D
       </button>
-      <button class="footer-btn" style="background:#f0f0ff;color:#3949ab;border-color:#d0d4f8" onclick="projModalOpen()">
+      <button class="footer-btn" onclick="projModalOpen()">
         <i class="ti ti-folder"></i> Проекты
       </button>
       <button class="footer-btn" id="spec-btn" onclick="showSpec()">
         <i class="ti ti-file-invoice"></i> Смета
       </button>
-      <button class="footer-btn" style="background:#1a5252;color:#fff" onclick="confShowKP()">
-        <i class="ti ti-receipt"></i> КП
-      </button>
       <button class="footer-btn" id="cut-btn" onclick="showCut()">
         <i class="ti ti-layout-grid"></i> Раскрой
       </button>
-      <button class="footer-btn" style="background:#1a3a6a;color:#fff;border-color:#1a3a6a" onclick="showConfBlueprint()">
+      <button class="footer-btn fb-dark" onclick="showConfBlueprint()">
         <i class="ti ti-ruler-2"></i> Чертёж
       </button>
     </div>

@@ -643,3 +643,73 @@ select{width:100%;font-size:12px;padding:5px 6px;border:1px solid #ddd;border-ra
 .k-cat-card:hover{border-color:#1a5252!important;background:#f0f8f8!important}
 .k-cat-card svg{width:44px;height:36px}
 .k-sz-btn:hover{background:#1a5252!important;color:#fff!important;border-color:#1a5252!important}
+
+/* ══════════════════════════════════════════════════════════
+   MEBELOFF DESIGN SYSTEM — итерация 0
+   Область действия: ТОЛЬКО #pg-conf (шкафный конфигуратор).
+   Палитра: тёплый графит + латунь. Калькулятор/кухня не тронуты.
+   ══════════════════════════════════════════════════════════ */
+#pg-conf{
+  --mo-ink:#1d2023; --mo-muted:#6f747a; --mo-line:#e6e3dc;
+  --mo-surface:#fff; --mo-surface2:#f7f5f0;
+  --mo-graphite:#23262a; --mo-graphite2:#2c3036;
+  --mo-brass:#c39a3b; --mo-brass-d:#a8822c; --mo-brass-soft:#f6efdd;
+  --mo-r:10px; --mo-rs:8px;
+  --mo-shadow:0 1px 2px rgba(29,32,35,.05),0 10px 28px rgba(29,32,35,.10);
+  --mo-focus:0 0 0 3px rgba(195,154,59,.35);
+}
+
+/* ── Топбар ── */
+#pg-conf .conf-topbar{background:var(--mo-surface);border-bottom:1px solid var(--mo-line);padding:8px 12px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
+#pg-conf .conf-topbar-title{font-size:13px;font-weight:700;color:var(--mo-ink);letter-spacing:.2px}
+
+/* ── Единая кнопка ── */
+#pg-conf .mo-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 14px;font-size:12px;font-weight:600;border-radius:var(--mo-rs);border:1px solid transparent;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s,transform .05s;user-select:none}
+#pg-conf .mo-btn:active{transform:translateY(1px)}
+#pg-conf .mo-btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+#pg-conf .mo-ghost{background:none;border-color:var(--mo-line);color:var(--mo-muted)}
+#pg-conf .mo-ghost:hover{background:var(--mo-surface2);color:var(--mo-ink)}
+#pg-conf .mo-accent{background:var(--mo-brass);color:#fff;box-shadow:0 1px 0 rgba(0,0,0,.06)}
+#pg-conf .mo-accent:hover{background:var(--mo-brass-d)}
+
+/* ── Футер-панель: единый стиль, латунный акцент на Раскрое ── */
+#pg-conf .footer-btn{background:var(--mo-surface2);color:var(--mo-ink);border:1px solid var(--mo-line);border-radius:var(--mo-rs);transition:background .15s,border-color .15s,box-shadow .15s,transform .05s}
+#pg-conf .footer-btn:hover{background:#efece4;border-color:#d8d4ca}
+#pg-conf .footer-btn:active{transform:translateY(1px)}
+#pg-conf .footer-btn:disabled{opacity:.45;cursor:not-allowed}
+#pg-conf #spec-btn{background:var(--mo-surface2);color:var(--mo-ink);border:1px solid var(--mo-line)}
+#pg-conf #spec-btn:hover{background:#efece4}
+#pg-conf #cut-btn{background:var(--mo-brass);color:#fff;border-color:var(--mo-brass)}
+#pg-conf #cut-btn:hover{background:var(--mo-brass-d)}
+#pg-conf .fb-dark{background:var(--mo-graphite);color:#e9e7e2;border-color:var(--mo-graphite)}
+#pg-conf .fb-dark:hover{background:var(--mo-graphite2)}
+
+/* ── Фокус с клавиатуры — везде одинаковый ── */
+#pg-conf button:focus-visible,
+#pg-conf input:focus-visible,
+#pg-conf select:focus-visible{outline:none;box-shadow:var(--mo-focus)}
+
+/* ── Поля ввода ── */
+#pg-conf input[type=number],#pg-conf input[type=text],#pg-conf input[type=date],#pg-conf select{border-color:var(--mo-line);background:#fbfaf7;border-radius:var(--mo-rs);transition:border-color .15s,box-shadow .15s}
+#pg-conf input[type=number]:focus,#pg-conf input[type=text]:focus,#pg-conf select:focus{border-color:var(--mo-brass);box-shadow:var(--mo-focus);outline:none}
+
+/* ── Вкладки и карточки секций ── */
+#pg-conf .ptab.active{color:var(--mo-brass-d);border-bottom-color:var(--mo-brass)}
+#pg-conf .sec-card{border-radius:var(--mo-r);border-color:var(--mo-line);box-shadow:0 1px 2px rgba(29,32,35,.04)}
+#pg-conf .sec-hdr{background:var(--mo-surface2)}
+#pg-conf .sec-hdr:hover{background:#f1eee6}
+#pg-conf #add-section-btn{border-color:#d8d4ca;border-radius:var(--mo-r);color:var(--mo-muted)}
+#pg-conf #add-section-btn:hover{background:var(--mo-brass-soft);border-color:var(--mo-brass);color:var(--mo-brass-d)}
+
+/* ── Тёмная витрина вокруг холста ── */
+#pg-conf #viewport{background:#1e2126}
+#pg-conf #stats-badge{background:rgba(30,33,38,.88);border:1px solid rgba(255,255,255,.10);color:#d9d7d1;backdrop-filter:blur(6px);border-radius:var(--mo-r)}
+#pg-conf #stats-badge b{color:#fff}
+#pg-conf #drag-hint{background:rgba(30,33,38,.88);color:#e9e7e2;border:1px solid rgba(255,255,255,.10);border-radius:var(--mo-rs)}
+
+/* ── Тач-устройства: зона нажатия ≥44px ── */
+@media(pointer:coarse){
+  #pg-conf .footer-btn,#pg-conf .mo-btn,#pg-conf #add-section-btn,#pg-conf .ptab,#pg-conf .gf-btn{min-height:44px}
+  #pg-conf input[type=number],#pg-conf input[type=text],#pg-conf input[type=date],#pg-conf select{min-height:44px;font-size:14px}
+  #pg-conf #proj-save-btn,#pg-conf #proj-new-btn{min-width:44px;min-height:44px}
+}
