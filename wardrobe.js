@@ -824,8 +824,15 @@ function removeDivider(sid,did){
   sections.find(x=>x.id===sid).dividers=sections.find(x=>x.id===sid).dividers.filter(x=>x.id!==did);
   renderPanel(); render3D(); projMarkUnsaved();
 }
+function rodClamp(s){
+  secRods(s).forEach(function(rr){
+    rr.height=Math.max(T*3, Math.min((s.height||2200)-T*3, rr.height||1600));
+  });
+}
 function upd(sid,field,val){
-  sections.find(x=>x.id===sid)[field]=parseInt(val)||0;
+  const s=sections.find(x=>x.id===sid);
+  s[field]=parseInt(val)||0;
+  if(field==='height') rodClamp(s);
   render3D(); updateStats(); projMarkUnsaved();
 }
 function updShelf(sid,shid,val){
@@ -1025,7 +1032,7 @@ function render2D(s){
   });
   secRods(s).forEach(function(rr){
     const rc=(rr.col!=null&&cols[rr.col])?cols[rr.col]:{left:T,width:W-2*T};
-    const ry=sy(rr.height||1600);
+    const ry=sy(Math.min(rr.height||1600, s.height-T*3));
     g+='<line x1="'+(rc.left*sc+2)+'" y1="'+ry+'" x2="'+((rc.left+rc.width)*sc-2)+'" y2="'+ry+'" stroke="#7a5c2e" stroke-width="2.5" stroke-linecap="round"/>';
   });
   const tools=[['shelf','Полка'],['drawers','Ящики'],['rod','Штанга'],['del','✕ Удалить']];
@@ -1777,7 +1784,7 @@ function render2DFull(){
     // штанга: линия с держателями
     secRods(s).forEach(function(rr){
       const rc=(rr.col!=null&&cols[rr.col])?cols[rr.col]:{left:T,width:W-2*T};
-      const ry=sy(rr.height||1600);
+      const ry=sy(Math.min(rr.height||1600, s.height-T*3));
       const rx1=x0+rc.left*sc+2, rx2=x0+(rc.left+rc.width)*sc-2;
       g+='<line x1="'+rx1+'" y1="'+ry+'" x2="'+rx2+'" y2="'+ry+'" stroke="#7f858d" stroke-width="3.5" stroke-linecap="round"/>';
       g+='<circle cx="'+rx1+'" cy="'+ry+'" r="3" fill="#565c63"/><circle cx="'+rx2+'" cy="'+ry+'" r="3" fill="#565c63"/>';
@@ -2294,7 +2301,8 @@ function drawSectionSvg(data, W=72, H=100){
 
   // Штанга (на всю секцию — не колонко-зависима)
   rodL.forEach(function(rrd){
-    const ry = H - bT - Math.round((rrd.height||1320) * scaleY) - 1;
+    const rrh = Math.min(rrd.height||1320, height - 48);
+    const ry = H - bT - Math.round(rrh * scaleY) - 1;
     items += `<line x1="${bT+4}" y1="${ry}" x2="${W-bT-4}" y2="${ry}" stroke="#88888888" stroke-width="2.5"/>`;
     items += `<circle cx="${bT+6}" cy="${ry}" r="2.5" fill="#999"/>`;
     items += `<circle cx="${W-bT-6}" cy="${ry}" r="2.5" fill="#999"/>`;
@@ -2336,6 +2344,7 @@ function applyUserTemplate(sid,tplId){
   s.rods=Array.isArray(tpl.data.rods)
     ?tpl.data.rods.map(r=>({height:r.height, col:r.col!=null?r.col:null}))
     :(tpl.data.hasRod?[{height:tpl.data.rodHeight||Math.round(s.height*.6), col:null}]:[]);
+  rodClamp(s);
   s.drawerBlocks=(tpl.data.drawerBlocks||[]).map(db=>({...db}));
   renderPanel(); render3D(); projMarkUnsaved();
 }
@@ -8901,7 +8910,7 @@ function showConfBlueprint(){
 
     // ── Штанга ─────────────────────────────────────────────
     secRods(sec).forEach(function(rr){
-      const rodY = baseY + (rr.height || H*0.7);
+      const rodY = baseY + Math.min(rr.height || H*0.7, H - 48);
       const rcolB = (rr.col!=null && bpCols[rr.col]) ? bpCols[rr.col] : null;
       const rodX1 = rcolB ? xOff+rcolB.left+4 : xOff+BD+4;
       const rodX2 = rcolB ? xOff+rcolB.left+rcolB.width-4 : xOff+W-BD-4;

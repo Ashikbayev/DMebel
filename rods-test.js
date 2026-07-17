@@ -99,6 +99,19 @@ ok((html.match(/updRod\(/g) || []).length >= 2, 'по строке на кажд
 ok(html.indexOf('addRod(') >= 0, 'кнопка «+ штанга» есть');
 ok(html.indexOf('delRod(') >= 0, 'кнопка удаления есть');
 
+console.log('── Кламп при смене высоты (баг со скрина: штанга выше крыши) ──');
+var sh = win._ai_mkSection(); sh.width = 800; sh.height = 2200; sh.depth = 600;
+win._ai_sections = [sh];
+win.applyFillType(sh.id, 'rodDouble');
+eq(sh.rods.length, 2, 'двойная штанга при 2200 поставлена');
+eq(sh.rods[0].height, 2080, 'верхняя 2080');
+win.upd(sh.id, 'height', '2000');
+ok(sh.rods[0].height <= 2000 - 48, 'после смены высоты на 2000 верхняя внутри секции: ' + sh.rods[0].height);
+eq(sh.rods[0].height, 1952, 'верхняя прижата к 2000−48');
+eq(sh.rods[1].height, 1180, 'нижняя не тронута (была внутри)');
+win.upd(sh.id, 'height', '1200');
+ok(sh.rods.every(function (r) { return r.height >= 48 && r.height <= 1200 - 48; }), 'обе внутри и при 1200');
+
 console.log('── totalRods для КП ──');
 var sa = win._ai_mkSection(); sa.width = 800; sa.height = 2400; sa.depth = 600;
 sa.rods = [{ height: 2280, col: null }, { height: 1380, col: null }];
