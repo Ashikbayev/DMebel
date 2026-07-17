@@ -2135,6 +2135,209 @@ function deleteUserTemplate(tplId){
 }
 
 // ── HTML блок шаблонов для секции ────────────────────────────
+/* ============================================================
+   КАТАЛОГ НАПОЛНЕНИЯ — 10 типов
+   Каждый тип: fits(s) — '' или причина недоступности,
+   apply(s) — построение на штатных примитивах,
+   thumb() — SVG-миниатюра. ready:false — механика в след. шаге.
+============================================================ */
+
+// ── примитивы миниатюр ──
+function ftFrame(inner){
+  return '<svg viewBox="0 0 60 84" width="52" height="72" xmlns="http://www.w3.org/2000/svg">'
+    +'<rect x="2.5" y="2.5" width="55" height="79" rx="3" fill="#fbfaf7" stroke="#b3ac9d" stroke-width="1.4"/>'
+    +inner+'</svg>';
+}
+function ftShelf(y){
+  return '<line x1="5" y1="'+y+'" x2="55" y2="'+y+'" stroke="#8a8377" stroke-width="2"/>';
+}
+function ftDrawer(y,h){
+  return '<rect x="6" y="'+y+'" width="48" height="'+h+'" rx="1.5" fill="#efe9dc" stroke="#8a8377" stroke-width="1.2"/>'
+    +'<line x1="24" y1="'+(y+h/2)+'" x2="36" y2="'+(y+h/2)+'" stroke="#4a453c" stroke-width="2" stroke-linecap="round"/>';
+}
+function ftRod(y){
+  let h='<line x1="6" y1="'+y+'" x2="54" y2="'+y+'" stroke="#4a453c" stroke-width="2.4" stroke-linecap="round"/>';
+  const xs=[16,30,44];
+  xs.forEach(function(x){
+    h+='<path d="M '+x+' '+y+' l 0 3 l -5 7 l 10 0 z" fill="none" stroke="#8a8377" stroke-width="1.2"/>';
+  });
+  return h;
+}
+function ftShoe(y){
+  return '<line x1="7" y1="'+(y+5)+'" x2="53" y2="'+(y-3)+'" stroke="#8a8377" stroke-width="2"/>'
+    +'<line x1="7" y1="'+(y+5)+'" x2="7" y2="'+(y+1)+'" stroke="#4a453c" stroke-width="2"/>';
+}
+
+const FILL_TYPES=[
+ {id:'shelves3', ready:true, name:'Классика полок', desc:'Трикотаж, коробки — универсал',
+  fits:function(s){ return s.height>=800?'':'нужна высота от 800'; },
+  thumb:function(){ return ftFrame(ftShelf(23)+ftShelf(43)+ftShelf(63)); },
+  apply:function(s){
+    fillReset(s);
+    fillShelvesEven(s,3);
+  }},
+ {id:'shelvesDense', ready:true, name:'Плотные полки', desc:'Бельё, футболки, полотенца',
+  fits:function(s){ return s.height>=1100?'':'нужна высота от 1100'; },
+  thumb:function(){ return ftFrame(ftShelf(16)+ftShelf(30)+ftShelf(44)+ftShelf(58)+ftShelf(70)); },
+  apply:function(s){
+    fillReset(s);
+    fillShelvesEven(s, s.height>=1800?5:4);
+  }},
+ {id:'shelfDrawer', ready:true, name:'Полка + ящик', desc:'Открытое + скрытое хранение',
+  fits:function(s){
+    if(s.height<1000) return 'нужна высота от 1000';
+    if(s.depth<300) return 'для ящика нужна глубина от 300';
+    return '';
+  },
+  thumb:function(){ return ftFrame(ftShelf(22)+ftShelf(42)+ftDrawer(60,16)); },
+  apply:function(s){
+    fillReset(s);
+    const h1=fillSnap(s.height*0.55), h2=fillSnap(s.height*0.78);
+    fillShelvesAt(s,[h1,h2]);
+    s.drawerBlocks.push({nicheIdx:0,count:1,brand:activeSlide.brand});
+  }},
+ {id:'drawerStack', ready:true, name:'Блок ящиков', desc:'Комод внутри шкафа',
+  fits:function(s){
+    if(s.height<800) return 'нужна высота от 800';
+    if(s.depth<300) return 'для ящиков нужна глубина от 300';
+    return '';
+  },
+  thumb:function(){ return ftFrame(ftDrawer(10,15)+ftDrawer(28,15)+ftDrawer(46,15)+ftDrawer(64,15)); },
+  apply:function(s){
+    fillReset(s);
+    s.drawerBlocks.push({nicheIdx:0,count:(s.height>=1300?4:3),brand:activeSlide.brand});
+  }},
+ {id:'rodLong', ready:true, name:'Штанга под длинное', desc:'Пальто, платья, плащи',
+  fits:function(s){
+    if(s.height<1400) return 'нужна высота от 1400';
+    if(s.depth<500) return 'плечикам нужна глубина от 500';
+    return '';
+  },
+  thumb:function(){ return ftFrame(ftRod(14)); },
+  apply:function(s){
+    fillReset(s);
+    s.hasRod=true; s.rodHeight=fillSnap(s.height-120);
+  }},
+ {id:'rodDouble', ready:false, name:'Двойная штанга', desc:'Рубашки сверху, брюки снизу',
+  fits:function(s){
+    if(s.height<1900) return 'нужна высота от 1900';
+    if(s.depth<500) return 'плечикам нужна глубина от 500';
+    return '';
+  },
+  thumb:function(){ return ftFrame(ftRod(14)+ftRod(46)); },
+  apply:null},
+ {id:'rodDrawers', ready:true, name:'Штанга + ящики', desc:'Самый ходовой гардеробный модуль',
+  fits:function(s){
+    if(s.height<1800) return 'нужна высота от 1800';
+    if(s.depth<500) return 'плечикам нужна глубина от 500';
+    return '';
+  },
+  thumb:function(){ return ftFrame(ftRod(13)+ftDrawer(56,11)+ftDrawer(69,11)); },
+  apply:function(s){
+    fillReset(s);
+    s.hasRod=true; s.rodHeight=fillSnap(s.height-120);
+    s.drawerBlocks.push({nicheIdx:0,count:2,brand:activeSlide.brand});
+  }},
+ {id:'pantograph', ready:false, name:'Пантограф', desc:'Лифт-штанга для высоких секций',
+  fits:function(s){
+    if(s.height<2200) return 'нужна высота от 2200';
+    if(s.width<450||s.width>1200) return 'механизмы — на ширину 450–1200';
+    return '';
+  },
+  thumb:function(){
+    return ftFrame('<line x1="6" y1="8" x2="22" y2="30" stroke="#4a453c" stroke-width="1.6"/>'
+      +'<line x1="54" y1="8" x2="38" y2="30" stroke="#4a453c" stroke-width="1.6"/>'
+      +ftRod(32)+ftShelf(66));
+  },
+  apply:null},
+ {id:'trousers', ready:false, name:'Брючница / галстучница', desc:'Премиум-хранение, поднимает чек',
+  fits:function(s){
+    if(s.width<450) return 'нужна ширина от 450';
+    if(s.depth<450) return 'выдвижной раме нужна глубина от 450';
+    return '';
+  },
+  thumb:function(){
+    let h='';
+    const ys=[18,26,34,42];
+    ys.forEach(function(y){ h+='<line x1="14" y1="'+y+'" x2="58" y2="'+y+'" stroke="#8a8377" stroke-width="2"/>'; });
+    h+='<rect x="10" y="58" width="12" height="10" fill="none" stroke="#8a8377" stroke-width="1.2"/>'
+      +'<rect x="26" y="58" width="12" height="10" fill="none" stroke="#8a8377" stroke-width="1.2"/>'
+      +'<rect x="42" y="58" width="12" height="10" fill="none" stroke="#8a8377" stroke-width="1.2"/>';
+    return ftFrame(h);
+  },
+  apply:null},
+ {id:'shoes', ready:false, name:'Обувной модуль', desc:'Наклонные полки с упором',
+  fits:function(s){ return s.height>=600?'':'нужна высота от 600'; },
+  thumb:function(){ return ftFrame(ftShoe(16)+ftShoe(32)+ftShoe(48)+ftShoe(64)); },
+  apply:null}
+];
+
+// ── помощники применения ──
+function fillSnap(v){ return Math.round(v/10)*10; }
+
+function fillReset(s){
+  s.shelves=[];
+  s.drawerBlocks=[];
+  s.hasRod=false;
+}
+
+function fillShelvesAt(s, heights){
+  const nCols=getColumns(s).length;
+  for(let c=0;c<nCols;c++){
+    heights.forEach(function(h){
+      s.shelves.push({id:s.shelfId++, height:h, col:c});
+    });
+  }
+}
+
+function fillShelvesEven(s, n){
+  const step=(s.height-2*T)/(n+1);
+  const hs=[];
+  for(let i=1;i<=n;i++) hs.push(fillSnap(T+step*i));
+  fillShelvesAt(s,hs);
+}
+
+// ── применение в один клик + плавное перестроение ──
+function applyFillType(sid, ftId){
+  const s=sections.find(function(x){ return x.id===sid; });
+  const ft=FILL_TYPES.find(function(x){ return x.id===ftId; });
+  if(!s||!ft) return;
+  if(!ft.ready){ return; }
+  if(ft.fits(s)!==''){ return; }
+  ft.apply(s);
+  const cv=document.getElementById('c3d');
+  if(cv){ cv.style.transition='opacity .18s ease'; cv.style.opacity='0.15'; }
+  setTimeout(function(){
+    renderPanel();
+    if(typeof render3D==='function'){ try{ render3D(); }catch(e){} }
+    if(typeof updateStats==='function'){ try{ updateStats(); }catch(e){} }
+    if(cv){ cv.style.opacity='1'; }
+  },160);
+}
+
+function renderFillCatalog(sid){
+  const s=sections.find(function(x){ return x.id===sid; });
+  if(!s) return '';
+  let h='<div class="ft-grid">';
+  FILL_TYPES.forEach(function(ft){
+    const reason=ft.fits(s) || (ft.ready ? '' : 'механика — след. шаг');
+    const off=(reason!=='');
+    h+='<div class="ft-card'+(off?' ft-off':'')+'"'
+      +(off?'':' onclick="applyFillType('+sid+',\''+ft.id+'\')"')
+      +' title="'+(off?reason:'Применить: '+ft.name)+'">'
+      +ft.thumb()
+      +'<div class="ft-name">'+ft.name+'</div>'
+      +'<div class="ft-desc">'+ft.desc+'</div>'
+      +(off?'<div class="ft-reason">'+reason+'</div>':'')
+      +'</div>';
+  });
+  h+='</div>';
+  return h;
+}
+window.applyFillType=applyFillType;
+window._ai_FILL_TYPES=FILL_TYPES;
+window._ai_renderFillCatalog=renderFillCatalog;
+
 function renderTemplateBar(sid){
   const userTpls = loadUserTemplates();
 
@@ -2418,6 +2621,7 @@ function renderPanel(){
       acc('sch','▦ 2D схема','',render2D(s),true) +
 
       // ── Шаблоны (по умолчанию открыты) ──
+      acc('fill','🗂 Наполнение — 10 типов','',renderFillCatalog(s.id),true) +
       acc('tpl','📐 Шаблоны наполнения','',renderTemplateBar(s.id),true) +
 
       // ── Полки ──
