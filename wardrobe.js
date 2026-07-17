@@ -232,7 +232,7 @@ function projMarkUnsaved(){
   }
   // Автосохранение с задержкой 4 секунды
   clearTimeout(autoSaveTimer);
-  autoSaveTimer = setTimeout(()=>{ if(projUnsaved && activeProjectId) projSave(); }, 4000);
+  autoSaveTimer = setTimeout(()=>{ if(projUnsaved) projSave(); }, 4000);
 }
 
 // Render tabs
@@ -545,11 +545,29 @@ function syncFromSheets(){ loadFromSheets(); }
 /* ============================================================
    SECTION HELPERS
 ============================================================ */
+function secRods(s){
+  if(!Array.isArray(s.rods)) s.rods=[];
+  if(s.hasRod){
+    s.rods.push({height:(s.rodHeight||Math.max(T*3,(s.height||2200)-120)), col:(s.rodCol!=null?s.rodCol:null)});
+  }
+  s.hasRod=false; s.rodHeight=undefined; s.rodCol=undefined;
+  return s.rods;
+}
+function rodNear(s,ym,ci){
+  const rods=secRods(s);
+  let best=-1,bd=60;
+  rods.forEach(function(r,i){
+    const d=Math.abs((r.height||0)-ym);
+    if(r.col!=null&&ci!=null&&r.col!==ci) return;
+    if(d<bd){bd=d;best=i;}
+  });
+  return best;
+}
 function mkSection(){
   return{
     id:secId++, width:800, height:2200, depth:600,
     shelves:[], dividers:[],
-    hasRod:false, rodHeight:1600, rodCol:null,
+    rods:[],
     facade:{type:'none', material:'ldsp', hasTexture:false, frez:'modern', handle:'railing', opening:'auto'},
     facadeDoors:[],
     antresol:{enabled:false, height:400, facade:{type:'none', material:'ldsp'}, shelves:[], shelfId:0},
@@ -715,9 +733,7 @@ function duplicateSection(sid){
   copy.width = src.width;
   copy.height = src.height;
   copy.depth = src.depth;
-  copy.hasRod = src.hasRod;
-  copy.rodHeight = src.rodHeight;
-  copy.rodCol = src.rodCol!=null ? src.rodCol : null;
+  copy.rods = secRods(src).map(r=>({height:r.height, col:r.col!=null?r.col:null}));
 
   copy.facade = { type:src.facade.type, material:src.facade.material, hasTexture:src.facade.hasTexture };
   copy.facadeDoors = src.facadeDoors.map(d=>({...d}));
@@ -868,8 +884,30 @@ window.edgeFaceSelect = edgeFaceSelect;
 
 
 function toggleRod(sid){
-  const s=sections.find(x=>x.id===sid); s.hasRod=!s.hasRod;
+  const s=sections.find(x=>x.id===sid);
+  if(secRods(s).length) s.rods=[];
+  else s.rods=[{height:Math.max(T*3,fillSnap(s.height-120)), col:null}];
   renderPanel(); render3D(); projMarkUnsaved();
+}
+function addRod(sid){
+  const s=sections.find(x=>x.id===sid); if(!s) return;
+  const rods=secRods(s);
+  const base=rods.length?Math.min.apply(null,rods.map(function(r){return r.height;})):(s.height-120+900);
+  const h=Math.max(T*3, fillSnap(Math.min(s.height-T*3, base-900)));
+  rods.push({height:h, col:null});
+  renderPanel(); render3D(); updateStats(); projMarkUnsaved();
+}
+function delRod(sid,i){
+  const s=sections.find(x=>x.id===sid); if(!s) return;
+  secRods(s); s.rods.splice(i,1);
+  renderPanel(); render3D(); updateStats(); projMarkUnsaved();
+}
+function updRod(sid,i,field,val){
+  const s=sections.find(x=>x.id===sid); if(!s) return;
+  const rods=secRods(s); if(!rods[i]) return;
+  if(field==='height') rods[i].height=Math.max(T*3, Math.min(s.height-T*3, parseInt(val)||0));
+  else rods[i].col=(val===''||val==null)?null:parseInt(val);
+  renderPanel(); render3D(); updateStats(); projMarkUnsaved();
 }
 function updRodCol(sid,val){
   const s=sections.find(x=>x.id===sid); if(!s) return;
@@ -985,11 +1023,11 @@ function render2D(s){
     const col=cols[Math.min(sh.col||0,cols.length-1)]||{left:T,width:W-2*T};
     g+='<rect x="'+(col.left*sc)+'" y="'+sy(sh.height+T)+'" width="'+(col.width*sc)+'" height="'+Math.max(1.5,T*sc)+'" fill="#b8935a"/>';
   });
-  if(s.hasRod){
-    const rc=(s.rodCol!=null&&cols[s.rodCol])?cols[s.rodCol]:{left:T,width:W-2*T};
-    const ry=sy(s.rodHeight||1600);
+  secRods(s).forEach(function(rr){
+    const rc=(rr.col!=null&&cols[rr.col])?cols[rr.col]:{left:T,width:W-2*T};
+    const ry=sy(rr.height||1600);
     g+='<line x1="'+(rc.left*sc+2)+'" y1="'+ry+'" x2="'+((rc.left+rc.width)*sc-2)+'" y2="'+ry+'" stroke="#7a5c2e" stroke-width="2.5" stroke-linecap="round"/>';
-  }
+  });
   const tools=[['shelf','Полка'],['drawers','Ящики'],['rod','Штанга'],['del','✕ Удалить']];
   let tb='<div style="display:flex;gap:3px;margin-bottom:5px;flex-wrap:wrap">';
   tools.forEach(tp=>{
@@ -1018,9 +1056,11 @@ function w2dClick(sid,evt){
     if(ex) ex.count=Math.min(5,(ex.count||1)+1);
     else s.drawerBlocks.push({nicheIdx:ni, count:2, brand:'En-7', col:(cols.length>1?ci:null)});
   }else if(_w2dTool==='rod'){
-    s.hasRod=true;
-    s.rodHeight=Math.max(T*3, Math.min(s.height-T*3, Math.round(ym/10)*10));
-    s.rodCol=(cols.length>1?ci:null);
+    const rh2=Math.max(T*3, Math.min(s.height-T*3, Math.round(ym/10)*10));
+    const rc2=(cols.length>1?ci:null);
+    const rn2=rodNear(s,ym,rc2);
+    if(rn2>=0){ s.rods[rn2].height=rh2; s.rods[rn2].col=rc2; }
+    else s.rods.push({height:rh2, col:rc2});
   }else if(_w2dTool==='del'){
     let best=-1,bd=40;
     s.shelves.forEach((sh,i)=>{
@@ -1030,7 +1070,7 @@ function w2dClick(sid,evt){
       if(d<bd){bd=d;best=i;}
     });
     if(best>=0){ s.shelves.splice(best,1); }
-    else if(s.hasRod&&Math.abs((s.rodHeight||0)-ym)<60&&(s.rodCol==null||s.rodCol===ci)){ s.hasRod=false; }
+    else if(rodNear(s,ym,ci)>=0){ s.rods.splice(rodNear(s,ym,ci),1); }
     else{
       const niches=getNiches(s);
       const ni=niches.findIndex(n=>ym>=n.bottom&&ym<=n.top);
@@ -1094,7 +1134,26 @@ const OPEN_LIST=[
   {id:'right', name:'Петли справа (ручка слева)'}
 ];
 let _wiz={step:1, len:3000, hei:2400, dep:600, offL:0, offR:0, offT:0,
-  doors:6, antr:false, antrH:400, presets:[], mat:'ldsp', frez:'modern', handle:'railing', plankL:0, plankR:0, plankT:0};
+  doors:6, antr:false, antrH:400, presets:[], mat:'ldsp', frez:'modern', handle:'railing', plankL:0, plankR:0, plankT:0,
+  type:'hinged', scen:'bedroom'};
+function wizSaveDraft(){ try{ localStorage.setItem('mebeloff_wiz_draft', JSON.stringify(_wiz)); }catch(e){} }
+function wizLoadDraft(){
+  try{
+    const r=localStorage.getItem('mebeloff_wiz_draft');
+    if(r){ const o=JSON.parse(r); for(const k in o){ if(k!=='step') _wiz[k]=o[k]; } }
+  }catch(e){}
+}
+function wizValidate(){
+  const errs={};
+  const L=parseInt(_wiz.len)||0, H=parseInt(_wiz.hei)||0, D=parseInt(_wiz.dep)||0;
+  if(L<600) errs.len='Ширина не может быть меньше 600 мм';
+  else if(L>6000) errs.len='Ширина больше 6000 мм — лучше два отдельных шкафа';
+  if(H<1000) errs.hei='Высота не может быть меньше 1000 мм';
+  else if(H>3200) errs.hei='Высота больше 3200 мм — нестандарт, посчитаем вручную';
+  if(D<350) errs.dep='Глубина не может быть меньше 350 мм';
+  else if(D>800) errs.dep='Глубина больше 800 мм — нестандарт';
+  return errs;
+}
 function wizW(){ return Math.max(300,(parseInt(_wiz.len)||0)-(parseInt(_wiz.offL)||0)-(parseInt(_wiz.offR)||0)-(parseInt(_wiz.plankL)||0)-(parseInt(_wiz.plankR)||0)); }
 function wizH(){ return Math.max(600,(parseInt(_wiz.hei)||0)-(parseInt(_wiz.offT)||0)); }
 // Раскладка дверей по модулям: по 2, нечётный остаток — одним модулем на 3
@@ -1117,32 +1176,40 @@ function wizModules(){
   return out;
 }
 function wizOpen(){
-  const vp=document.getElementById('viewport'); if(!vp)return;
+  ensure2DUI();
   let m=document.getElementById('w2dwiz');
   if(!m){
     m=document.createElement('div');
     m.id='w2dwiz';
-    m.style.cssText='position:absolute;inset:0;z-index:40;display:none;background:rgba(20,22,25,0.66);overflow:auto;padding:26px;box-sizing:border-box';
-    vp.appendChild(m);
+    document.body.appendChild(m);
   }
+  m.style.cssText='position:fixed;inset:0;z-index:900;background:rgba(15,17,20,.62);overflow:auto;padding:24px 12px;box-sizing:border-box;display:block';
+  wizLoadDraft();
   _wiz.step=1;
   _wiz.doors=Math.max(1,Math.round(wizW()/500));
-  m.style.display='block';
   wizRender();
 }
 function wizClose(){ const m=document.getElementById('w2dwiz'); if(m)m.style.display='none'; }
 function wizSet(f,v){
-  _wiz[f]=(f==='antr')?!!v:((f==='mat'||f==='frez'||f==='handle')?v:parseInt(v)||0);
+  const txt=(f==='mat'||f==='frez'||f==='handle'||f==='type'||f==='scen');
+  _wiz[f]=(f==='antr')?!!v:(txt?v:parseInt(v)||0);
   if(f==='len'||f==='offL'||f==='offR')_wiz.doors=Math.max(1,Math.round(wizW()/500));
+  wizSaveDraft();
   wizRender();
 }
+function wizDims(l,h,d){
+  _wiz.len=parseInt(l)||_wiz.len; _wiz.hei=parseInt(h)||_wiz.hei; _wiz.dep=parseInt(d)||_wiz.dep;
+  _wiz.doors=Math.max(1,Math.round(wizW()/500));
+  wizSaveDraft(); wizRender();
+}
 function wizStep(d){
-  _wiz.step=Math.max(1,Math.min(4,_wiz.step+d));
-  if(_wiz.step===3){
-    const M=wizModules().length;
-    while(_wiz.presets.length<M)_wiz.presets.push('empty');
-    _wiz.presets.length=M;
+  if(d>0&&_wiz.step===1){
+    const errs=wizValidate();
+    if(Object.keys(errs).length){ _wiz.showErrs=true; wizRender(); return; }
   }
+  _wiz.showErrs=false;
+  _wiz.step=Math.max(1,Math.min(4,_wiz.step+d));
+  wizSaveDraft();
   wizRender();
 }
 function wizPreset(i,p){ _wiz.presets[i]=p; wizRender(); }
@@ -1160,99 +1227,264 @@ function wizPrevSvg(p){
   else if(p==='shDrawers'){ inner+='<line x1="5" y1="22" x2="41" y2="22" stroke="#b08a52" stroke-width="2"/><line x1="5" y1="40" x2="41" y2="40" stroke="#b08a52" stroke-width="2"/><rect x="6" y="43" width="34" height="11" fill="#eef1f5" stroke="#8ea2c0"/><rect x="6" y="55" width="34" height="11" fill="#eef1f5" stroke="#8ea2c0"/><line x1="17" y1="48" x2="29" y2="48" stroke="#7e8790" stroke-width="1.6"/><line x1="17" y1="60" x2="29" y2="60" stroke="#7e8790" stroke-width="1.6"/>'; }
   return '<svg width="46" height="70" style="display:block"><rect x="1" y="1" width="44" height="68" fill="#fff" stroke="#3a3f45"/>'+inner+'</svg>';
 }
+function wizScenDefs(){
+  return [
+   {id:'bedroom', name:'Для спальни', desc:'Развеска + ящики для белья',
+    cyc:['rodDrawers','shelfDrawer','rodLong','shelves3'], th:['rodDrawers','shelfDrawer']},
+   {id:'hallway', name:'Для прихожей', desc:'Верхняя одежда, полки, обувь снизу',
+    cyc:['rodLong','shelves3','drawerStack','shelvesDense'], th:['rodLong','drawerStack']},
+   {id:'maxhang', name:'Максимум развески', desc:'Двойные штанги везде, где влезают',
+    cyc:['rodDouble'], th:['rodDouble','rodLong']},
+   {id:'maxshelf', name:'Максимум полок', desc:'Плотные полки во всех секциях',
+    cyc:['shelvesDense'], th:['shelvesDense','shelves3']},
+   {id:'family', name:'Семейный микс', desc:'Развеска, комод и полки вперемешку',
+    cyc:['rodDouble','drawerStack','shelves3','rodDrawers'], th:['rodDouble','drawerStack']}
+  ];
+}
+function wizScenList(n){
+  const def=wizScenDefs().find(function(x){return x.id===_wiz.scen;})||wizScenDefs()[0];
+  const out=[];
+  for(let i=0;i<n;i++) out.push(def.cyc[i%def.cyc.length]);
+  return out;
+}
+function wizFillApply(s,id){
+  const FALL={rodDouble:['rodDouble','rodLong','rodDrawers'], rodLong:['rodLong','rodDrawers'],
+    rodDrawers:['rodDrawers','rodLong','shelfDrawer'], drawerStack:['drawerStack','shelfDrawer'],
+    shelfDrawer:['shelfDrawer','shelves3'], shelvesDense:['shelvesDense','shelves3'], shelves3:['shelves3']};
+  const order=(FALL[id]||[id]).concat(['shelves3','shelvesDense']);
+  for(let i=0;i<order.length;i++){
+    const t=FILL_TYPES.find(function(x){return x.id===order[i];});
+    if(t&&t.ready&&typeof t.apply==='function'&&t.fits(s)===''){ t.apply(s); return order[i]; }
+  }
+  return null;
+}
+function wizTempSections(){
+  const H=wizH(), D=parseInt(_wiz.dep)||600;
+  const mods=wizModules();
+  const secH=Math.max(600,H-(_wiz.antr?_wiz.antrH:0));
+  const out=[];
+  const scen=wizScenList(mods.length);
+  mods.forEach(function(md,i){
+    const s=mkSection();
+    s.width=md.width; s.height=secH; s.depth=D;
+    if(_wiz.type==='hinged'&&_wiz.mat!=='none'){
+      s.facade.type=(md.doors===3?'doors3':md.doors===2?'doors2':'full');
+      s.facade.material=_wiz.mat; s.facade.frez=_wiz.frez; s.facade.handle=_wiz.handle;
+    }else{
+      s.facade.type='none';
+    }
+    if(_wiz.antr){
+      s.antresol.enabled=true; s.antresol.height=_wiz.antrH;
+      if(_wiz.type==='hinged'&&_wiz.mat!=='none'){
+        s.antresol.facade.type=(md.doors>=2?'doors2':'full');
+        s.antresol.facade.material=_wiz.mat;
+      }
+    }
+    wizFillApply(s, scen[i]);
+    out.push(s);
+  });
+  return out;
+}
+function wizEstimate(secArr){
+  const saved=sections;
+  let d=null;
+  try{ sections=secArr; d=calcAllCosts(); }catch(e){ d=null; }
+  sections=saved;
+  if(!d) return null;
+  const fin=function(x){ return (typeof x==='number'&&isFinite(x))?x:0; };
+  let price=null;
+  try{
+    if(typeof DB!=='undefined'&&DB&&DB.ldsp&&DB.ldsp.length){
+      const pl=DB.ldsp.reduce(function(a,x){return a+(x.p||0);},0)/DB.ldsp.length;
+      let m=fin(d.ldspEquiv)*pl + fin(d.hdfEquiv)*(DB.hdf_p||9000) + fin(d.totalEdgePm)*(DB.krom_p||200);
+      const fv=d.facadeVariants||{};
+      if(_wiz.type==='hinged'){
+        if(_wiz.mat==='ldsp'&&fv.ldsp) m+=fin(fv.ldsp.equiv)*pl;
+        if(_wiz.mat==='mdfPlenka'&&fv.mdfPlenka) m+=fin(fv.mdfPlenka.m2)*(((DB.fas_plen||[])[0]||{}).p||18000);
+        if(_wiz.mat==='mdfKraska'&&fv.mdfKraska) m+=fin(fv.mdfKraska.m2)*(((DB.fas_kr||[])[0]||{}).p||26000);
+      }
+      m+=fin(d.totalHinges)*320 + fin(d.totalHandles)*500 + fin(d.totalDrawerUnits)*2400;
+      const rodsN=secArr.reduce(function(a,s){ return a+secRods(s).length; },0);
+      m+=rodsN*2400 + secArr.length*4*100;
+      if(isFinite(m)&&m>0) price=Math.round(m*1.8/1000)*1000;
+    }
+  }catch(e){ price=null; }
+  return {d:d, price:price};
+}
+function wizPreviewHtml(secs){
+  const totW=secs.reduce(function(a,s){return a+s.width;},0)||1;
+  let h='<div class="wiz-prev">';
+  secs.forEach(function(s){
+    const pct=(s.width/totW*100).toFixed(2);
+    const pxW=Math.max(40,Math.round(220*s.width/totW));
+    const svg=drawSectionSvg({shelves:s.shelves, rods:s.rods, drawerBlocks:s.drawerBlocks,
+      height:s.height, dividers:s.dividers, width:s.width}, pxW, 150);
+    h+='<div class="wiz-prev-sec" style="width:'+pct+'%">'+svg+
+      '<div class="wiz-prev-cap">'+s.width+'&times;'+s.height+'</div></div>';
+  });
+  return h+'</div>';
+}
+function wizFldNum(label,f,val,min,max,step,err){
+  const e=err||'';
+  let h='<div class="wiz-fld'+(e?' wiz-fld-err':'')+'">';
+  h+='<div class="wiz-lbl">'+label+'</div>';
+  h+='<div class="wiz-pair">';
+  h+='<input type="range" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'" oninput="wizSet(\''+f+'\',this.value)">';
+  h+='<input type="number" inputmode="numeric" value="'+val+'" min="'+min+'" max="'+max+'" onchange="wizSet(\''+f+'\',this.value)">';
+  h+='</div>';
+  if(e) h+='<div class="wiz-err">'+e+'</div>';
+  return h+'</div>';
+}
+function wizTypeSvg(t){
+  let inner='';
+  if(t==='hinged'){
+    inner='<rect x="6" y="6" width="33" height="62" rx="2" fill="#efe9dc" stroke="#8a8f96"/>'+
+      '<rect x="41" y="6" width="33" height="62" rx="2" fill="#efe9dc" stroke="#8a8f96"/>'+
+      '<circle cx="35" cy="38" r="2" fill="#4a453c"/><circle cx="45" cy="38" r="2" fill="#4a453c"/>'+
+      '<line x1="6" y1="6" x2="16" y2="12" stroke="#c8c2b4"/><line x1="6" y1="68" x2="16" y2="62" stroke="#c8c2b4"/>';
+  }else if(t==='coupe'){
+    inner='<rect x="6" y="6" width="40" height="62" rx="1" fill="#efe9dc" stroke="#8a8f96"/>'+
+      '<rect x="36" y="8" width="38" height="60" rx="1" fill="#e2dbc9" stroke="#8a8f96"/>'+
+      '<line x1="14" y1="74" x2="26" y2="74" stroke="#4a453c" stroke-width="2" marker-end="none"/>'+
+      '<path d="M52,74 h12 l-4,-3 m4,3 l-4,3" stroke="#4a453c" fill="none" stroke-width="1.5"/>'+
+      '<path d="M28,74 h-12 l4,-3 m-4,3 l4,3" stroke="#4a453c" fill="none" stroke-width="1.5"/>';
+  }else{
+    inner='<rect x="6" y="6" width="68" height="62" fill="none" stroke="#8a8f96"/>'+
+      '<line x1="6" y1="26" x2="74" y2="26" stroke="#b8935a" stroke-width="3"/>'+
+      '<line x1="6" y1="44" x2="40" y2="44" stroke="#b8935a" stroke-width="3"/>'+
+      '<line x1="10" y1="16" x2="70" y2="16" stroke="#7a5c2e" stroke-width="2" stroke-linecap="round"/>'+
+      '<rect x="44" y="50" width="30" height="18" fill="rgba(90,130,220,.18)" stroke="#5a82dc"/>';
+  }
+  return '<svg viewBox="0 0 80 80" width="72" height="72">'+inner+'</svg>';
+}
 function wizRender(){
   const m=document.getElementById('w2dwiz'); if(!m)return;
-  const q=String.fromCharCode(39);
-  const W=wizW(), H=wizH();
-  const mods=wizModules();
-  const dw=Math.round(W/Math.max(1,parseInt(_wiz.doors)||1));
-  let dots='<div style="display:flex;gap:8px;align-items:center;margin:10px 0 18px 0">';
-  const names=['Стена и размеры','Двери и модули','Наполнение','Фасад'];
+  const qm=String.fromCharCode(39);
+  const W=wizW(), H=wizH(), D=parseInt(_wiz.dep)||600;
+  const errs=wizValidate();
+  const showE=!!_wiz.showErrs;
+  const names=['Габариты','Тип','Наполнение','Результат'];
+  let prog='<div class="wiz-prog"><div class="wiz-prog-in" style="width:'+(_wiz.step/4*100)+'%"></div></div>';
+  let dots='<div class="wiz-dots">';
   for(let i=1;i<=4;i++){
-    dots+='<div style="display:flex;align-items:center;gap:6px"><div style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;'+(i===_wiz.step?'background:#c39a3b;color:#1d2023':'background:#eceae4;color:#8a8f96')+'">'+i+'</div><span style="font-size:11px;color:'+(i===_wiz.step?'#1d2023':'#9aa1a8')+'">'+names[i-1]+'</span></div>';
-    if(i<4)dots+='<div style="flex:1;height:1px;background:#e2dfd7"></div>';
+    dots+='<div class="wiz-dot'+(i===_wiz.step?' on':(i<_wiz.step?' done':''))+'">'+
+      '<span class="wiz-dot-n">'+i+'</span><span class="wiz-dot-t">'+names[i-1]+'</span></div>';
   }
   dots+='</div>';
-  const inp=(label,f,val,w)=>{
-    return '<div><div style="font-size:11px;color:#6a7076;margin-bottom:4px">'+label+'</div>'+
-      '<input type="number" value="'+val+'" style="width:'+(w||100)+'px;padding:8px;border:1px solid #d5d1c8;border-radius:8px;font-size:13px" onchange="wizSet('+q+f+q+',this.value)"></div>';
-  };
   let body='';
   if(_wiz.step===1){
-    body+='<div style="font-size:12.5px;color:#565c63;margin-bottom:12px">Размеры стены/проёма и отступы — ширина шкафа посчитается сама.</div>';
-    body+='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px">'+inp('Длина (ширина), мм','len',_wiz.len,120)+inp('Высота, мм','hei',_wiz.hei,110)+inp('Глубина, мм','dep',_wiz.dep,100)+'</div>';
-    body+='<div style="font-size:11.5px;color:#6a7076;margin:8px 0 6px 0;font-weight:600">Отступы от стен/потолка</div>';
-    body+='<div style="display:flex;gap:14px;flex-wrap:wrap">'+inp('Слева, мм','offL',_wiz.offL,90)+inp('Справа, мм','offR',_wiz.offR,90)+inp('Сверху, мм','offT',_wiz.offT,90)+'</div>';
-    body+='<div style="font-size:11.5px;color:#6a7076;margin:12px 0 6px 0;font-weight:600">Фальш-планки по краям, мм (0 = нет)</div>';
-    body+='<div style="display:flex;gap:14px;flex-wrap:wrap">'+inp('Слева','plankL',_wiz.plankL,80)+inp('Справа','plankR',_wiz.plankR,80)+inp('Сверху','plankT',_wiz.plankT,80)+'</div>';
-    body+='<div style="margin-top:14px;font-size:12.5px;color:#1d2023">Шкаф: <b style="font-family:ui-monospace,Consolas,monospace">'+W+' × '+H+' × '+(parseInt(_wiz.dep)||600)+'</b> мм</div>';
+    body+='<div class="wiz-hint">Размеры места, куда встанет шкаф. Всё уже заполнено — поправьте и жмите «Далее».</div>';
+    const PRE=[['Спальня 3000&times;2400',3000,2400,600],['Прихожая 1200&times;2200',1200,2200,450],
+      ['Гардеробная 2400&times;2600',2400,2600,600],['Детская 1600&times;2200',1600,2200,520]];
+    body+='<div class="wiz-chips">';
+    PRE.forEach(function(pp){
+      const act=(_wiz.len===pp[1]&&_wiz.hei===pp[2]&&_wiz.dep===pp[3]);
+      body+='<button class="wiz-chip'+(act?' on':'')+'" onclick="wizDims('+pp[1]+','+pp[2]+','+pp[3]+')">'+pp[0]+'</button>';
+    });
+    body+='</div>';
+    body+=wizFldNum('Ширина, мм','len',_wiz.len,600,6000,50, showE?errs.len:(errs.len||''));
+    body+=wizFldNum('Высота, мм','hei',_wiz.hei,1000,3200,50, showE?errs.hei:(errs.hei||''));
+    body+=wizFldNum('Глубина, мм','dep',_wiz.dep,350,800,10, showE?errs.dep:(errs.dep||''));
+    body+='<details class="wiz-adv"><summary>Точная посадка: отступы и планки</summary><div class="wiz-adv-in">';
+    const adv=[['Отступ слева','offL'],['Отступ справа','offR'],['Отступ сверху','offT'],
+      ['Планка слева','plankL'],['Планка справа','plankR'],['Планка сверху','plankT']];
+    adv.forEach(function(aa){
+      body+='<label class="wiz-mini"><span>'+aa[0]+'</span><input type="number" inputmode="numeric" value="'+_wiz[aa[1]]+'" onchange="wizSet('+qm+aa[1]+qm+',this.value)"></label>';
+    });
+    body+='</div></details>';
+    body+='<div class="wiz-total">Шкаф: <b>'+W+' &times; '+H+' &times; '+D+'</b> мм</div>';
   }
   if(_wiz.step===2){
-    body+='<div style="font-size:12.5px;color:#565c63;margin-bottom:12px">Сколько дверей? Модули подберутся автоматически.</div>';
-    body+='<div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px">';
-    body+=inp('Сколько дверей · ширина ≈ '+dw+' мм','doors',_wiz.doors,110);
-    body+='<div><div style="font-size:11px;color:#6a7076;margin-bottom:4px">Антресоль</div>'+
-      '<label style="display:flex;align-items:center;gap:7px;font-size:12.5px;padding:8px 0"><input type="checkbox" '+(_wiz.antr?'checked':'')+' onchange="wizSet('+q+'antr'+q+',this.checked)"> есть, высота</label></div>';
-    body+=inp('мм','antrH',_wiz.antrH,80);
-    body+='</div>';
-    body+='<div style="font-size:11.5px;color:#6a7076;margin:10px 0 6px 0;font-weight:600">Модули: ширина × высота</div>';
-    body+='<div style="display:flex;gap:10px;flex-wrap:wrap">';
-    mods.forEach(md=>{
-      body+='<div style="border:1px solid #d5d1c8;border-radius:10px;padding:10px 14px;text-align:center;background:#fff">'+
-        '<div style="font-family:ui-monospace,Consolas,monospace;font-size:13px;font-weight:700">'+md.width+' × '+(H-(_wiz.antr?_wiz.antrH:0))+'</div>'+
-        '<div style="font-size:10.5px;color:#8a8f96">'+md.doors+' дв.</div></div>';
+    body+='<div class="wiz-hint">Каким будет шкаф?</div>';
+    const TYPES=[['hinged','Распашной','Классические двери на петлях'],
+      ['coupe','Купе','Раздвижные двери'],
+      ['walkin','Гардеробная','Открытые секции без дверей']];
+    body+='<div class="wiz-cards">';
+    TYPES.forEach(function(tt){
+      const act=(_wiz.type===tt[0]);
+      body+='<div class="wiz-card'+(act?' on':'')+'" onclick="wizSet('+qm+'type'+qm+','+qm+tt[0]+qm+')">'+
+        wizTypeSvg(tt[0])+'<div class="wiz-card-n">'+tt[1]+'</div><div class="wiz-card-d">'+tt[2]+'</div></div>';
     });
     body+='</div>';
-    if(_wiz.antr)body+='<div style="margin-top:10px;font-size:11.5px;color:#6a7076">Высота шкафа: <b>'+H+'</b> мм (низ '+(H-_wiz.antrH)+' + антресоль '+_wiz.antrH+')</div>';
-  }
-  if(_wiz.step===3){
-    body+='<div style="font-size:12.5px;color:#565c63;margin-bottom:12px">Наполнение каждой секции — тап по картинке. Потом всё правится в 2D.</div>';
-    const PRE=[['empty','Пусто'],['shelves3','3 полки'],['shelves5','5 полок'],['penal7','Пенал 7 полок'],
-      ['rod','Штанга'],['rod2shelf','Штанга + полка'],['split2t5p','Штанга | 5 полок'],
-      ['rodDrawers','Штанга + ящики'],['shDrawers','Полки + ящики'],['shoe4','Обувница']];
-    mods.forEach((md,i)=>{
-      body+='<div style="margin-bottom:12px"><div style="font-size:11.5px;font-weight:600;color:#1d2023;margin-bottom:6px">Секция '+(i+1)+' · '+md.width+' мм</div><div style="display:flex;gap:8px;flex-wrap:wrap">';
-      PRE.forEach(pp=>{
-        const act=(_wiz.presets[i]===pp[0]);
-        body+='<div onclick="wizPreset('+i+','+q+pp[0]+q+')" style="cursor:pointer;border:2px solid '+(act?'#c39a3b':'#e2dfd7')+';border-radius:9px;padding:6px;background:'+(act?'#faf3e2':'#fff')+';text-align:center">'+wizPrevSvg(pp[0])+'<div style="font-size:9.5px;color:'+(act?'#8a6a1e':'#6a7076')+';margin-top:3px;max-width:52px">'+pp[1]+'</div></div>';
-      });
-      body+='</div></div>';
-    });
-  }
-  if(_wiz.step===4){
-    body+='<div style="font-size:12.5px;color:#565c63;margin-bottom:12px">Материал фасадов. Зазоры и всё остальное — потом в 2D.</div>';
-    const MATS=[['ldsp','ЛДСП'],['mdfPlenka','МДФ Плёнка'],['mdfKraska','МДФ Краска'],['none','Без фасадов']];
-    body+='<div style="display:flex;gap:10px;flex-wrap:wrap">';
-    MATS.forEach(mm=>{
-      const act=(_wiz.mat===mm[0]);
-      body+='<div onclick="wizSet('+q+'mat'+q+','+q+mm[0]+q+')" style="cursor:pointer;border:2px solid '+(act?'#c39a3b':'#e2dfd7')+';border-radius:10px;padding:14px 18px;background:'+(act?'#faf3e2':'#fff')+';font-size:12.5px;font-weight:600;color:#1d2023">'+mm[1]+'</div>';
-    });
-    body+='</div>';
-    if(_wiz.mat!=='none'){
-      body+='<div style="font-size:11.5px;color:#6a7076;margin:14px 0 6px 0;font-weight:600">Фрезеровка</div><div style="display:flex;gap:8px;flex-wrap:wrap">';
-      FREZ_LIST.forEach(fz=>{
-        const act=(_wiz.frez===fz.id);
-        body+='<div onclick="wizSet('+q+'frez'+q+','+q+fz.id+q+')" style="cursor:pointer;border:2px solid '+(act?'#c39a3b':'#e2dfd7')+';border-radius:9px;padding:8px 12px;background:'+(act?'#faf3e2':'#fff')+';text-align:center"><div style="font-size:11.5px;font-weight:600;color:#1d2023">'+fz.name+'</div></div>';
-      });
-      body+='</div>';
-      body+='<div style="font-size:11.5px;color:#6a7076;margin:14px 0 6px 0;font-weight:600">Ручки</div><div style="display:flex;gap:8px;flex-wrap:wrap">';
-      HANDLE_LIST.forEach(hh=>{
-        const act=(_wiz.handle===hh.id);
-        body+='<div onclick="wizSet('+q+'handle'+q+','+q+hh.id+q+')" style="cursor:pointer;border:2px solid '+(act?'#c39a3b':'#e2dfd7')+';border-radius:9px;padding:8px 12px;background:'+(act?'#faf3e2':'#fff')+';font-size:11.5px;font-weight:600;color:#1d2023">'+hh.name+'</div>';
+    if(_wiz.type==='hinged'){
+      const MATS=[['ldsp','ЛДСП'],['mdfPlenka','МДФ Плёнка'],['mdfKraska','МДФ Краска'],['none','Без фасадов']];
+      body+='<div class="wiz-sub">Материал фасадов</div><div class="wiz-chips">';
+      MATS.forEach(function(mm){
+        const act=(_wiz.mat===mm[0]);
+        body+='<button class="wiz-chip'+(act?' on':'')+'" onclick="wizSet('+qm+'mat'+qm+','+qm+mm[0]+qm+')">'+mm[1]+'</button>';
       });
       body+='</div>';
     }
-    body+='<div style="margin-top:14px;font-size:12px;color:#6a7076">Итого: '+mods.length+' секц., '+_wiz.doors+' дв., '+W+'×'+H+' мм'+(_wiz.antr?', антресоль '+_wiz.antrH:'')+'</div>';
+    if(_wiz.type==='coupe'){
+      body+='<div class="wiz-note">Двери-купе пока не считаются автоматически: соберём корпус без фасадов, купе-систему добавите в калькуляторе отдельной позицией.</div>';
+    }
+    const dw=Math.round(W/Math.max(1,parseInt(_wiz.doors)||1));
+    body+='<div class="wiz-sub">'+(_wiz.type==='walkin'?'Сколько секций':'Сколько дверей')+' &middot; модуль &asymp; '+dw+' мм</div>';
+    body+='<div class="wiz-pair wiz-pair-doors">';
+    body+='<input type="range" min="1" max="12" step="1" value="'+_wiz.doors+'" oninput="wizSet('+qm+'doors'+qm+',this.value)">';
+    body+='<input type="number" inputmode="numeric" min="1" max="12" value="'+_wiz.doors+'" onchange="wizSet('+qm+'doors'+qm+',this.value)">';
+    body+='</div>';
+    body+='<label class="wiz-mini wiz-antr"><span>Антресоль сверху, мм</span>'+
+      '<input type="checkbox" '+(_wiz.antr?'checked':'')+' onchange="wizSet('+qm+'antr'+qm+',this.checked)">'+
+      '<input type="number" inputmode="numeric" value="'+_wiz.antrH+'" '+(_wiz.antr?'':'disabled')+' onchange="wizSet('+qm+'antrH'+qm+',this.value)"></label>';
   }
-  let btns='<div style="display:flex;gap:10px;margin-top:20px">';
-  if(_wiz.step>1)btns+='<button onclick="wizStep(-1)" style="padding:9px 18px;border:1px solid #d5d1c8;background:#fff;border-radius:9px;font-size:12.5px;cursor:pointer">Назад</button>';
+  if(_wiz.step===3){
+    body+='<div class="wiz-hint">Как будете пользоваться? Мастер сам расставит наполнение по секциям — потом всё правится.</div>';
+    body+='<div class="wiz-scens">';
+    wizScenDefs().forEach(function(sd){
+      const act=(_wiz.scen===sd.id);
+      let th='';
+      sd.th.forEach(function(tid){
+        const t=FILL_TYPES.find(function(x){return x.id===tid;});
+        if(t) th+='<span class="wiz-scen-th">'+t.thumb()+'</span>';
+      });
+      body+='<div class="wiz-scen'+(act?' on':'')+'" onclick="wizSet('+qm+'scen'+qm+','+qm+sd.id+qm+')">'+
+        '<div class="wiz-scen-ths">'+th+'</div>'+
+        '<div class="wiz-card-n">'+sd.name+'</div><div class="wiz-card-d">'+sd.desc+'</div></div>';
+    });
+    body+='</div>';
+  }
+  if(_wiz.step===4){
+    let secs=[];
+    try{ secs=wizTempSections(); }catch(e){ secs=[]; }
+    if(!secs.length){
+      body+='<div class="wiz-note">Не получилось собрать шкаф из этих размеров. Вернитесь на шаг 1 и поправьте габариты.</div>';
+    }else{
+      body+='<div class="wiz-hint">Готово! Вот ваш шкаф. Дальше его можно крутить в 3D и менять любую мелочь.</div>';
+      body+=wizPreviewHtml(secs);
+      const est=wizEstimate(secs);
+      body+='<div class="wiz-stats">';
+      body+='<span>'+secs.length+' секц.</span><span>'+W+' &times; '+H+' &times; '+D+' мм</span>';
+      if(est&&est.d){
+        const d=est.d;
+        if(d.ldspCount) body+='<span>ЛДСП: '+d.ldspCount+' л</span>';
+        if(d.totalDrawerUnits) body+='<span>Ящиков: '+d.totalDrawerUnits+'</span>';
+        if(d.totalDoors) body+='<span>Дверей: '+d.totalDoors+'</span>';
+      }
+      body+='</div>';
+      if(est&&est.price){
+        body+='<div class="wiz-price">Предварительно: &asymp; <b>'+est.price.toLocaleString('ru')+' ₸</b>'+
+          '<div class="wiz-price-note">Ориентир по средним ценам материалов. Точный расчёт — в Калькуляторе.</div></div>';
+      }else{
+        body+='<div class="wiz-price wiz-price-na">Точная цена считается в Калькуляторе после «Отправить в расчёт».</div>';
+      }
+      body+='<div class="wiz-final">';
+      body+='<button class="wiz-btn" onclick="wizBuild()">Отлично, дорабатываю &rarr;</button>';
+      body+='<button class="wiz-btn2" onclick="wizStep(-1)">Пересобрать</button>';
+      body+='</div>';
+    }
+  }
+  let btns='<div class="wiz-nav">';
+  if(_wiz.step>1)btns+='<button class="wiz-btn2" onclick="wizStep(-1)">&larr; Назад</button>';
   btns+='<span style="flex:1"></span>';
-  if(_wiz.step<4)btns+='<button onclick="wizStep(1)" style="padding:9px 22px;border:none;background:#c39a3b;color:#1d2023;border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer">Далее</button>';
-  else btns+='<button onclick="wizBuild()" style="padding:9px 22px;border:none;background:#c39a3b;color:#1d2023;border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer">Построить →</button>';
+  if(_wiz.step<4)btns+='<button class="wiz-btn" onclick="wizStep(1)">Далее &rarr;</button>';
   btns+='</div>';
-  m.innerHTML='<div style="max-width:720px;margin:0 auto;background:#fbf9f4;border-radius:14px;padding:22px 26px;box-shadow:0 18px 50px rgba(0,0,0,.5)">'+
-    '<div style="display:flex;align-items:center"><div style="font-size:15px;font-weight:800;letter-spacing:1.5px;color:#b8963e">MEBELOFF</div><div style="font-size:13px;color:#565c63;margin-left:10px">· Мастер быстрого старта</div><span style="flex:1"></span><button onclick="wizClose()" style="border:none;background:none;font-size:20px;cursor:pointer;color:#8a8f96">×</button></div>'+
-    dots+body+btns+'</div>';
+  m.innerHTML='<div class="wiz-shell">'+
+    '<div class="wiz-head"><div class="wiz-logo">MEBELOFF</div><div class="wiz-title">&middot; Мастер быстрого старта</div>'+
+    '<span style="flex:1"></span>'+
+    '<button class="wiz-skip" onclick="wizClose()">Пропустить мастер</button>'+
+    '<button class="wiz-x" onclick="wizClose()">&times;</button></div>'+
+    prog+dots+body+btns+'</div>';
 }
 // Пресеты наполнения → модель секции
 function wizApplyPreset(s,p){
@@ -1266,7 +1498,7 @@ function wizApplyPreset(s,p){
   else if(p==='penal7'){ even(7); }
   else if(p==='split2t5p'){
     s.dividers.push({id:s.divId++, pos:Math.round(s.width/2)-T/2});
-    s.hasRod=true; s.rodHeight=Math.max(T*3,h-116); s.rodCol=0;
+    s.rods=[{height:Math.max(T*3,h-116), col:0}];
     const st=Math.round((h-2*T)/6);
     for(let i=1;i<=5;i++)s.shelves.push({id:s.shelfId++, height:T+st*i, col:1});
   }
@@ -1274,18 +1506,18 @@ function wizApplyPreset(s,p){
     const mid=Math.round((h*0.42)/10)*10;
     s.shelves.push({id:s.shelfId++, height:mid, col:0});
     s.drawerBlocks.push({nicheIdx:0, count:2, brand:'En-7'});
-    s.hasRod=true; s.rodHeight=Math.max(T*3,h-116);
+    s.rods=[{height:Math.max(T*3,h-116), col:null}];
   }
   else if(p==='shoe4'){
     const zone=Math.min(1100,Math.round(h*0.5));
     const st=Math.round((zone-T)/5);
     for(let i=1;i<=4;i++)s.shelves.push({id:s.shelfId++, height:T+st*i, col:0});
   }
-  else if(p==='rod'){ s.hasRod=true; s.rodHeight=Math.max(T*3, h-116); }
+  else if(p==='rod'){ s.rods=[{height:Math.max(T*3, h-116), col:null}]; }
   else if(p==='rod2shelf'){
     const sh=Math.round((h-366)/10)*10;
     s.shelves.push({id:s.shelfId++, height:sh, col:0});
-    s.hasRod=true; s.rodHeight=Math.max(T*3, sh-100);
+    s.rods=[{height:Math.max(T*3, sh-100), col:null}];
   }
   else if(p==='shDrawers'){
     even(2);
@@ -1308,29 +1540,15 @@ function roomFitToCabinet(){
   _room.dep=maxD;
 }
 function wizBuild(){
-  const hasContent=sections.some(x=>x.shelves.length||x.dividers.length||x.drawerBlocks.length||x.hasRod);
+  const hasContent=sections.some(x=>x.shelves.length||x.dividers.length||x.drawerBlocks.length||secRods(x).length);
   if(sections.length>1||hasContent){
     if(!confirm('Мастер заменит текущие секции проекта. Продолжить?'))return;
   }
-  const W=wizW(), H=wizH(), D=parseInt(_wiz.dep)||600;
-  const mods=wizModules();
-  const secH=H-(_wiz.antr?_wiz.antrH:0);
+  let secs=[];
+  try{ secs=wizTempSections(); }catch(e){ secs=[]; }
+  if(!secs.length){ _wiz.step=1; _wiz.showErrs=true; wizRender(); return; }
   sections.length=0;
-  mods.forEach((md,i)=>{
-    const s=mkSection();
-    s.width=md.width; s.height=secH; s.depth=D;
-    s.facade.type=(_wiz.mat==='none')?'none':(md.doors===3?'doors3':md.doors===2?'doors2':'full');
-    if(_wiz.mat!=='none'){ s.facade.material=_wiz.mat; s.facade.frez=_wiz.frez; s.facade.handle=_wiz.handle; }
-    if(_wiz.antr){
-      s.antresol.enabled=true; s.antresol.height=_wiz.antrH;
-      if(_wiz.mat!=='none'){
-        s.antresol.facade.type=(md.doors>=2?'doors2':'full');
-        s.antresol.facade.material=_wiz.mat;
-      }
-    }
-    wizApplyPreset(s,_wiz.presets[i]||'empty');
-    sections.push(s);
-  });
+  secs.forEach(function(s){ sections.push(s); });
   _room.enabled=true;
   _room.offL=parseInt(_wiz.offL)||0; _room.offR=parseInt(_wiz.offR)||0; _room.offT=parseInt(_wiz.offT)||0;
   _room.plankL=parseInt(_wiz.plankL)||0; _room.plankR=parseInt(_wiz.plankR)||0; _room.plankT=parseInt(_wiz.plankT)||0;
@@ -1557,13 +1775,13 @@ function render2DFull(){
       }
     });
     // штанга: линия с держателями
-    if(s.hasRod){
-      const rc=(s.rodCol!=null&&cols[s.rodCol])?cols[s.rodCol]:{left:T,width:W-2*T};
-      const ry=sy(s.rodHeight||1600);
+    secRods(s).forEach(function(rr){
+      const rc=(rr.col!=null&&cols[rr.col])?cols[rr.col]:{left:T,width:W-2*T};
+      const ry=sy(rr.height||1600);
       const rx1=x0+rc.left*sc+2, rx2=x0+(rc.left+rc.width)*sc-2;
       g+='<line x1="'+rx1+'" y1="'+ry+'" x2="'+rx2+'" y2="'+ry+'" stroke="#7f858d" stroke-width="3.5" stroke-linecap="round"/>';
       g+='<circle cx="'+rx1+'" cy="'+ry+'" r="3" fill="#565c63"/><circle cx="'+rx2+'" cy="'+ry+'" r="3" fill="#565c63"/>';
-    }
+    });
     // антресоль
     if(antrH>0){
       const ay1=topY, ay0=topY-antrH*sc;
@@ -1657,9 +1875,11 @@ function w2dApplyTool(s,xm,ym){
     if(ex) ex.count=Math.min(5,(ex.count||1)+1);
     else s.drawerBlocks.push({nicheIdx:ni, count:2, brand:'En-7', col:(cols.length>1?ci:null)});
   }else if(_w2dTool==='rod'){
-    s.hasRod=true;
-    s.rodHeight=Math.max(T*3, Math.min(s.height-T*3, Math.round(ym/10)*10));
-    s.rodCol=(cols.length>1?ci:null);
+    const rh3=Math.max(T*3, Math.min(s.height-T*3, Math.round(ym/10)*10));
+    const rc3=(cols.length>1?ci:null);
+    const rn3=rodNear(s,ym,rc3);
+    if(rn3>=0){ s.rods[rn3].height=rh3; s.rods[rn3].col=rc3; }
+    else s.rods.push({height:rh3, col:rc3});
   }else if(_w2dTool==='part'){
     const colShN=s.shelves.filter(sh=>Math.min(sh.col||0,cols.length-1)===ci).length;
     if(colShN===0){
@@ -1716,7 +1936,7 @@ function w2dApplyTool(s,xm,ym){
       if(d<bpd){bpd=d;bp=i;}
     });
     if(bp>=0){ s.dividers.splice(bp,1); return false; }
-    if(s.hasRod&&Math.abs((s.rodHeight||0)-ym)<60&&(s.rodCol==null||s.rodCol===ci)){ s.hasRod=false; return false; }
+    const rdel=rodNear(s,ym,ci); if(rdel>=0){ s.rods.splice(rdel,1); return false; }
     const niches=getNiches(s);
     const ni=niches.findIndex(n=>ym>=n.bottom&&ym<=n.top);
     const bi=s.drawerBlocks.findIndex(db=>db.nicheIdx===ni&&(db.col==null||db.col===ci));
@@ -1767,9 +1987,11 @@ function w2dHoverBox(s,lay,xm,ym){
       if(d<bpd){bpd=d;bp=dv;}
     });
     if(bp)return {x:x0+bp.pos*sc-2, y:topY+T*sc-2, w:Math.max(1,T*sc)+4, h:(s.height-2*T)*sc+4};
-    if(s.hasRod&&Math.abs((s.rodHeight||0)-ym)<60&&(s.rodCol==null||s.rodCol===ci)){
-      const rc=(s.rodCol!=null&&cols[s.rodCol])?cols[s.rodCol]:{left:T,width:s.width-2*T};
-      return {x:x0+rc.left*sc, y:sy(s.rodHeight||1600)-6, w:rc.width*sc, h:12};
+    const rHov=rodNear(s,ym,ci);
+    if(rHov>=0){
+      const rrh=s.rods[rHov];
+      const rc=(rrh.col!=null&&cols[rrh.col])?cols[rrh.col]:{left:T,width:s.width-2*T};
+      return {x:x0+rc.left*sc, y:sy(rrh.height||1600)-6, w:rc.width*sc, h:12};
     }
     const nichesD=getNiches(s);
     const niD=nichesD.findIndex(n=>ym>=n.bottom&&ym<=n.top);
@@ -2021,7 +2243,8 @@ window.toggleClientMode = toggleClientMode;
 
 // ── SVG-превью наполнения секции ─────────────────────────────
 function drawSectionSvg(data, W=72, H=100){
-  const {shelves=[], hasRod=false, rodHeight=1320, drawerBlocks=[], height=2200, dividers=[], width=800} = data;
+  const {shelves=[], hasRod=false, rodHeight=1320, rods=null, drawerBlocks=[], height=2200, dividers=[], width=800} = data;
+  const rodL=Array.isArray(rods)?rods:(hasRod?[{height:rodHeight}]:[]);
   const bT=4; // толщина рамки на иконке (пиксели) — не путать с реальной T=16мм
   const scaleY = (H - bT*2) / height;
   const cols = getColumns({width, dividers: dividers.map(pos=>({pos}))});
@@ -2070,8 +2293,8 @@ function drawSectionSvg(data, W=72, H=100){
   });
 
   // Штанга (на всю секцию — не колонко-зависима)
-  if(hasRod){
-    const ry = H - bT - Math.round(rodHeight * scaleY) - 1;
+  rodL.forEach(function(rrd){
+    const ry = H - bT - Math.round((rrd.height||1320) * scaleY) - 1;
     items += `<line x1="${bT+4}" y1="${ry}" x2="${W-bT-4}" y2="${ry}" stroke="#88888888" stroke-width="2.5"/>`;
     items += `<circle cx="${bT+6}" cy="${ry}" r="2.5" fill="#999"/>`;
     items += `<circle cx="${W-bT-6}" cy="${ry}" r="2.5" fill="#999"/>`;
@@ -2080,7 +2303,7 @@ function drawSectionSvg(data, W=72, H=100){
       const hx = bT+8 + i*((W-bT*2-16)/(nH-1||1));
       items += `<path d="M${hx},${ry} Q${hx},${ry+7} ${hx-5},${ry+9} M${hx},${ry} Q${hx},${ry+7} ${hx+5},${ry+9}" stroke="#bbb" stroke-width="1" fill="none"/>`;
     }
-  }
+  });
 
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${items}</svg>`;
 }
@@ -2110,8 +2333,9 @@ function applyUserTemplate(sid,tplId){
   // тогда просто ничего не добавляем (секция остаётся без перегородок)
   s.dividers=(tpl.data.dividers||[]).map(pos=>({id:s.divId++, pos}));
   s.shelves=tpl.data.shelves.map(sh=>({id:s.shelfId++, height:sh.height, col:sh.col||0}));
-  s.hasRod=tpl.data.hasRod;
-  s.rodHeight=tpl.data.rodHeight||Math.round(s.height*.6);
+  s.rods=Array.isArray(tpl.data.rods)
+    ?tpl.data.rods.map(r=>({height:r.height, col:r.col!=null?r.col:null}))
+    :(tpl.data.hasRod?[{height:tpl.data.rodHeight||Math.round(s.height*.6), col:null}]:[]);
   s.drawerBlocks=(tpl.data.drawerBlocks||[]).map(db=>({...db}));
   renderPanel(); render3D(); projMarkUnsaved();
 }
@@ -2123,7 +2347,7 @@ function saveAsTemplate(sid){
     data:{ width:s.width, height:s.height,
            shelves:s.shelves.map(sh=>({height:sh.height, col:sh.col||0})),
            dividers:s.dividers.map(dv=>dv.pos),
-           hasRod:s.hasRod, rodHeight:s.rodHeight,
+           rods:secRods(s).map(r=>({height:r.height, col:r.col})),
            drawerBlocks:s.drawerBlocks.map(db=>({nicheIdx:db.nicheIdx,count:db.count,brand:db.brand||'En-7',col:(db.col!=null?db.col:null)})) }});
   saveUserTemplates(arr);
   renderPanel();
@@ -2216,16 +2440,21 @@ const FILL_TYPES=[
   thumb:function(){ return ftFrame(ftRod(14)); },
   apply:function(s){
     fillReset(s);
-    s.hasRod=true; s.rodHeight=fillSnap(s.height-120);
+    s.rods=[{height:fillSnap(s.height-120), col:null}];
   }},
- {id:'rodDouble', ready:false, name:'Двойная штанга', desc:'Рубашки сверху, брюки снизу',
+ {id:'rodDouble', ready:true, name:'Двойная штанга', desc:'Рубашки сверху, брюки снизу',
   fits:function(s){
     if(s.height<1900) return 'нужна высота от 1900';
     if(s.depth<500) return 'плечикам нужна глубина от 500';
     return '';
   },
   thumb:function(){ return ftFrame(ftRod(14)+ftRod(46)); },
-  apply:null},
+  apply:function(s){
+    fillReset(s);
+    const rtop=fillSnap(s.height-120);
+    const rlow=Math.max(T*3+200, fillSnap(rtop-900));
+    s.rods=[{height:rtop, col:null},{height:rlow, col:null}];
+  }},
  {id:'rodDrawers', ready:true, name:'Штанга + ящики', desc:'Самый ходовой гардеробный модуль',
   fits:function(s){
     if(s.height<1800) return 'нужна высота от 1800';
@@ -2235,7 +2464,7 @@ const FILL_TYPES=[
   thumb:function(){ return ftFrame(ftRod(13)+ftDrawer(56,11)+ftDrawer(69,11)); },
   apply:function(s){
     fillReset(s);
-    s.hasRod=true; s.rodHeight=fillSnap(s.height-120);
+    s.rods=[{height:fillSnap(s.height-120), col:null}];
     s.drawerBlocks.push({nicheIdx:0,count:2,brand:activeSlide.brand});
   }},
  {id:'pantograph', ready:false, name:'Пантограф', desc:'Лифт-штанга для высоких секций',
@@ -2278,7 +2507,7 @@ function fillSnap(v){ return Math.round(v/10)*10; }
 function fillReset(s){
   s.shelves=[];
   s.drawerBlocks=[];
-  s.hasRod=false;
+  s.rods=[];
 }
 
 function fillShelvesAt(s, heights){
@@ -2446,25 +2675,24 @@ function renderPanel(){
         <button class="ibtn" onclick="removeDivider(${s.id},${d.id})"><i class="ti ti-x"></i></button>
       </div>`
     ).join('');
-    const rodColSel=shelfCols.length>1
-      ? '<div class="irow" style="margin-bottom:8px">' +
-          '<span class="hint">ниша</span>' +
-          '<select style="flex:1;font-size:11px;padding:5px 6px;border-radius:6px;border:1px solid #ddd" onchange="updRodCol('+s.id+',this.value)">' +
-            '<option value=""'+(s.rodCol==null?' selected':'')+'>Вся секция</option>' +
-            shelfCols.map(function(c,ci){
-              const nm=ci===0?'Левая':ci===shelfCols.length-1?'Правая':('Ниша '+(ci+1));
-              return '<option value="'+ci+'"'+(s.rodCol===ci?' selected':'')+'>'+nm+'</option>';
-            }).join('') +
-          '</select>' +
-        '</div>'
-      : '';
-    const rodHtml=s.hasRod
-      ?`<div class="irow" style="margin-bottom:8px">
-          <span class="hint">высота</span>
-          <input type="number" value="${s.rodHeight}" onchange="upd(${s.id},'rodHeight',this.value)" style="max-width:80px">
-          <span class="hint">мм</span>
-        </div>`+rodColSel
-      :'';
+    function rodColSelFor(ri,rr){
+      if(shelfCols.length<=1) return '';
+      return '<select style="flex:1;font-size:11px;padding:5px 6px;border-radius:6px;border:1px solid #ddd" onchange="updRod('+s.id+','+ri+',&quot;col&quot;,this.value)">' +
+          '<option value=""'+(rr.col==null?' selected':'')+'>Вся секция</option>' +
+          shelfCols.map(function(c,ci){
+            const nm=ci===0?'Левая':ci===shelfCols.length-1?'Правая':('Ниша '+(ci+1));
+            return '<option value="'+ci+'"'+(rr.col===ci?' selected':'')+'>'+nm+'</option>';
+          }).join('') +
+        '</select>';
+    }
+    const rodHtml=secRods(s).map(function(rr,ri){
+      return `<div class="irow" style="margin-bottom:8px">
+          <span class="hint">выс.</span>
+          <input type="number" value="${rr.height}" onchange="updRod(${s.id},${ri},'height',this.value)" style="max-width:70px">
+          ${rodColSelFor(ri,rr)}
+          <button class="ibtn" onclick="delRod(${s.id},${ri})"><i class="ti ti-x"></i></button>
+        </div>`;
+    }).join('');
     const texHtml=(s.facade.type!=='none'&&showTex)
       ?`<label class="chkrow" style="margin-bottom:4px">
           <input type="checkbox" ${s.facade.hasTexture?'checked':''} onchange="updFacade(${s.id},'hasTexture',this.checked)">
@@ -2572,7 +2800,7 @@ function renderPanel(){
     // Бейджи с кол-вом элементов
     const shBadge = s.shelves.length ? `${s.shelves.length} шт` : '';
     const divBadge = s.dividers.length ? `${s.dividers.length} шт` : '';
-    const rodBadge = s.hasRod ? '✓' : '';
+    const rodBadge = secRods(s).length ? (secRods(s).length>1 ? secRods(s).length+' шт' : '✓') : '';
     const drBadge  = s.drawerBlocks.length ? `${s.drawerBlocks.reduce((a,b)=>a+b.count,0)} шт` : '';
     const facBadge = s.facade.type==='none' ? 'нет' : s.facade.type==='full' ? 'сплошной' : s.facade.type==='doors2' ? '2 дв.' : '3 дв.';
 
@@ -2643,9 +2871,8 @@ function renderPanel(){
 
       // ── Штанга ──
       acc('rod','⊢ Штанга',rodBadge,
-        `<label class="chkrow" style="margin-bottom:${s.hasRod?'8px':'0'}"><input type="checkbox" ${s.hasRod?'checked':''} onchange="toggleRod(${s.id})"> Штанга для одежды</label>` +
-        rodHtml,
-        s.hasRod
+        rodHtml + `<button class="addbtn" onclick="addRod(${s.id})">+ штанга</button>`,
+        secRods(s).length>0
       ) +
 
 
@@ -3293,15 +3520,15 @@ function render3D(){
       });
     }
     s.dividers.forEach(dv=>addBoard(ox+dv.pos,LH+T,zFront,T,Hc,Dc));
-    if(s.hasRod){
-      const rh=LH+Math.min(s.rodHeight,H-T*3);
-      const rcol = (s.rodCol!=null && shelfCols3d[s.rodCol]) ? shelfCols3d[s.rodCol] : null;
+    secRods(s).forEach(function(rr){
+      const rh=LH+Math.min(rr.height,H-T*3);
+      const rcol = (rr.col!=null && shelfCols3d[rr.col]) ? shelfCols3d[rr.col] : null;
       const rodLen = rcol ? Math.max(20,rcol.width-20) : W-2*T-20;
       const rodCx  = rcol ? ox+rcol.left+rcol.width/2 : ox+W/2;
       const g2=new THREE.CylinderGeometry(10,10,rodLen,16);
       const rm=new THREE.Mesh(g2,MR); rm.rotation.z=Math.PI/2;
       rm.position.set(rodCx,rh,zFront+Dc/2); rm.castShadow=true; rm.userData={w:true}; scene.add(rm);
-    }
+    });
     }
     // ── Ножки (всегда, 4 шт, высота LH=100мм) — по полному внешнему габариту D ──
     {
@@ -3545,7 +3772,7 @@ function buildCoreTree(s){
       .map(sh => sh.height)
       .sort((a,b)=>a-b);
     const dbs = (s.drawerBlocks||[]).filter(db => db.col==null || db.col===ci);
-    const rodHere = s.hasRod && (s.rodCol==null || s.rodCol===ci);
+    const rodsHere = secRods(s).filter(function(rr){ return rr.col==null || rr.col===ci; });
 
     // Границы проёмов колонки (низ..верх), core-совместимые
     const bounds = [T];
@@ -3575,8 +3802,9 @@ function buildCoreTree(s){
         return { type:'panels', count:nds.length, sizes:szs,
           children:nds.map(function(){return null;}).concat([null]) };
       }
-      if(rodHere && s.rodHeight >= o.y0 && s.rodHeight <= o.y1){
-        return { type:'rod', drop: Math.max(30, Math.round(o.y1 - s.rodHeight)) };
+      const rIn=rodsHere.find(function(rr){ return rr.height >= o.y0 && rr.height <= o.y1; });
+      if(rIn){
+        return { type:'rod', drop: Math.max(30, Math.round(o.y1 - rIn.height)) };
       }
       return null;
     }
@@ -4476,8 +4704,9 @@ function moduleHardware(s){
     const sl=pickSlideByBrand(s.depth||600, (s.drawerBlocks[0]||{}).brand||activeSlide.brand);
     add('Направляющая'+(sl?' '+sl.brand+' '+sl.length+'мм':''), drawers, 'компл');
   }
-  add('Штанга', s.hasRod?1:0, 'шт');
-  add('Штангодержатель', s.hasRod?2:0, 'шт');
+  const rodN=secRods(s).length;
+  add('Штанга', rodN, 'шт');
+  add('Штангодержатель', rodN*2, 'шт');
   // крепёж: крыша+дно по 4, каждая полка/перегородка 4, ящик 8
   let antrSh=0, antrTB=0;
   if(s.antresol&&s.antresol.enabled){ antrSh=(s.antresol.shelves||[]).length; antrTB=2; }
@@ -4648,7 +4877,8 @@ function fillSummary(s){
   if(s.shelves.length) items.push('полок '+s.shelves.length);
   const dr=(s.drawerBlocks||[]).reduce(function(a,db){ return a+db.count; },0);
   if(dr) items.push('ящиков '+dr);
-  if(s.hasRod) items.push('штанга');
+  const rodC=secRods(s).length;
+  if(rodC) items.push(rodC>1?('штанг '+rodC):'штанга');
   if(s.facade.type!=='none') items.push('дверей '+(s.facade.type==='doors3'?3:s.facade.type==='doors2'?2:1));
   if(s.antresol&&s.antresol.enabled) items.push('антресоль '+s.antresol.height);
   return items.join(' · ')||'—';
@@ -4847,7 +5077,7 @@ function calcAllCosts(){
   const _facAll      = [...facTexSheets,...facNoTexSheets];
   const facLdspEquiv = _facAll.length>0       ? countSheetsQuarter(_facAll, LDSP_H)    : 0;
 
-  const totalRods = sections.reduce((a,s) => a + (s.hasRod ? 1 : 0), 0);
+  const totalRods = sections.reduce((a,s) => a + secRods(s).length, 0);
   const totalLegs = sections.length * 4; // \u043d\u043e\u0436\u043a\u0438 \u0432\u0441\u0435\u0433\u0434\u0430, 4 \u0448\u0442 \u043d\u0430 \u0441\u0435\u043a\u0446\u0438\u044e
 
   // \u0424\u0440\u0435\u0437\u0435\u0440\u043e\u0432\u043a\u0430 \u2014 \u043c\u00b2 \u043f\u043e \u043a\u0430\u0436\u0434\u043e\u043c\u0443 \u0440\u0438\u0441\u0443\u043d\u043a\u0443 (\u0442\u043e\u043b\u044c\u043a\u043e \u041c\u0414\u0424).
@@ -5317,9 +5547,9 @@ function renderMobile3D(){
     s.dividers.forEach(dv=>addB(ox+dv.pos,T,zFront,T,H-2*T,Dc));
 
     // штанга
-    if(s.hasRod){
-      const rh=Math.min(s.rodHeight,H-T*3);
-      const rcolM = (s.rodCol!=null && mCols[s.rodCol]) ? mCols[s.rodCol] : null;
+    secRods(s).forEach(function(rr){
+      const rh=Math.min(rr.height,H-T*3);
+      const rcolM = (rr.col!=null && mCols[rr.col]) ? mCols[rr.col] : null;
       const rodLenM = rcolM ? Math.max(20,rcolM.width-20) : W-2*T-20;
       const rodCxM  = rcolM ? ox+rcolM.left+rcolM.width/2 : ox+W/2;
       const g2=new THREE.CylinderGeometry(10,10,rodLenM,16);
@@ -5327,7 +5557,7 @@ function renderMobile3D(){
       rm.rotation.z=Math.PI/2;
       rm.position.set(rodCxM,rh,zFront+Dc/2);
       rm.userData={mw:true}; mobileScene.add(rm);
-    }
+    });
 
     // фасад (толщина T, у истинного переда z=0..T)
     if(s.facade.type!=='none'){
@@ -5417,12 +5647,14 @@ window._ai_w2dLayout=()=>_w2dLayout;
 window.w2dFullHover=w2dFullHover; window.w2dHlHide=w2dHlHide;
 window.wizOpen=wizOpen; window.wizClose=wizClose; window.wizStep=wizStep;
 window.wizSet=wizSet; window.wizPreset=wizPreset; window.wizBuild=wizBuild;
+window.wizDims=wizDims; window._ai_wizTempSections=wizTempSections; window._ai_wizEstimate=wizEstimate; window._ai_wizValidate=wizValidate;
+window.wizApplyPreset=wizApplyPreset;
 window._ai_wiz=()=>_wiz;
 window.w2dFacadeMode=w2dFacadeMode; window._ai_facadeMode=()=>_facadeMode; window._ai_room=()=>_room;
 window.w2dWallMode=w2dWallMode; window._ai_wallMode=()=>_wallMode;
 window.w2dEditNiche=w2dEditNiche; window.w2dEditColW=w2dEditColW;
 window.w2dEditDrawers=w2dEditDrawers;
-window.toggleRod=toggleRod;
+window.toggleRod=toggleRod; window.addRod=addRod; window.delRod=delRod; window.updRod=updRod; window._ai_secRods=secRods;
 window.updFacade=updFacade; window.updEdge=updEdge;
 window.addDrawerBlock=addDrawerBlock; window.removeDrawerBlock=removeDrawerBlock; window.updDrawerBlock=updDrawerBlock;
 window.showCut=showCut; window.closeCut=closeCut;
@@ -5489,12 +5721,12 @@ function validateProject(){
     const L='С'+(i+1);
     if(s.width>SEC_SPAN_MAX && (!s.dividers||!s.dividers.length))
       add('warn',L+': ширина '+s.width+' мм без перегородки — дно и крыша прогнутся (норма до '+SEC_SPAN_MAX+')');
-    if(s.hasRod){
+    secRods(s).forEach(function(rr){
       const cols=getColumns(s);
-      const c=(s.rodCol!=null&&cols[s.rodCol])?cols[s.rodCol]:cols[0];
+      const c=(rr.col!=null&&cols[rr.col])?cols[rr.col]:cols[0];
       if(c&&c.width>ROD_SPAN_MAX)
         add('warn',L+': штанга '+Math.round(c.width)+' мм — длиннее '+ROD_SPAN_MAX+', нужен центральный держатель');
-    }
+    });
     if(s.drawerBlocks&&s.drawerBlocks.length&&s.depth<300)
       add('warn',L+': глубина '+s.depth+' мм — для ящиков мало (направляющие от 300)');
     if(s.facade&&s.facade.type!=='none'){
@@ -5506,7 +5738,7 @@ function validateProject(){
     }
     if(s.antresol&&s.antresol.enabled&&s.antresol.height<200)
       add('warn',L+': антресоль '+s.antresol.height+' мм — ниже 200, фасад и петли не встанут');
-    if(s.depth>0&&s.depth<350&&s.hasRod)
+    if(s.depth>0&&s.depth<350&&secRods(s).length)
       add('warn',L+': глубина '+s.depth+' мм со штангой — плечики не влезут (норма от 500)');
   });
   return out;
@@ -8668,9 +8900,9 @@ function showConfBlueprint(){
     }
 
     // ── Штанга ─────────────────────────────────────────────
-    if(sec.hasRod){
-      const rodY = baseY + (sec.rodHeight || H*0.7);
-      const rcolB = (sec.rodCol!=null && bpCols[sec.rodCol]) ? bpCols[sec.rodCol] : null;
+    secRods(sec).forEach(function(rr){
+      const rodY = baseY + (rr.height || H*0.7);
+      const rcolB = (rr.col!=null && bpCols[rr.col]) ? bpCols[rr.col] : null;
       const rodX1 = rcolB ? xOff+rcolB.left+4 : xOff+BD+4;
       const rodX2 = rcolB ? xOff+rcolB.left+rcolB.width-4 : xOff+W-BD-4;
       svg += l(rodX1, rodY, rodX2, rodY, C_ROD, 2.5);
@@ -8678,7 +8910,7 @@ function showConfBlueprint(){
       [rodX1+16, rodX2-16].forEach(rx => {
         svg += `<circle cx="${sx(rx)}" cy="${sy(rodY)}" r="3" fill="${C_ROD}" stroke="#475569" stroke-width="0.7"/>`;
       });
-    }
+    });
 
     // ── Фасад ──────────────────────────────────────────────
     const facType = sec.facade?.type || 'none';
@@ -8776,7 +9008,7 @@ ${depth0}мм`, 8, '#94a3b8', 'start');
     </div>
     <div style="margin-top:10px;padding:10px;background:#eff6ff;border-radius:8px;border:1px solid #bfdbfe;font-size:11px;color:#1e40af;line-height:1.6">
       <b>Секции слева направо:</b>
-      ${sections.map((s,i)=>`<b>${i+1}</b>: ${s.width}×${s.height}мм${s.antresol?.enabled?' +ант.'+s.antresol.height:''}${s.hasRod?' (штанга)':''}`).join(' · ')}
+      ${sections.map((s,i)=>`<b>${i+1}</b>: ${s.width}×${s.height}мм${s.antresol?.enabled?' +ант.'+s.antresol.height:''}${secRods(s).length?' (штанга)':''}`).join(' · ')}
     </div>`;
 
   modal.style.display = 'flex';

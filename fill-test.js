@@ -28,7 +28,7 @@ eq(FT.length, 10, 'ровно 10 типов');
 var ids = FT.map(function (t) { return t.id; });
 eq(new Set(ids).size, 10, 'все id уникальны');
 var readyIds = FT.filter(function (t) { return t.ready; }).map(function (t) { return t.id; }).sort().join(',');
-eq(readyIds, 'drawerStack,rodDrawers,rodLong,shelfDrawer,shelves3,shelvesDense', '6 рабочих типов, 4 с механикой в след. шаге');
+eq(readyIds, 'drawerStack,rodDouble,rodDrawers,rodLong,shelfDrawer,shelves3,shelvesDense', '7 рабочих типов, 3 с механикой в след. шаге');
 ok(FT.every(function (t) { return t.name && t.desc && typeof t.fits === 'function' && typeof t.thumb === 'function'; }), 'у каждого: имя, описание, fits, миниатюра');
 ok(FT.every(function (t) { return !t.ready || typeof t.apply === 'function'; }), 'у каждого рабочего есть apply');
 
@@ -62,10 +62,10 @@ ft('drawerStack').apply(s);
 eq(s.shelves.length, 0, 'блок ящиков: полок нет');
 eq(s.drawerBlocks[0].count, 4, 'блок ящиков при 2200: 4 ящика');
 ft('rodLong').apply(s);
-ok(s.hasRod && s.drawerBlocks.length === 0, 'штанга: только штанга');
-eq(s.rodHeight, 2080, 'штанга на H-120 со snap');
+ok(s.rods.length === 1 && s.drawerBlocks.length === 0, 'штанга: только штанга');
+eq(s.rods[0].height, 2080, 'штанга на H-120 со snap');
 ft('rodDrawers').apply(s);
-ok(s.hasRod, 'штанга+ящики: штанга есть');
+eq(s.rods.length, 1, 'штанга+ящики: штанга есть');
 eq(s.drawerBlocks[0].count, 2, 'штанга+ящики: 2 ящика');
 
 // низкая секция: плотных полок 4
@@ -96,10 +96,40 @@ console.log('── Клик применяет тип ──');
 win.applyFillType(s4.id, 'shelves3');
 eq(s4.shelves.length, 3, 'клик по «Классике» построил 3 полки');
 var before = s4.shelves.length;
-win.applyFillType(s4.id, 'rodDouble');
+win.applyFillType(s4.id, 'pantograph');
 eq(s4.shelves.length, before, 'клик по нерабочему типу ничего не ломает');
 win.applyFillType(s4.id, 'rodLong');
-ok(!s4.hasRod, 'недоступный по габаритам тип не применяется (1200 < 1400)');
+eq(s4.rods.length, 0, 'недоступный по габаритам тип не применяется (1200 < 1400)');
+win.applyFillType(s4.id, 'rodDouble');
+eq(s4.rods.length, 0, 'двойная штанга в 1200 не применяется (нужно 1900)');
+
+console.log('── Двойная штанга: механика ──');
+var s5 = win._ai_mkSection(); s5.width = 900; s5.height = 2400; s5.depth = 600;
+win._ai_sections = [s5];
+ft('rodDouble').apply(s5);
+eq(s5.rods.length, 2, 'двойная штанга: 2 штанги');
+eq(s5.rods[0].height, 2280, 'верхняя на H-120 со snap');
+eq(s5.rods[1].height, 1380, 'нижняя на 900 ниже верхней');
+ok(s5.rods.every(function (r) { return r.col === null; }), 'обе на всю секцию');
+var hw = win._ai_moduleHardware(s5);
+function hwq(n) { var r = hw.find(function (x) { return x.n === n; }); return r ? r.q : 0; }
+eq(hwq('Штанга'), 2, 'ведомость: 2 штанги');
+eq(hwq('Штангодержатель'), 4, 'ведомость: 4 держателя');
+win.applyFillType(s5.id, 'rodDouble');
+eq(s5.rods.length, 2, 'клик по карточке строит 2 штанги');
+ft('rodLong').apply(s5);
+eq(s5.rods.length, 1, 'смена на одинарную замещает, а не добавляет');
+
+console.log('── Миграция легаси hasRod → rods ──');
+var s6 = win._ai_mkSection(); s6.width = 800; s6.height = 2200; s6.depth = 600;
+s6.rods = undefined; s6.hasRod = true; s6.rodHeight = 1500; s6.rodCol = null;
+var mig = win._ai_secRods(s6);
+eq(mig.length, 1, 'легаси-секция мигрирует в 1 штангу');
+eq(mig[0].height, 1500, 'высота легаси-штанги сохранена');
+ok(!s6.hasRod, 'легаси-флаг снят после миграции');
+eq(win._ai_secRods(s6).length, 1, 'повторный вызов идемпотентен');
+var hw6 = win._ai_moduleHardware(s6);
+eq(hw6.find(function (x) { return x.n === 'Штанга'; }).q, 1, 'легаси-штанга попадает в ведомость');
 
 console.log('── Миниатюры различимы ──');
 ok(ft('drawerStack').thumb().indexOf('stroke-linecap="round"') >= 0, 'у ящиков — ручки на фасадах');

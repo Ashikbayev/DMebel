@@ -727,3 +727,93 @@ select{width:100%;font-size:12px;padding:5px 6px;border:1px solid #ddd;border-ra
 #pg-conf .ft-off:active{transform:none}
 #pg-conf .ft-reason{font-size:9px;color:#a05a2c;margin-top:3px;font-weight:600}
 @media(pointer:coarse){#pg-conf .ft-card{min-height:44px;padding:10px 6px}}
+
+/* ══════════ МАСТЕР БЫСТРОГО СТАРТА (Блок 3) ══════════ */
+.wiz-shell{max-width:720px;margin:0 auto;background:#fbf9f4;border-radius:14px;
+  padding:20px 24px 22px;box-shadow:0 18px 50px rgba(0,0,0,.5);box-sizing:border-box}
+.wiz-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.wiz-logo{font-size:15px;font-weight:800;letter-spacing:1.5px;color:#b8963e}
+.wiz-title{font-size:13px;color:#565c63}
+.wiz-skip{border:1px solid #d5d1c8;background:#fff;border-radius:8px;padding:6px 12px;
+  font-size:11.5px;color:#6a7076;cursor:pointer}
+.wiz-skip:hover{color:#1d2023;border-color:#b8963e}
+.wiz-x{border:none;background:none;font-size:22px;cursor:pointer;color:#8a8f96;padding:2px 6px;line-height:1}
+.wiz-prog{height:4px;background:#eceae4;border-radius:2px;overflow:hidden;margin-bottom:10px}
+.wiz-prog-in{height:100%;background:#c39a3b;border-radius:2px;transition:width .25s ease}
+.wiz-dots{display:flex;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.wiz-dot{display:flex;align-items:center;gap:6px}
+.wiz-dot-n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;background:#eceae4;color:#8a8f96}
+.wiz-dot.on .wiz-dot-n{background:#c39a3b;color:#1d2023}
+.wiz-dot.done .wiz-dot-n{background:#e8dcb8;color:#8a6a1e}
+.wiz-dot-t{font-size:11px;color:#9aa1a8}
+.wiz-dot.on .wiz-dot-t{color:#1d2023;font-weight:600}
+.wiz-hint{font-size:12.5px;color:#565c63;margin-bottom:14px;line-height:1.45}
+.wiz-sub{font-size:11.5px;color:#6a7076;font-weight:600;margin:14px 0 6px}
+.wiz-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.wiz-chip{border:1.5px solid #e2dfd7;background:#fff;border-radius:9px;padding:9px 13px;
+  font-size:12px;color:#3a3d40;cursor:pointer;min-height:40px}
+.wiz-chip.on{border-color:#c39a3b;background:#faf3e2;color:#8a6a1e;font-weight:600}
+.wiz-fld{margin-bottom:12px}
+.wiz-lbl{font-size:11.5px;color:#6a7076;margin-bottom:4px;font-weight:600}
+.wiz-pair{display:flex;gap:12px;align-items:center}
+.wiz-pair input[type=range]{flex:1;accent-color:#c39a3b;height:28px}
+.wiz-pair input[type=number]{width:88px;padding:10px 8px;border:1px solid #d5d1c8;border-radius:8px;
+  font-size:14px;box-sizing:border-box}
+.wiz-fld-err input[type=number]{border-color:#c0392b;background:#fdf1f1}
+.wiz-err{font-size:11.5px;color:#c0392b;margin-top:4px}
+.wiz-adv{margin:6px 0 12px}
+.wiz-adv summary{font-size:12px;color:#6a7076;cursor:pointer;padding:6px 0}
+.wiz-adv-in{display:flex;gap:10px;flex-wrap:wrap;padding:8px 0}
+.wiz-mini{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#3a3d40}
+.wiz-mini input[type=number]{width:74px;padding:8px 6px;border:1px solid #d5d1c8;border-radius:7px;font-size:13px}
+.wiz-antr{margin-top:12px;min-height:40px}
+.wiz-total{font-size:13px;color:#1d2023;padding:8px 0}
+.wiz-total b{font-family:ui-monospace,Consolas,monospace}
+.wiz-cards,.wiz-scens{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.wiz-card,.wiz-scen{cursor:pointer;border:2px solid #e2dfd7;border-radius:12px;padding:12px 14px;
+  background:#fff;text-align:center;flex:1;min-width:130px;transition:border-color .12s}
+.wiz-card.on,.wiz-scen.on{border-color:#c39a3b;background:#faf3e2}
+.wiz-card-n{font-size:13px;font-weight:700;color:#1d2023;margin-top:6px}
+.wiz-card-d{font-size:10.5px;color:#8a8f96;margin-top:3px;line-height:1.35}
+.wiz-scen{min-width:150px}
+.wiz-scen-ths{display:flex;gap:6px;justify-content:center}
+.wiz-scen-th svg{width:44px;height:auto}
+.wiz-note{font-size:11.5px;color:#8a6a1e;background:#fdfaef;border:1px solid #e8d9a8;border-radius:8px;
+  padding:9px 11px;margin:10px 0;line-height:1.45}
+.wiz-prev{display:flex;align-items:flex-end;gap:2px;background:#fff;border:1px solid #e2dfd7;
+  border-radius:10px;padding:12px;margin-bottom:12px;overflow-x:auto}
+.wiz-prev-sec{min-width:36px;text-align:center}
+.wiz-prev-sec svg{width:100%;height:auto;display:block}
+.wiz-prev-cap{font-size:9px;color:#9aa1a8;margin-top:3px;font-family:ui-monospace,Consolas,monospace;white-space:nowrap}
+.wiz-stats{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#3a3d40;margin-bottom:10px}
+.wiz-stats span{background:#f2efe8;border-radius:6px;padding:5px 9px}
+.wiz-price{font-size:14px;color:#1d2023;background:#eaf6ec;border:1px solid #bcdcc4;border-radius:9px;
+  padding:10px 13px;margin-bottom:12px}
+.wiz-price b{font-size:17px}
+.wiz-price-note{font-size:10.5px;color:#5a7a5a;margin-top:3px}
+.wiz-price-na{background:#f2efe8;border-color:#e2dfd7;color:#565c63;font-size:12px}
+.wiz-final{display:flex;gap:10px;flex-wrap:wrap}
+.wiz-nav{display:flex;gap:10px;margin-top:18px}
+.wiz-btn{padding:12px 22px;border:none;background:#c39a3b;color:#1d2023;border-radius:9px;
+  font-size:13.5px;font-weight:700;cursor:pointer;min-height:46px}
+.wiz-btn:hover{background:#d3ab4d}
+.wiz-btn2{padding:12px 18px;border:1px solid #d5d1c8;background:#fff;border-radius:9px;
+  font-size:13px;cursor:pointer;min-height:46px;color:#3a3d40}
+@media (max-width:640px){
+  #w2dwiz{padding:0 !important}
+  .wiz-shell{max-width:none;min-height:100vh;min-height:100dvh;border-radius:0;padding:14px 14px 24px}
+  .wiz-dot-t{display:none}
+  .wiz-dot.on .wiz-dot-t{display:inline}
+  .wiz-card,.wiz-scen{min-width:calc(50% - 6px);flex:none;box-sizing:border-box}
+  .wiz-scen{min-width:100%}
+  .wiz-pair input[type=number]{width:96px;font-size:16px}
+  .wiz-chip{min-height:44px;font-size:13px}
+  .wiz-btn,.wiz-btn2{min-height:50px;flex:1;font-size:14.5px}
+  .wiz-prev{padding:8px}
+}
+@media (orientation:landscape) and (max-height:500px){
+  .wiz-shell{padding:10px 16px 16px}
+  .wiz-dots{margin-bottom:8px}
+  .wiz-hint{margin-bottom:8px}
+}
