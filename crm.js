@@ -1034,6 +1034,7 @@
   var STOCK_DEF_ONLY = false;
   var SMIN = {};
   var SMIN_LOADED = false;
+  var SLEAD = {}; // v4.4: срок поставки материала в днях (лист СкладМин, колонка 4)
   var TODAY_STOCK_TRIED = false;
   var CAT_IN  = ['Доплата','Прочий приход'];
   var CAT_OUT = ['Материалы','Оплата мастеру','Оплата дизайнеру','Аренда','Реклама','Транспорт','Инструмент','Прочее'];
@@ -1246,9 +1247,13 @@
       .then(function(r){ return r.json(); })
       .then(function(res){
         if(res && res.ok){
-          SMIN = {};
+          SMIN = {}; SLEAD = {};
           var arr = res.mins || [];
-          arr.forEach(function(m){ if(m && m.key && Number(m.min) > 0) SMIN[m.key] = Math.round(Number(m.min)); });
+          arr.forEach(function(m){
+            if(!m || !m.key) return;
+            if(Number(m.min) > 0) SMIN[m.key] = Math.round(Number(m.min));
+            if(Number(m.lead) > 0) SLEAD[m.key] = Math.round(Number(m.lead));
+          });
           SMIN_LOADED = true;
           cb(null);
         }
@@ -1258,6 +1263,7 @@
   }
 
   function minOf(key){ return Number(SMIN[key]) || 0; }
+  function leadOf(key){ return Number(SLEAD[key]) || 0; }
 
   // Цены позиций для «Склада в деньгах»: артикулы фурнитуры/кухни/шкафа
   // и имена материалов из прайса калькулятора (DB). Позиции без цены
@@ -1314,8 +1320,13 @@
     var bAgg = document.createElement('button'); bAgg.className = 'crm-vbtn'; bAgg.textContent = '\uD83D\uDED2 Сводная закупка';
     bAgg.title = 'Список закупщику сразу по нескольким заказам после договора';
     bAgg.addEventListener('click', function(){ openAggPurchaseModal(); });
-    btnRow.appendChild(bIn); btnRow.appendChild(bOut); btnRow.appendChild(bInv); btnRow.appendChild(bAgg);
+    var bLead = document.createElement('button'); bLead.className = 'crm-vbtn'; bLead.textContent = '\u23F1 Сроки поставки';
+    bLead.title = 'Проверить, не опоздает ли материал с учётом срока поставки и дат монтажа';
+    var leadResultBox = document.createElement('div');
+    bLead.addEventListener('click', function(){ checkLeadTimes(bLead, leadResultBox); });
+    btnRow.appendChild(bIn); btnRow.appendChild(bOut); btnRow.appendChild(bInv); btnRow.appendChild(bAgg); btnRow.appendChild(bLead);
     wrap.appendChild(btnRow);
+    wrap.appendChild(leadResultBox);
     view.appendChild(wrap);
 
     if(STOCK_SUBVIEW === 'history'){ renderStockHistory(view); return; }
@@ -1435,7 +1446,7 @@
       }
       var tbl = document.createElement('table'); tbl.className = 'crm-ftbl';
       var thead = document.createElement('tr');
-      ['Наименование','Ключ','Ед','Мин','Остаток','Сумма',''].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thead.appendChild(th); });
+      ['Наименование','Ключ','Ед','Мин','Срок','Остаток','Сумма',''].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thead.appendChild(th); });
       tbl.appendChild(thead);
       rows.forEach(function(s){
         var qty = Math.round(Number(s.qty) || 0);
@@ -1460,6 +1471,23 @@
           }, function(err){ toast('\u26A0\uFE0F Не сохранилось: ' + err, '#BA7517'); });
         });
         tr.appendChild(c4);
+        var c4b = document.createElement('td');
+        var ld = leadOf(s.key);
+        c4b.textContent = ld > 0 ? String(ld) + ' \u0434\u043D' : '\u2014';
+        c4b.style.cssText = 'color:#999;cursor:pointer';
+        c4b.title = 'Срок поставки этой позиции в днях (0 \u2014 снять). Используется для предупреждения «пора заказать» по датам монтажа.';
+        c4b.addEventListener('click', function(){
+          var v = prompt('Срок поставки \u00AB' + (s.name || s.key) + '\u00BB в днях (0 \u2014 снять):', ld || '');
+          if(v === null) return;
+          var nv = Math.round(Number(v));
+          if(isNaN(nv) || nv < 0){ toast('\u26A0\uFE0F Нужно целое число не меньше нуля', '#BA7517'); return; }
+          post({ action:'saveStockMin', smin:{ key: s.key, lead: nv } }, function(){
+            if(nv > 0) SLEAD[s.key] = nv; else delete SLEAD[s.key];
+            if(VIEW === 'stock') renderAll();
+            toast(nv > 0 ? 'OK Срок: ' + nv + ' дн' : 'OK Срок снят', '#1a5252');
+          }, function(err){ toast('\u26A0\uFE0F Не сохранилось: ' + err, '#BA7517'); });
+        });
+        tr.appendChild(c4b);
         var c5 = document.createElement('td'); c5.textContent = String(qty);
         if(qty <= 0){ c5.style.color = '#BA1B1B'; c5.style.fontWeight = '600'; }
         else if(mn > 0 && qty < mn){ c5.style.color = '#BA7517'; c5.style.fontWeight = '600'; }
@@ -3894,6 +3922,73 @@
     }
     b.appendChild(attWrap);
 
+    // ── Лента событий (v4.4): статусы + фото/заметки + платежи +
+    // изменения к договору — одной хронологией. Собирается из уже
+    // загруженных SL/ATT/FIN/CH, новых запросов к серверу не требует
+    // (эти массивы и так нужны другим блокам карточки). Кнопка
+    // «Обновить» просто перерисовывает ленту из текущего состояния
+    // массивов — если фото/платёж добавили выше по карточке, лента
+    // подхватит это по клику, без автосинхронизации между блоками.
+    var feedWrap = document.createElement('div');
+    function renderFeed(){
+      feedWrap.innerHTML = '';
+      var box = document.createElement('div'); box.className='crm-ch-box';
+      var bh = document.createElement('div'); bh.className='crm-ch-h';
+      var bt = document.createElement('b'); bt.textContent = 'Лента событий';
+      var bRefresh = document.createElement('button'); bRefresh.className='crm-vbtn';
+      bRefresh.textContent = '\u21BB'; bRefresh.title = 'Обновить ленту';
+      bRefresh.style.cssText = 'padding:2px 8px';
+      bRefresh.addEventListener('click', function(){ renderFeed(); });
+      bh.appendChild(bt); bh.appendChild(bRefresh);
+      box.appendChild(bh);
+
+      var loading = !(SL_LOADED && ATT_LOADED && FIN_LOADED && CH_LOADED);
+      if(loading){
+        var ld = document.createElement('div'); ld.className='crm-ch-row';
+        ld.textContent = 'Загружаю...';
+        box.appendChild(ld);
+      } else {
+        var ev = [];
+        slogOf(o.num).forEach(function(s){
+          ev.push({ date: s.date, icon: '\u21C4', text: 'Статус: ' + s.status });
+        });
+        attachOf(o.num).forEach(function(a){
+          if(a.kind === '\u0444\u0430\u0439\u043B') ev.push({ date: a.created, icon: '\uD83D\uDCF7', text: 'Фото' + (a.comment ? ': ' + a.comment : '') });
+          else ev.push({ date: a.created, icon: '\uD83D\uDCDD', text: a.comment });
+        });
+        FIN.forEach(function(f){
+          if(String(f.num) !== String(o.num)) return;
+          var sign = f.type === 'Приход' ? '+' : '\u2212';
+          ev.push({ date: f.date, icon: '\uD83D\uDCB0', text: (f.type === 'Приход' ? 'Оплата' : 'Расход') + ' \u00AB' + f.cat + '\u00BB: ' + sign + fm0(Math.abs(Number(f.sum)||0)) });
+        });
+        changesOf(o.num).forEach(function(c){
+          var plus = Number(c.sum) >= 0;
+          ev.push({ date: c.date, icon: '\u270E', text: 'Изменение \u00AB' + c.desc + '\u00BB: ' + (plus?'+':'\u2212') + fm0(Math.abs(Number(c.sum)||0)) });
+        });
+        ev.sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
+        if(!ev.length){
+          var em = document.createElement('div'); em.className='crm-ch-row';
+          em.style.color = '#999';
+          em.textContent = 'Событий пока нет \u2014 смена статуса, фото, платежи и изменения к договору появятся здесь по хронологии.';
+          box.appendChild(em);
+        } else {
+          ev.forEach(function(e){
+            var r = document.createElement('div'); r.className='crm-ch-row';
+            var dt = document.createElement('span'); dt.className='dt'; dt.textContent = fmtDate(e.date);
+            var ds = document.createElement('span'); ds.className='ds'; ds.textContent = e.icon + ' ' + e.text;
+            r.appendChild(dt); r.appendChild(ds);
+            box.appendChild(r);
+          });
+        }
+      }
+      feedWrap.appendChild(box);
+    }
+    renderFeed();
+    if(!SL_LOADED) fetchStatusLog(function(err){ if(!err) renderFeed(); });
+    if(!FIN_LOADED) fetchFin(function(err){ if(!err) renderFeed(); });
+    if(!CH_LOADED) fetchChanges(function(err){ if(!err) renderFeed(); });
+    b.appendChild(feedWrap);
+
     var btns = document.createElement('div'); btns.className='crm-m-btns';
     var bDel = document.createElement('button'); bDel.className='crm-m-btn danger'; bDel.textContent='\uD83D\uDDD1';
     bDel.title = 'Удалить заказ из СРМ';
@@ -4371,6 +4466,102 @@
   // need — оно НЕ зависит от остатков склада), остаток вычитается ОДИН
   // РАЗ из общей суммы — иначе при делении по заказам дефицит считался
   // бы неверно (один и тот же остаток вычитался бы из каждого заказа).
+  // v4.4: lead-time предупреждение по закупке. Для набора уже
+  // загруженных снимков заказов (recs = [{o, rec}]) строит карту
+  // "ключ материала -> какие заказы (и на какую дату монтажа) в нём
+  // нуждаются" через orderPurchase() того же калькулятора, что уже
+  // используется сводной закупкой (main.js не трогаем). Опирается на
+  // необработанное need (без вычета остатков) — остатки проверяются
+  // отдельно на вызывающей стороне через t.buy, чтобы не путать
+  // "материала не хватит" с "материал есть, но приедет поздно".
+  function buildKeyOrdersMap(recs){
+    var keyOrders = {};
+    recs.forEach(function(item){
+      var p = orderPurchase(item.rec.snap, DB, []);
+      var trk = p.tracked || [];
+      trk.forEach(function(t){
+        if(!t.need) return;
+        if(!keyOrders[t.key]) keyOrders[t.key] = [];
+        keyOrders[t.key].push({ num: item.o.num, client: item.o.client, mountDate: item.o.mountDate });
+      });
+    });
+    return keyOrders;
+  }
+
+  // Срок поставки материала (SLEAD) vs дата монтажа самого срочного
+  // заказа, которому он нужен. Возвращает null, если срок не задан,
+  // заказ без даты монтажа, или времени с запасом хватает.
+  function leadWarningFor(keyOrders, key){
+    var lead = leadOf(key);
+    if(!lead) return null;
+    var list = keyOrders[key] || [];
+    var best = null;
+    list.forEach(function(x){
+      if(!x.mountDate) return;
+      var days = Math.ceil((new Date(x.mountDate) - new Date()) / 86400000);
+      if(best === null || days < best.days) best = { num: x.num, client: x.client, days: days };
+    });
+    if(!best) return null;
+    if(best.days > lead) return null;
+    return { lead: lead, days: best.days, num: best.num, client: best.client };
+  }
+
+  // Отдельная от сводной закупки проверка — вкладка Склад/Дефицит,
+  // по кнопке (тянет снимки заказов сама, туда их ещё не грузили).
+  function checkLeadTimes(btn, box){
+    if(typeof orderPurchase !== 'function'){
+      toast('\u26A0\uFE0F Калькулятор ещё не загрузился \u2014 открой вкладку расчёта', '#BA7517');
+      return;
+    }
+    var skip = ['Готова','Отказ','Отложено'];
+    var candidates = ORDERS.filter(function(o){ return o.dogDate && o.mountDate && skip.indexOf(o.status) === -1; });
+    box.innerHTML = '';
+    if(!candidates.length){
+      var e0 = document.createElement('div'); e0.className = 'crm-empty';
+      e0.textContent = 'Нет заказов после договора с датой монтажа.';
+      box.appendChild(e0);
+      return;
+    }
+    btn.disabled = true; btn.textContent = 'Считаю...';
+    var recs = [];
+    var left = candidates.length;
+    candidates.forEach(function(o){
+      loadOrderRec(o.num, function(err, rec){
+        if(!err) recs.push({ o: o, rec: rec });
+        left--;
+        if(left === 0){
+          btn.disabled = false; btn.textContent = '\u23F1 Сроки поставки';
+          var keyOrders = buildKeyOrdersMap(recs);
+          var warns = [];
+          Object.keys(keyOrders).forEach(function(k){
+            var w = leadWarningFor(keyOrders, k);
+            if(!w) return;
+            var stockRow = STOCK.filter(function(s){ return s.key === k; })[0];
+            warns.push({ name: stockRow ? stockRow.name : k, w: w });
+          });
+          box.innerHTML = '';
+          if(!warns.length){
+            var ok = document.createElement('div'); ok.className = 'crm-empty';
+            ok.textContent = 'По срокам поставки всё в порядке \u2014 ничего не горит.';
+            box.appendChild(ok);
+            return;
+          }
+          warns.sort(function(a,c){ return a.w.days - c.w.days; });
+          var tt = document.createElement('div'); tt.className = 'crm-sec-t';
+          tt.textContent = '\u23F1 Пора заказывать';
+          box.appendChild(tt);
+          warns.forEach(function(x){
+            var daysTxt = x.w.days < 0 ? 'монтаж уже наступил' : ('до монтажа ' + x.w.days + ' дн');
+            var row = document.createElement('div');
+            row.style.cssText = 'font-size:12px;padding:4px 0;border-bottom:1px solid #f0f0ea;color:#A32D2D';
+            row.textContent = '\u26A0 ' + x.name + ' \u2014 \u2116' + x.w.num + (x.w.client ? ' (' + x.w.client + ')' : '') + ': обычно везут ' + x.w.lead + ' дн, ' + daysTxt;
+            box.appendChild(row);
+          });
+        }
+      });
+    });
+  }
+
   function openAggPurchaseModal(){
     if(typeof orderPurchase !== 'function' || typeof stockMap !== 'function' || typeof aggregatePurchase !== 'function'){
       toast('\u26A0\uFE0F Калькулятор ещё не загрузился \u2014 открой вкладку расчёта', '#BA7517');
@@ -4467,6 +4658,7 @@
     var untracked = pur.untracked || [];
     tracked.sort(function(a,c){ return (c.buy - a.buy) || String(a.name||a.key).localeCompare(String(c.name||c.key), 'ru'); });
     untracked.sort(function(a,c){ return String(a.n||'').localeCompare(String(c.n||''), 'ru'); });
+    var keyOrders = buildKeyOrdersMap(recs); // v4.4: для строк ниже — предупреждение по сроку поставки
 
     var toBuy = 0;
     tracked.forEach(function(t){ if(t.buy > 0) toBuy++; });
@@ -4487,7 +4679,18 @@
       tbl.appendChild(thr);
       tracked.forEach(function(t){
         var tr = document.createElement('tr');
-        var c1 = document.createElement('td'); c1.textContent = String(t.name || t.key); tr.appendChild(c1);
+        var c1 = document.createElement('td'); c1.textContent = String(t.name || t.key);
+        if(t.buy > 0){
+          var w = leadWarningFor(keyOrders, t.key);
+          if(w){
+            var daysTxt = w.days < 0 ? 'монтаж уже наступил' : ('до монтажа ' + w.days + ' дн');
+            var warnEl = document.createElement('div');
+            warnEl.style.cssText = 'font-size:10px;color:#A32D2D;font-weight:500;margin-top:2px';
+            warnEl.textContent = '\u26A0 \u2116' + w.num + (w.client ? ' \u2014 ' + w.client : '') + ': везут ' + w.lead + ' дн, ' + daysTxt;
+            c1.appendChild(warnEl);
+          }
+        }
+        tr.appendChild(c1);
         var c2 = document.createElement('td'); c2.textContent = String(t.unit || ''); tr.appendChild(c2);
         var c3 = document.createElement('td'); c3.textContent = fmt(t.need); tr.appendChild(c3);
         var c4 = document.createElement('td'); c4.textContent = String(t.have); tr.appendChild(c4);

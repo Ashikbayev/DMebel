@@ -145,9 +145,11 @@ var SLCOL = { id:1, num:2, status:3, date:4 };
 // Строка = позиция склада с заданным минимумом. Остаток ниже минимума
 // подсвечивается в СРМ и попадает в «Пора докупить». Минимум 0 = снят
 // (строка удаляется). Ключ — тот же, что в листе "Склад" (SKU/материал).
+// v4.4: колонка "СрокПоставки" (дней) — используется в lead-time
+// предупреждении закупки (сравнивается с датой монтажа заказа).
 var SMIN_SHEET = 'СкладМин';
-var SMIN_HEADER = ['Ключ','Минимум','Обновлён'];
-var SMINCOL = { key:1, min:2, updated:3 };
+var SMIN_HEADER = ['Ключ','Минимум','Обновлён','СрокПоставки'];
+var SMINCOL = { key:1, min:2, updated:3, lead:4 };
 
 function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -957,6 +959,16 @@ function stockMinSheet_(ss) {
     sh = ss.insertSheet(SMIN_SHEET);
     sh.getRange(1, 1, 1, SMIN_HEADER.length).setValues([SMIN_HEADER]).setFontWeight('bold');
     sh.setFrozenRows(1);
+  } else {
+    // Лист создан до v4.4 — на подписи заголовка это не сказывается
+    // (данные и так пишутся/читаются по номеру колонки SMINCOL.lead),
+    // но по возможности дописываем подпись "СрокПоставки" для порядка.
+    // try/catch — это чисто косметика, не должна ронять сохранение.
+    try {
+      if (!sh.getRange(1, SMINCOL.lead).getValue()) {
+        sh.getRange(1, SMINCOL.lead).setValue(SMIN_HEADER[SMINCOL.lead - 1]).setFontWeight('bold');
+      }
+    } catch (e) {}
   }
   return sh;
 }
@@ -965,36 +977,49 @@ function stockMinList_(ss) {
   var sh = stockMinSheet_(ss);
   var last = sh.getLastRow();
   if (last < 2) return { ok: true, mins: [] };
-  var rows = sh.getRange(2, 1, last - 1, SMINCOL.updated).getValues();
+  var rows = sh.getRange(2, 1, last - 1, SMINCOL.lead).getValues();
   var mins = [];
   rows.forEach(function(r){
     var key = String(r[SMINCOL.key - 1] || '');
     if (!key) return;
-    mins.push({ key: key, min: Math.round(Number(r[SMINCOL.min - 1]) || 0) });
+    mins.push({
+      key: key,
+      min: Math.round(Number(r[SMINCOL.min - 1]) || 0),
+      lead: Math.round(Number(r[SMINCOL.lead - 1]) || 0)
+    });
   });
   return { ok: true, mins: mins };
 }
 
-// Upsert минимума по ключу. min = 0 снимает минимум (строка удаляется).
+// Upsert минимума и/или срока поставки по ключу. Оба поля независимы:
+// еслиo.min не передан — старое значение минимума сохраняется, и
+// наоборот для o.lead (так UI может менять их по отдельности одним
+// кликом на своей колонке). min=0 и lead=0 одновременно — строка
+// удаляется (обе настройки сняты).
 function saveStockMin_(ss, o) {
   var key = String((o && o.key) || '').trim();
   if (!key) return { ok: false, error: 'нет ключа позиции' };
-  var min = Math.round(Number(o.min));
-  if (isNaN(min) || min < 0) return { ok: false, error: 'минимум должен быть целым числом не меньше нуля' };
   var sh = stockMinSheet_(ss);
   var last = sh.getLastRow();
   var row = -1;
   for (var r = 2; r <= last; r++) {
     if (String(sh.getRange(r, SMINCOL.key).getValue()) === key) { row = r; break; }
   }
-  if (min === 0) {
+  var curMin = row > 0 ? Math.round(Number(sh.getRange(row, SMINCOL.min).getValue()) || 0) : 0;
+  var curLead = row > 0 ? Math.round(Number(sh.getRange(row, SMINCOL.lead).getValue()) || 0) : 0;
+  var min = (o.min === undefined || o.min === null) ? curMin : Math.round(Number(o.min));
+  var lead = (o.lead === undefined || o.lead === null) ? curLead : Math.round(Number(o.lead));
+  if (isNaN(min) || min < 0) return { ok: false, error: 'минимум должен быть целым числом не меньше нуля' };
+  if (isNaN(lead) || lead < 0) return { ok: false, error: 'срок поставки должен быть целым числом не меньше нуля' };
+  if (min === 0 && lead === 0) {
     if (row > 0) sh.deleteRow(row);
-    return { ok: true, key: key, min: 0 };
+    return { ok: true, key: key, min: 0, lead: 0 };
   }
   if (row < 0) { row = last + 1; sh.getRange(row, SMINCOL.key).setValue(key); }
   sh.getRange(row, SMINCOL.min).setValue(min);
+  sh.getRange(row, SMINCOL.lead).setValue(lead);
   sh.getRange(row, SMINCOL.updated).setValue(new Date());
-  return { ok: true, key: key, min: min };
+  return { ok: true, key: key, min: min, lead: lead };
 }
 
 
