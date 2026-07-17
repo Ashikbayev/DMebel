@@ -14,11 +14,26 @@ function mkStub() {
     construct: function () { return mkStub(); }, apply: function () { return mkStub(); }
   });
 }
-win.__THREE__ = mkStub();
+function makeObj3D() {
+  return { userData: {}, position: { x: 0, y: 0, z: 0,
+      set: function (x, y, z) { this.x = x; this.y = y; this.z = z; },
+      copy: function (p) { this.x = p.x; this.y = p.y; this.z = p.z; } },
+    rotation: { x: 0, y: 0, z: 0 }, castShadow: false, material: null };
+}
+var THREE_REAL = {
+  Mesh: function (g, m) { var o = makeObj3D(); o.geometry = g; o.material = m; return o; },
+  LineSegments: function (g) { var o = makeObj3D(); o.geometry = g; return o; },
+  BoxGeometry: function (w, h, d) { return { type: 'box', w: w, h: h, d: d }; },
+  CylinderGeometry: function (r1, r2, h) { return { type: 'cyl', r1: r1, h: h }; },
+  EdgesGeometry: function (g) { return { type: 'edges', src: g }; }
+};
+var FB = mkStub();
+win.__THREE__ = new Proxy({}, { get: function (t, k) { return (k in THREE_REAL) ? THREE_REAL[k] : FB; } });
+win.__added__ = [];
 win.eval(fs.readFileSync('wardrobe-core.js', 'utf8'));
 var src = fs.readFileSync('wardrobe.js', 'utf8');
 src = src.replace("import * as THREE from 'three';", 'const THREE = window.__THREE__;');
-src += '\nrenderer={};camera={};scene={children:[],add:function(){},remove:function(){}};ML={};ML2={};MH={};MR={};MFL={};MFM={};ME={};window._ai_renderPanel=renderPanel;window._ai_copySection=duplicateSection;window._ai_validateProject=validateProject;window._ai_w2dClick=w2dClick;window._ai_fillSummary=fillSummary;\n';
+src += '\nrenderer={};camera={};scene={children:[],add:function(o){this.children.push(o);window.__added__.push(o);},remove:function(){}};ML={};ML2={};MH={};MR={};MFL={};MFM={};ME={};window._ai_renderPanel=renderPanel;window._ai_copySection=duplicateSection;window._ai_validateProject=validateProject;window._ai_w2dClick=w2dClick;window._ai_fillSummary=fillSummary;\n';
 win.eval(src);
 
 var S = win._ai_secRods;
@@ -98,6 +113,24 @@ ok(html.indexOf('2 шт') >= 0, 'бейдж «2 шт» при двух штан�
 ok((html.match(/updRod\(/g) || []).length >= 2, 'по строке на каждую штангу');
 ok(html.indexOf('addRod(') >= 0, 'кнопка «+ штанга» есть');
 ok(html.indexOf('delRod(') >= 0, 'кнопка удаления есть');
+
+console.log('── 3D: все штанги рисуются (баг со скрина: 3 в панели, 1 в 3D) ──');
+var s3d = win._ai_mkSection(); s3d.width = 800; s3d.height = 2200; s3d.depth = 600;
+s3d.rods = [{ height: 2080, col: null }, { height: 500, col: null }, { height: 300, col: null }];
+win._ai_sections = [s3d];
+win.__added__.length = 0;
+win._ai_render3D();
+function rodCyls() {
+  return win.__added__.filter(function (o) { return o.geometry && o.geometry.type === 'cyl' && o.geometry.r1 === 10; });
+}
+eq(rodCyls().length, 3, 'кор-движок: 3 цилиндра на 3 штанги');
+var ys = rodCyls().map(function (o) { return o.position.y; }).sort(function (a, b) { return a - b; });
+ok(ys[0] !== ys[1] && ys[1] !== ys[2], 'штанги на разных высотах');
+win.setCoreEngine(false);
+win.__added__.length = 0;
+win._ai_render3D();
+eq(rodCyls().length, 3, 'legacy-движок: тоже 3 цилиндра');
+win.setCoreEngine(true);
 
 console.log('── Кламп при смене высоты (баг со скрина: штанга выше крыши) ──');
 var sh = win._ai_mkSection(); sh.width = 800; sh.height = 2200; sh.depth = 600;

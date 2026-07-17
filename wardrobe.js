@@ -3465,9 +3465,6 @@ function render3D(){
           const b=p.box; if(!b)return;
           const cx=ox+W/2+b.cx, cy=LH+b.cy, cz=zFront+Dc-b.cz;
           if(p.kind==='rod'){
-            const g2=new THREE.CylinderGeometry(b.dz/2,b.dz/2,b.dx,16);
-            const rm=new THREE.Mesh(g2,MR); rm.rotation.z=Math.PI/2;
-            rm.position.set(cx,cy,cz); rm.castShadow=true; rm.userData={w:true}; scene.add(rm);
             return;
           }
           const isFac3d=(p.kind==='facade'||p.kind==='dfacade');
@@ -3529,6 +3526,7 @@ function render3D(){
       });
     }
     s.dividers.forEach(dv=>addBoard(ox+dv.pos,LH+T,zFront,T,Hc,Dc));
+    }
     secRods(s).forEach(function(rr){
       const rh=LH+Math.min(rr.height,H-T*3);
       const rcol = (rr.col!=null && shelfCols3d[rr.col]) ? shelfCols3d[rr.col] : null;
@@ -3538,7 +3536,6 @@ function render3D(){
       const rm=new THREE.Mesh(g2,MR); rm.rotation.z=Math.PI/2;
       rm.position.set(rodCx,rh,zFront+Dc/2); rm.castShadow=true; rm.userData={w:true}; scene.add(rm);
     });
-    }
     // ── Ножки (всегда, 4 шт, высота LH=100мм) — по полному внешнему габариту D ──
     {
       const legMat=new THREE.MeshStandardMaterial({color:0x888888,roughness:0.3,metalness:0.6});
