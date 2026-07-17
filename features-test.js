@@ -99,27 +99,25 @@ eq(s.facade.frez, 'venecia', 'фрезеровка сохранилась (Ве�
 win.updFacade(s.id, 'handle', 'leather');
 eq(s.facade.handle, 'leather', 'ручка сохранилась (кожаная петля)');
 
-// 6) мастер: новые пресеты строятся
+// 6) мастер строит; библиотека пресетов wizApplyPreset жива и точна
 win.wizOpen();
 win.wizSet('len', '3200'); win.wizSet('offL', '0'); win.wizSet('offR', '0'); win.wizSet('offT', '0');
 win.wizSet('hei', '2400'); win.wizSet('doors', '6');
-win.wizStep(1); win.wizStep(1);
-win.wizPreset(0, 'split2t5p');
-win.wizPreset(1, 'rodDrawers');
-win.wizPreset(2, 'penal7');
-win.wizStep(1);
 win.wizSet('frez', 'volna'); win.wizSet('handle', 'gola');
+win.wizStep(1); win.wizStep(1); win.wizStep(1);
 win.confirm = function () { return true; };
 win.wizBuild();
 var S = win._ai_sections;
 eq(S.length, 3, '6 дверей → 3 модуля');
-// split2t5p: перегородка + штанга col0 + 5 полок col1
+// пресеты применяем напрямую (в новом мастере их место заняли сценарии)
+S.forEach(function (x) { x.shelves = []; x.dividers = []; x.drawerBlocks = []; x.rods = []; });
+win.wizApplyPreset(S[0], 'split2t5p');
+win.wizApplyPreset(S[1], 'rodDrawers');
+win.wizApplyPreset(S[2], 'penal7');
 eq(S[0].dividers.length, 1, 'split: перегородка есть');
-ok(S[0].hasRod && S[0].rodCol === 0, 'split: штанга в колонке 0');
+ok(S[0].rods.length === 1 && S[0].rods[0].col === 0, 'split: штанга в колонке 0');
 eq(S[0].shelves.filter(function (x) { return x.col === 1; }).length, 5, 'split: 5 полок в колонке 1');
-// rodDrawers
-ok(S[1].hasRod && S[1].drawerBlocks.length === 1 && S[1].shelves.length === 1, 'rodDrawers: штанга+полка+ящики');
-// penal7
+ok(S[1].rods.length === 1 && S[1].drawerBlocks.length === 1 && S[1].shelves.length === 1, 'rodDrawers: штанга+полка+ящики');
 eq(S[2].shelves.length, 7, 'penal7: 7 полок');
 ok(S.every(function (x) { return x.facade.frez === 'volna' && x.facade.handle === 'gola'; }), 'фрезеровка/ручки из мастера на всех секциях');
 // раскрой не падает
@@ -163,9 +161,8 @@ win.wizOpen();
 win.wizSet('len', '3000'); win.wizSet('hei', '2600'); win.wizSet('offL', '30'); win.wizSet('offR', '30');
 win.wizSet('plankL', '80'); win.wizSet('plankR', '80'); win.wizSet('plankT', '60');
 win.wizSet('doors', '4');
-win.wizStep(1);
 win.wizSet('antr', true); win.wizSet('antrH', '500');
-win.wizStep(1); win.wizStep(1);
+win.wizStep(1); win.wizStep(1); win.wizStep(1);
 win.confirm = function () { return true; };
 win.wizBuild();
 var S9 = win._ai_sections;

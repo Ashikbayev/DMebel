@@ -29,7 +29,7 @@ var m = win.document.getElementById('w2dwiz');
 ok(!!m, 'модалка мастера создана');
 eq(m.style.display, 'block', 'мастер показан');
 ok(m.innerHTML.indexOf('MEBELOFF') >= 0, 'брендинг в шапке');
-ok(m.innerHTML.indexOf('Стена и размеры') >= 0, 'шаг 1');
+ok(m.innerHTML.indexOf('Габариты') >= 0, 'шаг 1 (новый мастер)');
 
 // 2) Стена: 4000×3000×600, отступы 50/50/100
 win.wizSet('len', '4000'); win.wizSet('hei', '3000'); win.wizSet('dep', '600');
@@ -39,25 +39,20 @@ eq(win._ai_wiz().len, 4000, 'длина 4000');
 // авто-двери: W=3900 → round(3900/500)=8
 eq(wz.doors, 8, 'авто: 8 дверей (3900/500)');
 
-// 3) Шаг 2: двери 8, антресоль 600 → модули 2+2+2+2 (4 секции)
+// 3) Шаг 2: тип, двери 8, антресоль 600, материал → модули 2+2+2+2 (4 секции)
 win.wizStep(1);
-ok(m.innerHTML.indexOf('дв.') >= 0, 'шаг 2: модули показаны');
+ok(m.innerHTML.indexOf('Распашной') >= 0, 'шаг 2: карточки типов показаны');
+ok(m.innerHTML.indexOf('модуль') >= 0, 'шаг 2: разбивка на модули показана');
 win.wizSet('antr', true); win.wizSet('antrH', '600');
-var mods = [];
-// проверяем разбивку через построение позже; здесь сумма ширин
-// 4) Шаг 3: пресеты
-win.wizStep(1);
-ok(m.innerHTML.indexOf('Секция 1') >= 0 && m.innerHTML.indexOf('5 полок') >= 0, 'шаг 3: библиотека пресетов');
-win.wizPreset(0, 'shelves5');
-win.wizPreset(1, 'rod2shelf');
-win.wizPreset(2, 'shDrawers');
-win.wizPreset(3, 'rod');
-eq(win._ai_wiz().presets.join(','), 'shelves5,rod2shelf,shDrawers,rod', 'пресеты выбраны');
-
-// 5) Шаг 4: материал + построить
-win.wizStep(1);
-ok(m.innerHTML.indexOf('МДФ Краска') >= 0, 'шаг 4: материалы');
+ok(m.innerHTML.indexOf('МДФ Краска') >= 0, 'шаг 2: материалы фасадов');
 win.wizSet('mat', 'mdfKraska');
+// 4) Шаг 3: сценарии наполнения
+win.wizStep(1);
+ok(m.innerHTML.indexOf('wiz-scen') >= 0 && m.innerHTML.indexOf('Для спальни') >= 0, 'шаг 3: сценарии');
+win.wizSet('scen', 'maxshelf');
+// 5) Шаг 4: результат + построить
+win.wizStep(1);
+ok(m.innerHTML.indexOf('Отлично, дорабатываю') >= 0, 'шаг 4: результат');
 win.confirm = function(){ return true; };
 win.wizBuild();
 
@@ -69,11 +64,8 @@ eq(S[0].height, 2900 - 600, 'высота секции = H − антресол�
 ok(S.every(function (s) { return s.antresol.enabled && s.antresol.height === 600; }), 'антресоль 600 на всех');
 ok(S.every(function (s) { return s.facade.type === 'doors2'; }), 'фасад doors2 на всех (по 2 двери)');
 ok(S.every(function (s) { return s.facade.material === 'mdfKraska'; }), 'материал МДФ Краска');
-eq(S[0].shelves.length, 5, 'пресет 5 полок применён');
-ok(S[1].hasRod && S[1].shelves.length === 1, 'пресет штанга+полка');
-eq(S[2].drawerBlocks.length, 1, 'пресет полки+ящики: блок ящиков');
-eq(S[2].shelves.length, 2, 'пресет полки+ящики: 2 полки');
-ok(S[3].hasRod && S[3].shelves.length === 0, 'пресет штанга');
+ok(S.every(function (s) { return s.shelves.length >= 4; }), 'сценарий «максимум полок»: плотные полки во всех секциях');
+ok(S.every(function (s) { return s.rods.length === 0; }), 'сценарий «максимум полок»: без штанг');
 eq(m.style.display, 'none', 'мастер закрылся после построения');
 
 // 6) раскрой считается без ошибок
