@@ -925,6 +925,61 @@ function waitReady(dom, tries){
   ok(td1.ok === true && tl2.templates.length === 1 && tl2.templates[0].name === 'Врезка мойки', 'шаблон удаляется');
   ok(att("delDopTemplate_(__dtSS, 'нет')").ok === false, 'удаление несуществующего шаблона отклонено');
 
+  // ─────────────────────────────────────────────────────────────
+  // v4.6: Рекламации (гарантийные обращения по сданным заказам)
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.6: Рекламации ──');
+  var reclRows = [];
+  var reclWSheet = mkWritable(reclRows);
+  gsCtx.__reclSS = {
+    getSheetByName: function(n){
+      if(n === 'Рекламации') return reclWSheet;
+      if(n === 'Заказы') return ordSheet;
+      return null;
+    },
+    insertSheet: function(n){ return n === 'Рекламации' ? reclWSheet : ordSheet; }
+  };
+
+  ok(att("addRecl_(__reclSS, { num:'77', desc:'' })").ok === false, 'рекламация без описания отклонена');
+  ok(att("addRecl_(__reclSS, { num:'999', desc:'Скрипит дверь' })").ok === false, 'рекламация по несуществующему заказу отклонена');
+
+  // Ключевой инвариант: заказ остаётся в своём статусе (не уходит из «Готова»)
+  var olB = att("ordersList_(__reclSS)");
+  var stBefore = null; olB.orders.forEach(function(x){ if(x.num === '77') stBefore = x.status; });
+  var rc1 = att("addRecl_(__reclSS, { num:'77', desc:'Скрипит петля', date:'2026-07-10' })");
+  ok(rc1.ok === true && rc1.stage === 'Принята', 'рекламация добавлена, стадия по умолчанию «Принята»');
+  var olA = att("ordersList_(__reclSS)");
+  var stAfter = null; olA.orders.forEach(function(x){ if(x.num === '77') stAfter = x.status; });
+  ok(stBefore !== null && stAfter === stBefore, 'заказ НЕ меняет статус при заведении рекламации');
+
+  var rl1 = att("reclList_(__reclSS)");
+  ok(rl1.recl.length === 1 && rl1.recl[0].num === '77' && rl1.recl[0].desc === 'Скрипит петля', 'рекламация отдаётся в списке');
+
+  ok(att("updRecl_(__reclSS, { id:'" + rc1.id + "', stage:'Ремонтируем' })").ok === false, 'неизвестная стадия отклонена');
+  var ru1 = att("updRecl_(__reclSS, { id:'" + rc1.id + "', stage:'Устраняем' })");
+  var rl2 = att("reclList_(__reclSS)");
+  ok(ru1.ok === true && rl2.recl[0].stage === 'Устраняем', 'стадия рекламации меняется');
+  ok(att("updRecl_(__reclSS, { id:'нет', stage:'Закрыта' })").ok === false, 'смена стадии несуществующей рекламации отклонена');
+
+  // По одному заказу можно вести несколько рекламаций (через год — новая)
+  var rc2 = att("addRecl_(__reclSS, { num:'77', desc:'Отошла столешница', date:'2027-01-20' })");
+  var rl3 = att("reclList_(__reclSS)");
+  ok(rc2.ok === true && rl3.recl.length === 2, 'по одному заказу заводятся две рекламации');
+
+  var rd1 = att("delRecl_(__reclSS, '" + rc1.id + "')");
+  var rl4 = att("reclList_(__reclSS)");
+  ok(rd1.ok === true && rl4.recl.length === 1 && rl4.recl[0].desc === 'Отошла столешница', 'рекламация удаляется');
+  ok(att("delRecl_(__reclSS, 'нет')").ok === false, 'удаление несуществующей рекламации отклонено');
+
+  // Удаление заказа каскадом уносит его рекламации
+  var rcDel = att("addRecl_(__reclSS, { num:'78', desc:'Царапина' })");
+  var rlBefore = att("reclList_(__reclSS)");
+  var doDel = att("delOrder_(__reclSS, '78')");
+  var rlAfter = att("reclList_(__reclSS)");
+  ok(rcDel.ok === true && rlBefore.recl.length === 2, 'рекламация по заказу 78 заведена');
+  ok(doDel.ok === true && doDel.removedRecl === 1, 'delOrder_ отчитался об удалённой рекламации');
+  ok(rlAfter.recl.length === 1 && rlAfter.recl[0].num === '77', 'рекламации удалённого заказа ушли каскадом, чужие целы');
+
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');
   process.exit(FAIL ? 1 : 0);

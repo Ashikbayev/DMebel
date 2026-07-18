@@ -62,6 +62,10 @@
     var xBtn = document.createElement('button'); xBtn.className = 'crm-lb-x'; xBtn.textContent = '\u2715';
     xBtn.title = 'Закрыть'; xBtn.addEventListener('click', close);
     var main = document.createElement('div'); main.className = 'crm-lb-main';
+    // main растянут на всю ширину и перекрывает фон — без своего
+    // обработчика клик по тёмной области вокруг фото не закрывал бы
+    // лайтбокс (до bg событие не доходит).
+    main.addEventListener('click', function(e){ if(e.target === main) close(); });
     var prev = document.createElement('button'); prev.className = 'crm-lb-arrow'; prev.textContent = '\u2039';
     prev.title = 'Предыдущее фото'; prev.addEventListener('click', function(){ go(-1); });
     var next = document.createElement('button'); next.className = 'crm-lb-arrow'; next.textContent = '\u203A';
@@ -534,7 +538,7 @@
       '.crm-margin{color:#0F6E56;font-weight:600}'+
       '.crm-overpaid{color:#0F6E56;font-weight:600}'+
       '.crm-lb-bg{position:fixed;inset:0;background:rgba(10,10,10,.9);z-index:10050;display:flex;flex-direction:column;align-items:center;justify-content:center}'+
-      '.crm-lb-x{position:absolute;top:14px;right:16px;background:none;border:none;color:#fff;font-size:26px;cursor:pointer;line-height:1;padding:6px;opacity:.85}'+
+      '.crm-lb-x{position:absolute;top:14px;right:16px;background:none;border:none;color:#fff;font-size:26px;cursor:pointer;line-height:1;padding:6px;opacity:.85;z-index:2}'+
       '.crm-lb-x:hover{opacity:1}'+
       '.crm-lb-main{display:flex;align-items:center;justify-content:center;flex:1;width:100%;min-height:0;position:relative}'+
       '.crm-lb-img{max-width:88vw;max-height:70vh;object-fit:contain;border-radius:4px}'+
@@ -1143,6 +1147,40 @@
       if(String(CH[i].num) === String(num)) out.push(CH[i]);
     }
     return out;
+  }
+
+  // ── Рекламации (лист "Рекламации"): гарантийные обращения ──
+  // Живут отдельно от статуса заказа: заказ остаётся «Готова», а
+  // рекламация идёт своим циклом Принята → Устраняем → Закрыта.
+  var RECL_STAGES = ['Принята','Устраняем','Закрыта'];
+  var RECL_COLOR = { 'Принята':'#D4537E', 'Устраняем':'#BA7517', 'Закрыта':'#3B6D11' };
+  var RECL = [];
+  var RECL_LOADED = false;
+
+  function fetchRecl(cb){
+    if(!getToken()){ cb('__no_key__'); return; }
+    fetch(GS_URL + '?action=recl&token=' + encodeURIComponent(getToken()))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(res && res.ok){ RECL = res.recl || []; RECL_LOADED = true; cb(null); }
+        else cb((res && res.error) || 'таблица вернула ошибку');
+      })
+      .catch(function(e){ cb(String(e && e.message || e)); });
+  }
+
+  function reclOf(num){
+    var out = [];
+    for(var i=0;i<RECL.length;i++){
+      if(String(RECL[i].num) === String(num)) out.push(RECL[i]);
+    }
+    return out;
+  }
+
+  function orderByNum(num){
+    for(var i=0;i<ORDERS.length;i++){
+      if(String(ORDERS[i].num) === String(num)) return ORDERS[i];
+    }
+    return null;
   }
 
   // ── Вложения (лист "Вложения"): фото и заметки к заказам ──
@@ -3012,7 +3050,7 @@
   function renderBoard(view, vis){
     var tabs = document.createElement('div');
     tabs.className = 'crm-board-tabs';
-    [['sale','Продажа'],['prod','Производство'],['archive','Архив']].forEach(function(t){
+    [['sale','Продажа'],['prod','Производство'],['archive','Архив'],['rec','Рекламации']].forEach(function(t){
       var b = document.createElement('button');
       b.className = 'crm-board-tab' + (BOARD_TAB===t[0] ? ' on' : '');
       b.textContent = t[1];
@@ -3023,6 +3061,7 @@
       tabs.appendChild(b);
     });
     view.appendChild(tabs);
+    if(BOARD_TAB === 'rec'){ renderReclBoard(view); return; }
     var board = document.createElement('div');
     board.className = 'crm-board';
     var stagesForTab = BOARD_GROUPS[BOARD_TAB] || BOARD_GROUPS.sale;
@@ -3062,6 +3101,115 @@
       board.appendChild(col);
     });
     view.appendChild(board);
+  }
+
+  // Доска рекламаций: карточки — это РЕКЛАМАЦИИ, а не заказы (в отличие
+  // от остальных вкладок). Фильтры поиска/города/месяца применяются к
+  // заказу-владельцу, чтобы вкладка вела себя предсказуемо.
+  function renderReclBoard(view){
+    if(!RECL_LOADED){
+      var ld = document.createElement('div');
+      ld.className = 'crm-empty';
+      ld.textContent = 'Загружаю рекламации...';
+      view.appendChild(ld);
+      fetchRecl(function(err){
+        if(err && err !== '__no_key__') toast('\u26A0\uFE0F Рекламации не загрузились: ' + err, '#BA7517');
+        else if(!err) renderAll();
+      });
+      return;
+    }
+    var visNums = {};
+    ORDERS.forEach(function(o){
+      if(!matches(o)) return;
+      if(CITY_FILTER!=='all' && String(o.city||'').trim()!==CITY_FILTER) return;
+      if(!monthOk(o)) return;
+      visNums[String(o.num)] = true;
+    });
+    var rows = RECL.filter(function(rc){ return visNums[String(rc.num)]; });
+    var board = document.createElement('div');
+    board.className = 'crm-board';
+    RECL_STAGES.forEach(function(stg){
+      var inCol = rows.filter(function(rc){ return rc.stage === stg; });
+      var col = document.createElement('div'); col.className='crm-col';
+      col.addEventListener('dragover', function(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; col.classList.add('drag'); });
+      col.addEventListener('dragleave', function(){ col.classList.remove('drag'); });
+      col.addEventListener('drop', function(e){
+        e.preventDefault();
+        col.classList.remove('drag');
+        var id = e.dataTransfer.getData('text/plain');
+        var rc = null;
+        for(var i=0;i<RECL.length;i++){ if(String(RECL[i].id)===String(id)){ rc=RECL[i]; break; } }
+        if(!rc || rc.stage === stg) return;
+        var from = rc.stage;
+        rc.stage = stg; renderAll();
+        post({ action:'updRecl', recl:{ id:String(id), stage:stg } }, function(){
+          toast('OK Рекламация \u2116'+rc.num+': '+from+' \u2192 '+stg, '#1a5252');
+        }, function(err){
+          rc.stage = from; renderAll();
+          toast('\u26A0\uFE0F Стадия не записалась, вернул обратно: '+err, '#BA7517');
+        });
+      });
+      var h = document.createElement('div'); h.className='crm-col-h';
+      var dot = document.createElement('span'); dot.className='dot'; dot.style.background = RECL_COLOR[stg];
+      var nm = document.createElement('span'); nm.textContent = stg;
+      var c = document.createElement('span'); c.className='cnt'; c.textContent = inCol.length;
+      h.appendChild(dot); h.appendChild(nm); h.appendChild(c);
+      col.appendChild(h);
+      var cardsWrap = document.createElement('div');
+      cardsWrap.className = 'crm-col-cards';
+      inCol.sort(function(a,b){ return new Date(b.date||0).getTime() - new Date(a.date||0).getTime(); });
+      inCol.forEach(function(rc){ cardsWrap.appendChild(makeReclCard(rc)); });
+      col.appendChild(cardsWrap);
+      board.appendChild(col);
+    });
+    view.appendChild(board);
+    if(!rows.length){
+      var em = document.createElement('div');
+      em.className = 'crm-empty';
+      em.textContent = RECL.length ? 'Под текущие фильтры рекламаций нет.' : 'Рекламаций нет. Добавить можно в карточке заказа, в блоке «Рекламации».';
+      view.appendChild(em);
+    }
+  }
+
+  function makeReclCard(rc){
+    var o = orderByNum(rc.num);
+    var d = document.createElement('div');
+    d.className = 'crm-card';
+    d.style.borderLeftColor = RECL_COLOR[rc.stage] || '#ccc';
+    d.draggable = true;
+    d.addEventListener('dragstart', function(e){ e.dataTransfer.setData('text/plain', String(rc.id)); e.dataTransfer.effectAllowed='move'; });
+    var l1 = document.createElement('div'); l1.className='l1';
+    var n = document.createElement('span'); n.textContent = '\u2116'+rc.num;
+    var dt = document.createElement('span'); dt.style.cssText='font-weight:400;color:#999'; dt.textContent = fmtDate(rc.date);
+    l1.appendChild(n); l1.appendChild(dt);
+    var l2 = document.createElement('div'); l2.className='l2';
+    l2.textContent = o ? ((o.client||'') + (o.city ? ' \u00B7 '+o.city : '')) : 'заказ не найден';
+    var l3 = document.createElement('div'); l3.className='l2';
+    l3.style.cssText = 'color:#333;white-space:normal';
+    l3.textContent = rc.desc;
+    d.appendChild(l1); d.appendChild(l2); d.appendChild(l3);
+    var si = RECL_STAGES.indexOf(rc.stage);
+    if(si >= 0 && si < RECL_STAGES.length - 1){
+      var nx = RECL_STAGES[si+1];
+      var nb = document.createElement('button');
+      nb.className = 'crm-next';
+      nb.textContent = '\u2192 ' + nx;
+      nb.addEventListener('click', function(e){
+        e.stopPropagation();
+        nb.disabled = true; nb.textContent = '...';
+        post({ action:'updRecl', recl:{ id:String(rc.id), stage:nx } }, function(){
+          rc.stage = nx;
+          renderAll();
+          toast('OK Рекламация \u2116'+rc.num+' \u2192 '+nx, '#1a5252');
+        }, function(err){
+          nb.disabled = false; nb.textContent = '\u2192 ' + nx;
+          toast('\u26A0\uFE0F Стадия не записалась: '+err, '#BA7517');
+        });
+      });
+      d.appendChild(nb);
+    }
+    d.addEventListener('click', function(){ openCard(rc.num); });
+    return d;
   }
 
   function renderList(view, vis){
@@ -4025,6 +4173,87 @@
       fetchAttach(function(err){ if(!err) renderAttach(); });
     }
     b.appendChild(attWrap);
+
+    // ── Рекламации (v4.6): гарантийные обращения по этому заказу.
+    // Блок показывается только после договора — до него жаловаться
+    // ещё не на что. Статус самого заказа рекламация НЕ меняет.
+    var reclWrap = document.createElement('div');
+    function renderRecl(){
+      reclWrap.innerHTML = '';
+      if(!o.dogDate) return;
+      var box = document.createElement('div'); box.className='crm-ch-box';
+      var bh = document.createElement('div'); bh.className='crm-ch-h';
+      var bt = document.createElement('b'); bt.textContent = 'Рекламации';
+      bh.appendChild(bt);
+      box.appendChild(bh);
+      if(!RECL_LOADED){
+        var ld = document.createElement('div'); ld.className='crm-ch-row';
+        ld.textContent = 'Загружаю...';
+        box.appendChild(ld);
+      } else {
+        var mine = reclOf(o.num);
+        mine.sort(function(a,b){ return new Date(b.date||0).getTime() - new Date(a.date||0).getTime(); });
+        mine.forEach(function(rc){
+          var r = document.createElement('div'); r.className='crm-ch-row';
+          var dt = document.createElement('span'); dt.className='dt'; dt.textContent = fmtDate(rc.date);
+          var bd = document.createElement('span'); bd.className='crm-badge';
+          bd.style.background = RECL_COLOR[rc.stage] || '#999';
+          bd.textContent = rc.stage;
+          var ds = document.createElement('span'); ds.className='ds'; ds.textContent = rc.desc;
+          var del = document.createElement('button'); del.className='del'; del.textContent='\u2715';
+          del.title = 'Удалить рекламацию';
+          del.addEventListener('click', function(){
+            if(!confirm('Удалить рекламацию \u00AB' + rc.desc + '\u00BB?')) return;
+            post({ action:'delRecl', id: rc.id }, function(){
+              RECL = RECL.filter(function(x){ return x.id !== rc.id; });
+              renderRecl();
+              toast('OK Рекламация удалена', '#1a5252');
+            }, function(err){
+              toast('\u26A0\uFE0F Не удалилось: ' + err, '#BA7517');
+            });
+          });
+          r.appendChild(dt); r.appendChild(bd); r.appendChild(ds); r.appendChild(del);
+          box.appendChild(r);
+        });
+        if(!mine.length){
+          var em = document.createElement('div'); em.className='crm-ch-row';
+          em.style.color = '#999';
+          em.textContent = 'Рекламаций нет. Если клиент обратился по гарантии \u2014 заведи её здесь, статус заказа не изменится.';
+          box.appendChild(em);
+        }
+      }
+      var addRow = document.createElement('div');
+      addRow.style.cssText = 'display:flex;gap:6px;align-items:center;padding:8px 12px;flex-wrap:wrap';
+      var inp = document.createElement('input');
+      inp.type = 'text';
+      inp.placeholder = 'На что жалуется клиент...';
+      inp.style.cssText = 'flex:1;min-width:140px';
+      var bAdd = document.createElement('button'); bAdd.className='crm-vbtn new';
+      bAdd.textContent = '+ Рекламация';
+      bAdd.addEventListener('click', function(){
+        var desc = String(inp.value || '').trim();
+        if(!desc){ toast('\u26A0\uFE0F Опиши, на что жалуется клиент', '#BA7517'); return; }
+        bAdd.disabled = true;
+        post({ action:'addRecl', recl:{ num:String(o.num), desc:desc } }, function(res){
+          RECL.push({ id:res.id, num:String(o.num), date:new Date().toISOString(), stage:res.stage, desc:desc });
+          inp.value = '';
+          bAdd.disabled = false;
+          renderRecl();
+          toast('OK Рекламация принята', '#1a5252');
+        }, function(err){
+          bAdd.disabled = false;
+          toast('\u26A0\uFE0F Не сохранилось: ' + err, '#BA7517');
+        });
+      });
+      addRow.appendChild(inp); addRow.appendChild(bAdd);
+      box.appendChild(addRow);
+      reclWrap.appendChild(box);
+    }
+    renderRecl();
+    if(!RECL_LOADED && o.dogDate){
+      fetchRecl(function(err){ if(!err) renderRecl(); });
+    }
+    b.appendChild(reclWrap);
 
     // ── Лента событий (v4.4): статусы + фото/заметки + платежи +
     // изменения к договору — одной хронологией. Собирается из уже
