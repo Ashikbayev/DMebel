@@ -980,6 +980,44 @@ function waitReady(dom, tries){
   ok(doDel.ok === true && doDel.removedRecl === 1, 'delOrder_ отчитался об удалённой рекламации');
   ok(rlAfter.recl.length === 1 && rlAfter.recl[0].num === '77', 'рекламации удалённого заказа ушли каскадом, чужие целы');
 
+  // ─────────────────────────────────────────────────────────────
+  // v4.6: Себестоимость изменения к договору (поправка маржи)
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.6: Себестоимость изменений ──');
+  var chRows = [];
+  var chWSheet = mkWritable(chRows);
+  gsCtx.__chSS = {
+    getSheetByName: function(n){
+      if(n === 'Изменения') return chWSheet;
+      if(n === 'Заказы') return ordSheet;
+      return null;
+    },
+    insertSheet: function(n){ return n === 'Изменения' ? chWSheet : ordSheet; }
+  };
+
+  var c1 = att("addChange_(__chSS, { num:'77', desc:'Шкафчик', sum:200000, cost:140000 })");
+  ok(c1.ok === true, 'изменение с себестоимостью записано');
+  var cl1 = att("changesList_(__chSS)");
+  ok(cl1.changes.length === 1 && cl1.changes[0].cost === 140000, 'себестоимость отдаётся в списке');
+
+  var c2 = att("addChange_(__chSS, { num:'77', desc:'Без себеса', sum:50000 })");
+  var cl2 = att("changesList_(__chSS)");
+  var noCost = null; cl2.changes.forEach(function(x){ if(x.desc === 'Без себеса') noCost = x; });
+  ok(c2.ok === true && noCost && noCost.cost === '', 'без себестоимости cost = пусто, а НЕ ноль');
+
+  var c3 = att("addChange_(__chSS, { num:'77', desc:'Чистая прибыль', sum:30000, cost:0 })");
+  var cl3 = att("changesList_(__chSS)");
+  var zeroCost = null; cl3.changes.forEach(function(x){ if(x.desc === 'Чистая прибыль') zeroCost = x; });
+  ok(c3.ok === true && zeroCost && zeroCost.cost === 0, 'нулевая себестоимость сохраняется как 0 (отличима от пусто)');
+
+  ok(att("addChange_(__chSS, { num:'77', desc:'Кривой знак', sum:100000, cost:-50000 })").ok === false, 'себестоимость с чужим знаком отклонена');
+  ok(att("addChange_(__chSS, { num:'77', desc:'Убыток', sum:100000, cost:150000 })").ok === false, 'себестоимость больше суммы отклонена');
+
+  var c4 = att("addChange_(__chSS, { num:'77', desc:'Убрали полку', sum:-50000, cost:-35000 })");
+  var cl4 = att("changesList_(__chSS)");
+  var neg = null; cl4.changes.forEach(function(x){ if(x.desc === 'Убрали полку') neg = x; });
+  ok(c4.ok === true && neg && neg.sum === -50000 && neg.cost === -35000, 'отрицательное изменение с отрицательной себестоимостью записано');
+
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');
   process.exit(FAIL ? 1 : 0);

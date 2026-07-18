@@ -275,6 +275,20 @@
   }
 
   function fm0(n){ n = Math.round(Number(n)||0); return n.toLocaleString('ru-RU') + '\u20B8'; }
+
+  // Плитка сводки (v4.6). Раньше эта функция была объявлена девять раз
+  // почти дословно в разных отчётах — правка стиля или разметки требовала
+  // обойти все копии, и они успели разойтись (где-то третий аргумент был
+  // булевым, где-то строкой 'warn'). Здесь warn просто truthy — работают
+  // оба прежних варианта вызова.
+  function sumTile(host, v, k, warn){
+    var t = document.createElement('div'); t.className='crm-sum-t';
+    var ve = document.createElement('div'); ve.className='v'+(warn?' warn':''); ve.textContent=v;
+    var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
+    t.appendChild(ve); t.appendChild(ke);
+    if(host) host.appendChild(t);
+    return t;
+  }
   function fmtDate(v){
     if(!v) return '';
     var d = new Date(v);
@@ -301,6 +315,24 @@
     var d = new Date(o.updated);
     if(isNaN(d.getTime())) return null;
     return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+  }
+  // Поправка маржи на изменения после договора (v4.6).
+  // o.margin зафиксирована при подписании и «±Изменение» её не двигает
+  // (bumpOrderSogl_ меняет только цену и долг). При этом отчёт берёт
+  // ТЕКУЩУЮ sogl — из-за этого дозаказ целиком записывался в
+  // себестоимость и занижал рентабельность. Здесь считаем, сколько
+  // маржи реально принесли изменения: (сумма − себестоимость).
+  // Изменения без себестоимости (старые записи, или просто не знали)
+  // в поправку не идут и возвращаются счётчиком unknown — отчёт про них
+  // честно предупреждает, вместо того чтобы молча считать их бесплатными.
+  function marginAdjOf(num){
+    var adj = 0, unknown = 0, unknownSum = 0;
+    changesOf(num).forEach(function(c){
+      var hasCost = !(c.cost === '' || c.cost === null || c.cost === undefined);
+      if(!hasCost){ unknown++; unknownSum += Number(c.sum)||0; return; }
+      adj += (Number(c.sum)||0) - (Number(c.cost)||0);
+    });
+    return { adj: adj, unknown: unknown, unknownSum: unknownSum };
   }
   function debtOf(o){
     var s = Number(o.sogl)||0;
@@ -708,16 +740,10 @@
     var mountsNow = ORDERS.filter(function(o){ return o.status!=='Отказ' && monthKey(o.mountDate)===nowKey; }).length;
     var sum = document.createElement('div');
     sum.className = 'crm-sum';
-    function tile(v, k, warn){
-      var t = document.createElement('div'); t.className='crm-sum-t';
-      var ve = document.createElement('div'); ve.className='v'+(warn?' warn':''); ve.textContent=v;
-      var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
-      t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
-    }
-    tile(String(act.length), 'заказов в работе');
-    tile(fm0(moneyInWork), 'денег в работе');
-    tile(fm0(debtTotal), 'долг клиентов', debtTotal>0);
-    tile(String(mountsNow), 'установок в этом месяце');
+    sumTile(sum, String(act.length), 'заказов в работе');
+    sumTile(sum, fm0(moneyInWork), 'денег в работе');
+    sumTile(sum, fm0(debtTotal), 'долг клиентов', debtTotal>0);
+    sumTile(sum, String(mountsNow), 'установок в этом месяце');
     root.appendChild(sum);
     // ── Требует внимания ──
     var alerts = buildAlerts();
@@ -2062,15 +2088,9 @@
     t0.textContent = 'Итог месяца';
     view.appendChild(t0);
     var sum = document.createElement('div'); sum.className='crm-sum';
-    function tile(v, k, cls){
-      var t = document.createElement('div'); t.className='crm-sum-t';
-      var ve = document.createElement('div'); ve.className='v'+(cls?(' '+cls):''); ve.textContent=v;
-      var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
-      t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
-    }
-    tile('+' + fm0(inc), 'приход за месяц');
-    tile('\u2212' + fm0(exp), 'расход за месяц', 'warn');
-    tile((net>=0?'+':'\u2212') + fm0(Math.abs(net)), 'чистый доход месяца', net<0 ? 'warn' : '');
+    sumTile(sum, '+' + fm0(inc), 'приход за месяц');
+    sumTile(sum, '\u2212' + fm0(exp), 'расход за месяц', 'warn');
+    sumTile(sum, (net>=0?'+':'\u2212') + fm0(Math.abs(net)), 'чистый доход месяца', net<0 ? 'warn' : '');
     view.appendChild(sum);
     var note = document.createElement('div'); note.className='crm-fin-note';
     note.textContent = 'Расход за месяц включает постоянные (аренда, оклады), если они начислены во вкладке «Постоянные». Начисляй в начале каждого месяца.';
@@ -2245,16 +2265,10 @@
       Object.keys(lead).forEach(function(k){ totLeadSum += lead[k].sum; totLeadCnt += lead[k].cnt; });
 
       var sum = document.createElement('div'); sum.className='crm-sum';
-      function tile(v, k){
-        var t = document.createElement('div'); t.className='crm-sum-t';
-        var ve = document.createElement('div'); ve.className='v'; ve.textContent=v;
-        var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
-        t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
-      }
-      tile(totZamer ? Math.round(totWon/totZamer*100) + '%' : '\u2014', 'конверсия Замер\u2192Договор');
-      tile(totSalesCnt ? fm0(totSalesSum/totSalesCnt) : '\u2014', 'средний чек');
-      tile(totLeadCnt ? Math.round(totLeadSum/totLeadCnt) + ' дн.' : '\u2014', 'Ø Договор\u2192Установка');
-      tile(String(totSalesCnt), 'договоров всего');
+      sumTile(sum, totZamer ? Math.round(totWon/totZamer*100) + '%' : '\u2014', 'конверсия Замер\u2192Договор');
+      sumTile(sum, totSalesCnt ? fm0(totSalesSum/totSalesCnt) : '\u2014', 'средний чек');
+      sumTile(sum, totLeadCnt ? Math.round(totLeadSum/totLeadCnt) + ' дн.' : '\u2014', 'Ø Договор\u2192Установка');
+      sumTile(sum, String(totSalesCnt), 'договоров всего');
       box.appendChild(sum);
 
       var tbl = document.createElement('table'); tbl.className='crm-ftbl';
@@ -2579,17 +2593,11 @@
       var salT = 0;
       EMP.forEach(function(e){ if(e.active) salT += Number(e.salary)||0; });
       var sum = document.createElement('div'); sum.className='crm-sum'; sum.style.marginTop='10px';
-      function tile(v, k){
-        var t = document.createElement('div'); t.className='crm-sum-t';
-        var ve = document.createElement('div'); ve.className='v'; ve.textContent=v;
-        var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
-        t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
-      }
-      tile(fm0(salT), 'окладов/мес всего');
-      tile(fm0(earnMasterM), 'заработок мастеров (мес)');
-      tile(fm0(earnDesignerM), 'заработок дизайнеров (мес)');
-      tile(fm0(dopTotalM), 'доп. работы (мес)');
-      tile(fm0(salT + earnMasterM + earnDesignerM + dopTotalM), 'фонд оплаты за месяц');
+      sumTile(sum, fm0(salT), 'окладов/мес всего');
+      sumTile(sum, fm0(earnMasterM), 'заработок мастеров (мес)');
+      sumTile(sum, fm0(earnDesignerM), 'заработок дизайнеров (мес)');
+      sumTile(sum, fm0(dopTotalM), 'доп. работы (мес)');
+      sumTile(sum, fm0(salT + earnMasterM + earnDesignerM + dopTotalM), 'фонд оплаты за месяц');
       view.appendChild(sum);
 
       if(!LOADED){
@@ -2692,16 +2700,10 @@
     });
 
     var sum = document.createElement('div'); sum.className='crm-sum';
-    function tile(v, k, warn){
-      var t = document.createElement('div'); t.className='crm-sum-t';
-      var ve = document.createElement('div'); ve.className='v'+(warn?' warn':''); ve.textContent=v;
-      var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
-      t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
-    }
-    tile('+' + fm0(plus), 'добавлено (цена вверх)');
-    tile('\u2212' + fm0(Math.abs(minus)), 'убрано (цена вниз)', minus < 0);
-    tile((net >= 0 ? '+' : '\u2212') + fm0(Math.abs(net)), 'итоговый сдвиг цены', net < 0);
-    tile(String(CH.length), 'всего изменений');
+    sumTile(sum, '+' + fm0(plus), 'добавлено (цена вверх)');
+    sumTile(sum, '\u2212' + fm0(Math.abs(minus)), 'убрано (цена вниз)', minus < 0);
+    sumTile(sum, (net >= 0 ? '+' : '\u2212') + fm0(Math.abs(net)), 'итоговый сдвиг цены', net < 0);
+    sumTile(sum, String(CH.length), 'всего изменений');
     view.appendChild(sum);
 
     // помесячно по дате изменения
@@ -2750,15 +2752,9 @@
     t0.textContent = 'Касса — фактические деньги';
     view.appendChild(t0);
     var sum = document.createElement('div'); sum.className='crm-sum';
-    function tile(v, k, warn){
-      var t = document.createElement('div'); t.className='crm-sum-t';
-      var ve = document.createElement('div'); ve.className='v'+(warn?' warn':''); ve.textContent=v;
-      var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
-      t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
-    }
-    tile(fm0(inc), 'приход, всего');
-    tile(fm0(exp), 'расход, всего', exp > inc);
-    tile(fm0(inc - exp), 'итог (приход − расход)', inc - exp < 0);
+    sumTile(sum, fm0(inc), 'приход, всего');
+    sumTile(sum, fm0(exp), 'расход, всего', exp > inc);
+    sumTile(sum, fm0(inc - exp), 'итог (приход − расход)', inc - exp < 0);
     view.appendChild(sum);
 
     // график приход/расход по месяцам
@@ -2880,15 +2876,9 @@
     var avg = funnel.length ? predT / funnel.length : 0;
 
     var sum = document.createElement('div'); sum.className='crm-sum';
-    function tile(v, k, warn){
-      var t = document.createElement('div'); t.className='crm-sum-t';
-      var ve = document.createElement('div'); ve.className='v'+(warn?' warn':''); ve.textContent=v;
-      var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
-      t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
-    }
-    tile(fm0(predT), 'предв. сумма в работе');
-    tile(String(funnel.length), 'заявок без договора');
-    tile(fm0(avg), 'средняя предв. цена');
+    sumTile(sum, fm0(predT), 'предв. сумма в работе');
+    sumTile(sum, String(funnel.length), 'заявок без договора');
+    sumTile(sum, fm0(avg), 'средняя предв. цена');
     view.appendChild(sum);
 
     // разбивка по статусам (сколько заявок и на какую сумму на каждом этапе)
@@ -2941,42 +2931,50 @@
     });
     var avg = withSogl.length ? revenue / withSogl.length : 0;
     var margT = 0, margRev = 0, margCnt = 0;
+    var chUnknown = 0, chUnknownSum = 0;
     withSogl.forEach(function(o){
       var m = marginOf(o);
-      if(m > 0){ margT += m; margRev += Number(o.sogl)||0; margCnt += 1; }
+      if(m <= 0) return;
+      // Маржа договора + то, что реально принесли изменения после него.
+      // Без этой поправки дозаказ уходил целиком в «себестоимость».
+      var a = CH_LOADED ? marginAdjOf(o.num) : { adj:0, unknown:0, unknownSum:0 };
+      chUnknown += a.unknown;
+      chUnknownSum += a.unknownSum;
+      margT += m + a.adj;
+      margRev += Number(o.sogl)||0;
+      margCnt += 1;
     });
     var margPct = margRev > 0 ? Math.round(margT / margRev * 100) : 0;
 
     var sum = document.createElement('div'); sum.className='crm-sum';
-    function tile(v, k, warn){
-      var t = document.createElement('div'); t.className='crm-sum-t';
-      var ve = document.createElement('div'); ve.className='v'+(warn?' warn':''); ve.textContent=v;
-      var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
-      t.appendChild(ve); t.appendChild(ke); sum.appendChild(t);
-    }
-    tile(fm0(revenue), 'выручка по договорам, всего');
-    tile(fm0(received), 'получено (авансы + доплаты)');
-    tile(fm0(debtT), 'долг клиентов', debtT>0);
-    tile(fm0(avg), 'средний чек (' + withSogl.length + ' догов.)');
+    sumTile(sum, fm0(revenue), 'выручка по договорам, всего');
+    sumTile(sum, fm0(received), 'получено (авансы + доплаты)');
+    sumTile(sum, fm0(debtT), 'долг клиентов', debtT>0);
+    sumTile(sum, fm0(avg), 'средний чек (' + withSogl.length + ' догов.)');
     view.appendChild(sum);
 
     if(margCnt){
       var sum2 = document.createElement('div'); sum2.className='crm-sum';
-      function tile2(v, k, warn){
-        var t = document.createElement('div'); t.className='crm-sum-t';
-        var ve = document.createElement('div'); ve.className='v'+(warn?' warn':''); ve.textContent=v;
-        var ke = document.createElement('div'); ke.className='k'; ke.textContent=k;
-        t.appendChild(ve); t.appendChild(ke); sum2.appendChild(t);
-      }
-      tile2(fm0(margT), 'маржа по договорам');
-      tile2(fm0(margRev - margT), 'себестоимость');
-      tile2(margPct + '%', 'рентабельность');
-      tile2(String(margCnt) + ' из ' + withSogl.length, 'догов. с маржой');
+      sumTile(sum2, fm0(margT), 'маржа по договорам');
+      sumTile(sum2, fm0(margRev - margT), 'себестоимость');
+      sumTile(sum2, margPct + '%', 'рентабельность');
+      sumTile(sum2, String(margCnt) + ' из ' + withSogl.length, 'догов. с маржой');
       view.appendChild(sum2);
       if(margCnt < withSogl.length){
         var mn = document.createElement('div'); mn.className='crm-fin-note';
         mn.textContent = 'Маржа считается по ' + margCnt + ' договорам из ' + withSogl.length + ' — у остальных расчёт был сохранён до появления учёта маржи. Пересохрани расчёт заказа, чтобы маржа появилась.';
         view.appendChild(mn);
+      }
+      if(!CH_LOADED){
+        var ln = document.createElement('div'); ln.className='crm-fin-note';
+        ln.textContent = 'Изменения к договорам ещё грузятся — маржа показана без поправки на них. Цифра обновится сама.';
+        view.appendChild(ln);
+      }
+      if(chUnknown){
+        var cn = document.createElement('div'); cn.className='crm-fin-note';
+        cn.style.color = '#BA7517';
+        cn.textContent = '\u26A0\uFE0F ' + chUnknown + ' изменений к договорам на ' + fm0(chUnknownSum) + ' — без себестоимости, поэтому в марже они не учтены. Цифра занижена (при дозаказах) на неизвестную величину. Заполняй «Себестоимость» при добавлении изменения, чтобы маржа была точной.';
+        view.appendChild(cn);
       }
     }
 
@@ -3494,6 +3492,7 @@
     selDir.appendChild(opP); selDir.appendChild(opM);
 
     var iSum = inp('', 'number'); iSum.placeholder = '0';
+    var iCost = inp('', 'number'); iCost.placeholder = 'если знаешь';
     var today = new Date();
     var iDate = inp(today.getFullYear()+'-'+('0'+(today.getMonth()+1)).slice(-2)+'-'+('0'+today.getDate()).slice(-2), 'date');
     var iDesc = inp(''); iDesc.placeholder = 'Что добавили или убрали';
@@ -3501,6 +3500,11 @@
     var r1 = document.createElement('div'); r1.className='crm-2col';
     r1.appendChild(field('Тип', selDir)); r1.appendChild(field('Сумма, \u20B8', iSum));
     b.appendChild(r1);
+    b.appendChild(field('Себестоимость, \u20B8', iCost));
+    var cnote = document.createElement('div'); cnote.className='crm-fin-note';
+    cnote.style.marginTop = '0';
+    cnote.textContent = 'Во сколько это обошлось тебе (материал + работа). Можно не заполнять \u2014 тогда отчёт маржи по этому изменению честно предупредит, что данных нет. Знак ставится сам по типу.';
+    b.appendChild(cnote);
     b.appendChild(field('Дата', iDate));
     b.appendChild(field('Описание', iDesc));
 
@@ -3516,9 +3520,17 @@
       var desc = iDesc.value.trim();
       if(!desc){ toast('\u26A0\uFE0F Опиши изменение', '#BA7517'); return; }
       var signed = selDir.value === 'minus' ? -sum : sum;
+      var costRaw = String(iCost.value).trim();
+      var signedCost = '';
+      if(costRaw !== ''){
+        var c = Math.round(parseFloat(costRaw) || 0);
+        if(c < 0){ toast('\u26A0\uFE0F Себестоимость вводится положительной — знак поставится сам', '#BA7517'); return; }
+        if(c > sum){ toast('\u26A0\uFE0F Себестоимость больше суммы изменения — проверь цифры', '#BA7517'); return; }
+        signedCost = selDir.value === 'minus' ? -c : c;
+      }
       bSave.disabled = true; bSave.textContent = 'Записываю...';
-      post({ action:'addChange', change:{ num:String(o.num), desc:desc, sum:signed, date:iDate.value } }, function(res){
-        CH.push({ id:(res && res.id) || String(Date.now()), num:String(o.num), date:iDate.value, desc:desc, sum:signed });
+      post({ action:'addChange', change:{ num:String(o.num), desc:desc, sum:signed, cost:signedCost, date:iDate.value } }, function(res){
+        CH.push({ id:(res && res.id) || String(Date.now()), num:String(o.num), date:iDate.value, desc:desc, sum:signed, cost:signedCost });
         if(res && res.sogl !== undefined){ o.sogl = Number(res.sogl)||0; }
         document.body.removeChild(bg);
         renderAll();
@@ -5143,13 +5155,16 @@
     }
     btn.disabled = true; btn.textContent = 'Считаю...';
     var recs = [];
+    var errs = [];
     var left = candidates.length;
     candidates.forEach(function(o){
       loadOrderRec(o.num, function(err, rec){
-        if(!err) recs.push({ o: o, rec: rec });
+        if(err) errs.push('\u2116' + o.num);
+        else recs.push({ o: o, rec: rec });
         left--;
         if(left === 0){
           btn.disabled = false; btn.textContent = '\u23F1 Сроки поставки';
+          if(errs.length) toast('\u26A0\uFE0F Пропущено заказов (нет снимка): ' + errs.length, '#BA7517');
           var keyOrders = buildKeyOrdersMap(recs);
           var warns = [];
           Object.keys(keyOrders).forEach(function(k){
