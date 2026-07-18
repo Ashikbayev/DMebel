@@ -1118,6 +1118,8 @@
   var STOCK_HSEARCH = '';
   var STOCK_SORT = 'name';
   var STOCK_DEF_ONLY = false;
+  var RESERVED = {};
+  var RESERVED_LOADED = false;
   var SMIN = {};
   var SMIN_LOADED = false;
   var SLEAD = {}; // v4.4: срок поставки материала в днях (лист СкладМин, колонка 4)
@@ -1444,7 +1446,20 @@
     bLead.title = 'Проверить, не опоздает ли материал с учётом срока поставки и дат монтажа';
     var leadResultBox = document.createElement('div');
     bLead.addEventListener('click', function(){ checkLeadTimes(bLead, leadResultBox); });
-    btnRow.appendChild(bIn); btnRow.appendChild(bOut); btnRow.appendChild(bInv); btnRow.appendChild(bAgg); btnRow.appendChild(bLead);
+    var bResv = document.createElement('button'); bResv.className = 'crm-vbtn'; bResv.textContent = '\uD83D\uDCE6 Резерв';
+    bResv.title = 'Посчитать, сколько остатка уже обещано другим активным заказам (тянет снимки всех заказов после договора)';
+    bResv.addEventListener('click', function(){
+      bResv.disabled = true; bResv.textContent = 'Считаю...';
+      computeReserved(null, function(err, map){
+        bResv.disabled = false; bResv.textContent = '\uD83D\uDCE6 Резерв';
+        if(err === '__no_key__'){ toast('\u26A0\uFE0F Введи ключ доступа', '#BA7517'); return; }
+        if(err){ toast('\u26A0\uFE0F Резерв не посчитался: ' + err, '#BA7517'); return; }
+        RESERVED = map; RESERVED_LOADED = true;
+        if(VIEW === 'stock') renderAll();
+        toast('OK Резерв посчитан по активным заказам', '#1a5252');
+      });
+    });
+    btnRow.appendChild(bIn); btnRow.appendChild(bOut); btnRow.appendChild(bInv); btnRow.appendChild(bAgg); btnRow.appendChild(bLead); btnRow.appendChild(bResv);
     wrap.appendChild(btnRow);
     wrap.appendChild(leadResultBox);
     view.appendChild(wrap);
@@ -1566,7 +1581,7 @@
       }
       var tbl = document.createElement('table'); tbl.className = 'crm-ftbl';
       var thead = document.createElement('tr');
-      ['Наименование','Ключ','Ед','Мин','Срок','Остаток','Сумма',''].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thead.appendChild(th); });
+      ['Наименование','Ключ','Ед','Мин','Срок','Остаток','Резерв','Своб.','Сумма',''].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thead.appendChild(th); });
       tbl.appendChild(thead);
       rows.forEach(function(s){
         var qty = Math.round(Number(s.qty) || 0);
@@ -1612,6 +1627,22 @@
         if(qty <= 0){ c5.style.color = '#BA1B1B'; c5.style.fontWeight = '600'; }
         else if(mn > 0 && qty < mn){ c5.style.color = '#BA7517'; c5.style.fontWeight = '600'; }
         tr.appendChild(c5);
+        var resv = RESERVED_LOADED ? (Math.round(RESERVED[s.key]) || 0) : null;
+        var c5b = document.createElement('td');
+        c5b.textContent = resv === null ? '\u2014' : String(resv);
+        c5b.style.color = '#999';
+        tr.appendChild(c5b);
+        var c5c = document.createElement('td');
+        if(resv === null){
+          c5c.textContent = '\u2014';
+          c5c.style.color = '#999';
+        } else {
+          var free = qty - resv;
+          c5c.textContent = String(free);
+          if(free < 0){ c5c.style.color = '#BA1B1B'; c5c.style.fontWeight = '600'; }
+          else if(resv > 0){ c5c.style.color = '#BA7517'; }
+        }
+        tr.appendChild(c5c);
         var c6 = document.createElement('td');
         var pr = prices[s.key];
         c6.textContent = (qty > 0 && pr > 0) ? fm0(qty * pr) : '';
@@ -1791,7 +1822,7 @@
       bGo.disabled = true; bGo.textContent = 'Провожу...';
       post({ action:'stockMove', stock:{ moves: moves } }, function(){
         document.body.removeChild(bg);
-        STOCK_LOADED = false; STOCK_MOVES_LOADED = false;
+        STOCK_LOADED = false; STOCK_MOVES_LOADED = false; RESERVED_LOADED = false;
         if(VIEW === 'stock') renderAll();
         toast('OK Инвентаризация проведена: скорректировано позиций \u2014 ' + moves.length, '#1a5252');
       }, function(err){
@@ -1901,6 +1932,7 @@
       var mv = { type: selType.value, key: key, name: iName.value.trim(), unit: selUnit.value, qty: Math.round(qn), num: iNum.value.trim(), comment: iCmt.value.trim() };
       post({ action:'stockMove', stock:{ moves:[ mv ] } }, function(){
         document.body.removeChild(bg);
+        RESERVED_LOADED = false;
         if(VIEW==='stock') renderAll();
         toast('OK ' + mv.type + ' ' + mv.qty + ' ' + mv.unit + ' (' + (mv.name || mv.key) + ')', '#1a5252');
       }, function(err){
@@ -4604,15 +4636,40 @@
     lead.textContent = toBuy ? ('Докупить позиций: ' + toBuy) : 'Всё есть на складе — докупать нечего.';
     b.appendChild(lead);
 
+    var resvBox = document.createElement('div');
+    resvBox.style.cssText = 'padding:2px 0 4px';
+    var bResv = document.createElement('button'); bResv.className = 'crm-vbtn';
+    bResv.textContent = '\uD83D\uDCE6 Посчитать резерв др. заказов';
+    bResv.title = 'Сколько остатка уже обещано другим активным заказам (тянет их снимки)';
+    var reserved = null;
+    bResv.addEventListener('click', function(){
+      bResv.disabled = true; bResv.textContent = 'Считаю...';
+      computeReserved(o.num, function(err, map){
+        bResv.disabled = false;
+        if(err === '__no_key__'){ toast('\u26A0\uFE0F Введи ключ доступа', '#BA7517'); return; }
+        if(err){ toast('\u26A0\uFE0F Резерв не посчитался: ' + err, '#BA7517'); bResv.textContent = '\uD83D\uDCE6 Посчитать резерв др. заказов'; return; }
+        reserved = map;
+        resvBox.innerHTML = '';
+        paintTable();
+      });
+    });
+    resvBox.appendChild(bResv);
+    b.appendChild(resvBox);
+
     var fmt = function(n){ n = Number(n) || 0; return Number.isInteger(n) ? String(n) : n.toFixed(2); };
 
-    if(tracked.length){
+    var tblWrap = document.createElement('div');
+    b.appendChild(tblWrap);
+    function paintTable(){
+      tblWrap.innerHTML = '';
+      if(!tracked.length) return;
       var t1 = document.createElement('b'); t1.textContent = 'Со складским учётом';
       t1.style.display = 'block'; t1.style.margin = '8px 0 4px';
-      b.appendChild(t1);
+      tblWrap.appendChild(t1);
       var tbl = document.createElement('table'); tbl.className = 'crm-ftbl';
       var thr = document.createElement('tr');
-      ['Наименование','Ед','Нужно','Есть','Докупить'].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thr.appendChild(th); });
+      var heads = reserved ? ['Наименование','Ед','Нужно','Есть','Резерв (др.)','Свободно','Докупить'] : ['Наименование','Ед','Нужно','Есть','Докупить'];
+      heads.forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thr.appendChild(th); });
       tbl.appendChild(thr);
       tracked.forEach(function(t){
         var tr = document.createElement('tr');
@@ -4620,13 +4677,31 @@
         var c2 = document.createElement('td'); c2.textContent = String(t.unit || ''); tr.appendChild(c2);
         var c3 = document.createElement('td'); c3.textContent = fmt(t.need); tr.appendChild(c3);
         var c4 = document.createElement('td'); c4.textContent = String(t.have); tr.appendChild(c4);
-        var c5 = document.createElement('td'); c5.textContent = String(t.buy);
-        if(t.buy > 0){ c5.style.color = '#A32D2D'; c5.style.fontWeight = '500'; }
+        var buy = t.buy;
+        if(reserved){
+          var rv = Math.round(reserved[t.key]) || 0;
+          var free = t.have - rv;
+          var c4b = document.createElement('td'); c4b.textContent = String(rv); c4b.style.color = '#999'; tr.appendChild(c4b);
+          var c4c = document.createElement('td'); c4c.textContent = String(free);
+          if(free < 0){ c4c.style.color = '#BA1B1B'; c4c.style.fontWeight = '600'; }
+          tr.appendChild(c4c);
+          // Докупить с учётом резерва: сколько физически свободно (за
+          // вычетом чужих претензий), столько и хватит без покупки —
+          // остальное нужно докупить. Та же формула округления, что и
+          // в t.buy (лист — вверх, штуки — до целого).
+          var freeHave = Math.max(0, free);
+          buy = t.unit === '\u043b\u0438\u0441\u0442'
+            ? Math.max(0, Math.ceil(t.need - 1e-9) - freeHave)
+            : Math.max(0, Math.round(t.need) - freeHave);
+        }
+        var c5 = document.createElement('td'); c5.textContent = String(buy);
+        if(buy > 0){ c5.style.color = '#A32D2D'; c5.style.fontWeight = '500'; }
         tr.appendChild(c5);
         tbl.appendChild(tr);
       });
-      b.appendChild(tbl);
+      tblWrap.appendChild(tbl);
     }
+    paintTable();
 
     if(untracked.length){
       var t2 = document.createElement('b'); t2.textContent = 'Без складского учёта';
@@ -4681,31 +4756,80 @@
     lead.textContent = 'Штуки предзаполнены, листы — целыми (подтверди сколько реально вскрыл). 0 — не выдавать.';
     b.appendChild(lead);
 
+    var resvBox = document.createElement('div');
+    resvBox.style.cssText = 'padding:2px 0 4px';
+    var bResv = document.createElement('button'); bResv.className = 'crm-vbtn';
+    bResv.textContent = '\uD83D\uDCE6 Посчитать резерв др. заказов';
+    bResv.title = 'Сколько остатка уже обещано другим активным заказам (тянет их снимки)';
+    var reserved = null;
+    bResv.addEventListener('click', function(){
+      bResv.disabled = true; bResv.textContent = 'Считаю...';
+      computeReserved(o.num, function(err, map){
+        bResv.disabled = false;
+        if(err === '__no_key__'){ toast('\u26A0\uFE0F Введи ключ доступа', '#BA7517'); return; }
+        if(err){ toast('\u26A0\uFE0F Резерв не посчитался: ' + err, '#BA7517'); bResv.textContent = '\uD83D\uDCE6 Посчитать резерв др. заказов'; return; }
+        reserved = map;
+        resvBox.innerHTML = '';
+        paintTable();
+      });
+    });
+    resvBox.appendChild(bResv);
+    b.appendChild(resvBox);
+
     var rows = [];
-    if(tracked.length){
+    var tblWrap = document.createElement('div');
+    b.appendChild(tblWrap);
+    var warnBox = document.createElement('div');
+    warnBox.style.cssText = 'font-size:11px;color:#A32D2D;padding-top:4px';
+    b.appendChild(warnBox);
+    function checkWarn(){
+      if(!reserved) return;
+      var over = rows.filter(function(r){ return r.free !== undefined && Number(r.input.value) > r.free; });
+      warnBox.textContent = over.length
+        ? '\u26A0\uFE0F Запрошено больше свободного остатка: ' + over.map(function(r){ return r.name; }).join(', ') + ' \u2014 часть уже обещана другим заказам.'
+        : '';
+    }
+    function paintTable(){
+      tblWrap.innerHTML = '';
+      rows = [];
+      if(!tracked.length){
+        var e0 = document.createElement('div'); e0.className = 'crm-empty'; e0.textContent = 'В заказе нет позиций со складским учётом.';
+        tblWrap.appendChild(e0);
+        return;
+      }
       var tbl = document.createElement('table'); tbl.className = 'crm-ftbl';
       var thr = document.createElement('tr');
-      ['Наименование','Ед','Нужно','Есть','Выдать'].forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thr.appendChild(th); });
+      var heads = reserved ? ['Наименование','Ед','Нужно','Есть','Резерв (др.)','Свободно','Выдать'] : ['Наименование','Ед','Нужно','Есть','Выдать'];
+      heads.forEach(function(hh){ var th=document.createElement('th'); th.textContent=hh; thr.appendChild(th); });
       tbl.appendChild(thr);
       tracked.forEach(function(t){
         var need = Number(t.need) || 0;
-        var def = t.unit === 'лист' ? Math.ceil(need - 1e-9) : Math.round(need);
+        var def = t.unit === '\u043b\u0438\u0441\u0442' ? Math.ceil(need - 1e-9) : Math.round(need);
         var tr = document.createElement('tr');
         var c1 = document.createElement('td'); c1.textContent = String(t.name || t.key); tr.appendChild(c1);
         var c2 = document.createElement('td'); c2.textContent = String(t.unit || ''); tr.appendChild(c2);
         var c3 = document.createElement('td'); c3.textContent = Number.isInteger(need) ? String(need) : need.toFixed(2); tr.appendChild(c3);
         var c4 = document.createElement('td'); c4.textContent = String(t.have); tr.appendChild(c4);
+        var free;
+        if(reserved){
+          var rv = Math.round(reserved[t.key]) || 0;
+          free = t.have - rv;
+          var c4b = document.createElement('td'); c4b.textContent = String(rv); c4b.style.color = '#999'; tr.appendChild(c4b);
+          var c4c = document.createElement('td'); c4c.textContent = String(free);
+          if(free < 0){ c4c.style.color = '#BA1B1B'; c4c.style.fontWeight = '600'; }
+          tr.appendChild(c4c);
+        }
         var c5 = document.createElement('td');
         var iq = document.createElement('input'); iq.type = 'number'; iq.min = '0'; iq.step = '1'; iq.value = String(def); iq.style.width = '58px';
+        iq.addEventListener('input', checkWarn);
         c5.appendChild(iq); tr.appendChild(c5);
         tbl.appendChild(tr);
-        rows.push({ key: t.key, name: t.name || t.key, unit: t.unit, have: t.have, input: iq });
+        rows.push({ key: t.key, name: t.name || t.key, unit: t.unit, have: t.have, free: free, input: iq });
       });
-      b.appendChild(tbl);
-    } else {
-      var e0 = document.createElement('div'); e0.className = 'crm-empty'; e0.textContent = 'В заказе нет позиций со складским учётом.';
-      b.appendChild(e0);
+      tblWrap.appendChild(tbl);
+      checkWarn();
     }
+    paintTable();
 
     if(untracked.length){
       var un = document.createElement('div'); un.className = 'crm-empty';
@@ -4730,6 +4854,7 @@
       bDo.disabled = true; bDo.textContent = 'Выдаю...';
       post({ action:'stockMove', stock:{ moves: moves } }, function(){
         document.body.removeChild(bg);
+        RESERVED_LOADED = false;
         if(VIEW==='stock') renderAll();
         toast('OK Выдано со склада: ' + moves.length + ' поз. по заказу \u2116' + o.num, '#1a5252');
       }, function(err){
@@ -4793,7 +4918,68 @@
     else { toast('\u26A0\uFE0F Браузер заблокировал окно — разреши всплывающие окна', '#BA7517'); }
   }
 
-  // ── Сводная закупка по нескольким заказам (Момент H) ──────
+  // ── Резервирование материала под заказ (v4.6) ──────────────
+  // Задача: не дать дважды пообещать один и тот же лист/штуку двум
+  // заказам. Резерв ключа = сумма ЕЩЁ НЕ ВЫДАННОГО need по всем активным
+  // заказам (после договора, кроме Готова/Отказ/Отложено), кроме того
+  // заказа, для которого сейчас считаем (excludeNum) — иначе заказ
+  // резервировал бы материал сам у себя.
+  // Важно: need берётся из снимка КАЖДОГО заказа заново (та же формула
+  // orderPurchase(), что и у сводной закупки/сроков поставки), а из
+  // него вычитается уже выданное этому заказу количество (Расход по
+  // ключу с этим №) — материал, который уже выдан, больше не «резерв»,
+  // он и так вычтен из физического остатка складским движением. Без
+  // этого вычета резерв задваивал бы списание.
+  function fetchActiveRecs(excludeNum, cb){
+    var skip = ['Готова','Отказ','Отложено'];
+    var candidates = ORDERS.filter(function(o){
+      return o.dogDate && skip.indexOf(o.status) === -1 && String(o.num) !== String(excludeNum || '');
+    });
+    if(!candidates.length){ cb([]); return; }
+    var recs = [];
+    var left = candidates.length;
+    candidates.forEach(function(o){
+      loadOrderRec(o.num, function(err, rec){
+        if(!err) recs.push({ o: o, rec: rec });
+        left--;
+        if(left === 0) cb(recs);
+      });
+    });
+  }
+
+  function buildReservedMap(recs){
+    var reserved = {};
+    recs.forEach(function(item){
+      var p = orderPurchase(item.rec.snap, DB, []);
+      var trk = p.tracked || [];
+      trk.forEach(function(t){
+        if(!t.need) return;
+        var issued = 0;
+        STOCK_MOVES.forEach(function(m){
+          if(m.type === 'Расход' && String(m.num) === String(item.o.num) && m.key === t.key){
+            issued += Math.round(Number(m.qty) || 0);
+          }
+        });
+        var remain = Math.max(0, t.need - issued);
+        if(remain) reserved[t.key] = (reserved[t.key] || 0) + remain;
+      });
+    });
+    return reserved;
+  }
+
+  // Свежие STOCK_MOVES (перевыдача могла случиться прямо сейчас) +
+  // снимки активных заказов -> карта резерва. excludeNum исключает
+  // текущий заказ из подсчёта (для модалок «Список закупщику»/«Выдать»).
+  function computeReserved(excludeNum, cb){
+    if(typeof orderPurchase !== 'function'){ cb('калькулятор ещё не загрузился — открой вкладку расчёта', null); return; }
+    fetchStockMoves(function(merr){
+      if(merr && merr !== '__no_key__'){ cb(merr, null); return; }
+      if(merr === '__no_key__'){ cb(merr, null); return; }
+      fetchActiveRecs(excludeNum, function(recs){ cb(null, buildReservedMap(recs)); });
+    });
+  }
+
+
   // Заказы: после договора (dogDate есть), кроме Готова/Отказ/Отложено.
   // Нужно суммируется по каждому заказу через orderPurchase() (поле
   // need — оно НЕ зависит от остатков склада), остаток вычитается ОДИН
