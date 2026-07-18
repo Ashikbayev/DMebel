@@ -532,7 +532,7 @@
       '.crm-2col{display:flex;gap:8px}.crm-2col .crm-f{flex:1}'+
       '.crm-money-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;background:#f6f6f4;border-radius:8px;padding:10px;margin-bottom:10px;font-size:11px;color:#555}'+
       '.crm-money-grid b{color:#222;font-size:12px}'+
-      '.crm-m-btns{display:flex;gap:8px;margin-top:12px}'+
+      '.crm-m-btns{display:flex;gap:8px;margin-top:12px;position:sticky;bottom:0;background:#fff;padding:10px 0;box-shadow:0 -8px 12px -10px rgba(0,0,0,.18)}'+
       '.crm-m-btn{flex:1;padding:10px;border-radius:8px;border:none;font-size:12px;font-weight:600;cursor:pointer}'+
       '.crm-m-btn.save{background:#1a5252;color:#fff}'+
       '.crm-m-btn.open{background:#fff;color:#1a5252;border:1px solid #1a5252}'+
@@ -592,10 +592,22 @@
       '.crm-op .del{background:none;border:none;color:#ccc;cursor:pointer;font-size:13px;line-height:1;padding:2px}'+
       '.crm-op .del:hover{color:#c0392b}'+
       '.crm-sec-t{font-size:13px;font-weight:600;color:#444;margin:14px 0 8px}'+
-      '.crm-ch-box{background:#fff;border:1px solid #eee;border-radius:10px;margin-bottom:10px;overflow:hidden}'+
-      '.crm-ch-h{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #f0f0ee}'+
-      '.crm-ch-h b{font-size:12px;color:#444;flex:1}'+
-      '.crm-ch-row{display:flex;gap:8px;align-items:center;padding:7px 12px;font-size:11px;color:#555;border-bottom:1px solid #f7f7f5}'+
+      '.crm-ch-box{background:#f6f6f4;border-radius:10px;margin-bottom:10px;overflow:hidden}'+
+      '.crm-ch-box.recl{background:#FCEBEB}'+
+      '.crm-ch-box.recl .crm-ch-h b{color:#A32D2D}'+
+      '.crm-ch-box.recl .crm-ch-h .ti{color:#A32D2D}'+
+      '.crm-sec{background:#f6f6f4;border-radius:10px;padding:10px 12px;margin-bottom:10px}'+
+      '.crm-sec .crm-ch-box{background:#fff}'+
+      '.crm-sec-h{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#5F5E5A;margin-bottom:8px}'+
+      '.crm-sec-h .ti,.crm-ch-h .ti{font-size:14px;color:#5F5E5A}'+
+      '.crm-hava{width:34px;height:34px;border-radius:50%;background:#1a5252;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}'+
+      '.crm-h-t{font-size:14px;font-weight:700;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+      '.crm-h-s{font-size:11px;color:#999}'+
+      '.crm-feed-dot{width:6px;height:6px;border-radius:50%;background:#B4B2A9;flex-shrink:0}'+
+      '.crm-ch-row:last-child .crm-feed-dot{background:#1a5252}'+
+      '.crm-ch-h{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #e8e6de}'+
+      '.crm-ch-h b{font-size:11px;font-weight:700;color:#5F5E5A;flex:1}'+
+      '.crm-ch-row{display:flex;gap:8px;align-items:center;padding:7px 12px;font-size:11px;color:#555;border-bottom:1px solid #e8e6de}'+
       '.crm-ch-row:last-child{border-bottom:none}'+
       '.crm-ch-row .dt{color:#999;min-width:64px}'+
       '.crm-ch-row .ds{flex:1;color:#333;min-width:80px}'+
@@ -3386,6 +3398,18 @@
   }
 
   // ── Карточка заказа ────────────────────────────────────────
+  function secIcon(name){
+    var ic = document.createElement('i');
+    ic.className = 'ti ' + name;
+    ic.setAttribute('aria-hidden', 'true');
+    return ic;
+  }
+  function secHead(icon, txt){
+    var d = document.createElement('div'); d.className='crm-sec-h';
+    d.appendChild(secIcon(icon));
+    d.appendChild(document.createTextNode(txt));
+    return d;
+  }
   function field(label, el){
     var f = document.createElement('div'); f.className='crm-f';
     var l = document.createElement('label'); l.textContent = label;
@@ -3738,11 +3762,21 @@
     var bg = document.createElement('div'); bg.className='crm-modal-bg';
     bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
     var m = document.createElement('div'); m.className='crm-modal';
+    var strip0 = document.createElement('div'); strip0.className='crm-card-strip';
+    strip0.style.background = ST_COLOR[o.status] || '#ccc';
+    m.appendChild(strip0);
     var h = document.createElement('div'); h.className='crm-m-h';
-    var title = document.createElement('b'); title.textContent = 'Заказ \u2116'+o.num;
+    var hava = document.createElement('div'); hava.className='crm-hava';
+    hava.textContent = initialsOf(o.client) || ('\u2116' + o.num);
+    var hcol = document.createElement('div'); hcol.style.minWidth='0';
+    var title = document.createElement('div'); title.className='crm-h-t';
+    title.textContent = (o.client ? o.client + ' \u00B7 ' : '') + '\u2116' + o.num;
+    var hsub = document.createElement('div'); hsub.className='crm-h-s';
+    hsub.textContent = (o.city||'') + (o.furn ? ((o.city?' \u00B7 ':'')) + o.furn : '');
+    hcol.appendChild(title); hcol.appendChild(hsub);
     var x = document.createElement('button'); x.className='crm-m-x'; x.textContent='\u00D7';
     x.addEventListener('click', function(){ document.body.removeChild(bg); });
-    h.appendChild(title); h.appendChild(x);
+    h.appendChild(hava); h.appendChild(hcol); h.appendChild(x);
     var b = document.createElement('div'); b.className='crm-m-b';
 
     var selSt = document.createElement('select');
@@ -3818,7 +3852,10 @@
     }
     phoneWrap.appendChild(waBtn);
     r1.appendChild(field('Телефон', phoneWrap));
-    b.appendChild(r1);
+    var secCli = document.createElement('div'); secCli.className='crm-sec';
+    secCli.appendChild(secHead('ti-user', 'Клиент'));
+    secCli.appendChild(r1);
+    b.appendChild(secCli);
     var sameCli = ordersByPhone(o.phone, o.num);
     if(sameCli.length){
       var rep = document.createElement('div');
@@ -3844,19 +3881,20 @@
         repMore.textContent = '\u2026и ещё ' + (sameCli.length - 6);
         rep.appendChild(repMore);
       }
-      b.appendChild(rep);
+      secCli.appendChild(rep);
     }
+    var secObj = document.createElement('div'); secObj.className='crm-sec';
+    secObj.appendChild(secHead('ti-map-pin', 'Объект'));
     var r2 = document.createElement('div'); r2.className='crm-2col';
     r2.appendChild(field('Город', iCity)); r2.appendChild(field('Тип мебели', iFurn));
-    b.appendChild(r2);
-    b.appendChild(field('Адрес / объект', iObj));
-    b.appendChild(field('Примечание', iNote));
-    var r3 = document.createElement('div'); r3.className='crm-2col';
-    r3.appendChild(field('Дата установки', iMount));
-    r3.appendChild(field('Оплачено дополнительно, \u20B8', payWrap));
-    b.appendChild(r3);
+    secObj.appendChild(r2);
+    secObj.appendChild(field('Адрес / объект', iObj));
+    secObj.appendChild(field('Примечание', iNote));
+    secObj.appendChild(field('Дата установки', iMount));
+    b.appendChild(secObj);
+    var payFld = field('Оплачено дополнительно, \u20B8', payWrap);
 
-    var moneyWrap = document.createElement('div');
+    var moneyWrap = document.createElement('div'); moneyWrap.className='crm-sec';
     function renderMoney(){
       moneyWrap.innerHTML = '';
       var hasContract = (Number(o.sogl)||0) > 0;
@@ -3866,7 +3904,7 @@
       // styles.css класса под это нет, чтобы не зависеть от файла, который
       // сюда не прикладывается) ─────────────────────────────────────────
       var top = document.createElement('div');
-      top.style.cssText = 'background:#f6f6f4;border-radius:10px;padding:10px 12px;margin-bottom:8px';
+      top.style.cssText = 'margin-bottom:8px';
       var topHead = document.createElement('div');
       topHead.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px';
       var topLbl = document.createElement('span'); topLbl.style.cssText='font-size:12px;color:#888';
@@ -3895,7 +3933,7 @@
       payGrid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px';
       function payTile(k, v, warn){
         var t = document.createElement('div');
-        t.style.cssText = 'border-radius:8px;padding:6px 10px;background:' + (warn ? '#FAEEDA' : '#f6f6f4');
+        t.style.cssText = 'border-radius:8px;padding:6px 10px;background:' + (warn ? '#FAEEDA' : '#fff');
         var kk = document.createElement('div'); kk.style.cssText = 'font-size:11px;color:' + (warn ? '#854F0B' : '#888');
         kk.textContent = k;
         var vv = document.createElement('div'); vv.style.cssText = 'font-size:15px;font-weight:700;color:' + (warn ? '#854F0B' : '#232323');
@@ -3907,6 +3945,7 @@
       if(debt < 0) payTile('Переплата', fm0(-debt), false);
       else payTile('Долг', fm0(debt), debt > 0);
       moneyWrap.appendChild(payGrid);
+      moneyWrap.appendChild(payFld);
 
       // ── Варианты материала: до договора кликабельны, после — только показ ──
       var matWrap = document.createElement('div'); matWrap.style.cssText = 'margin-bottom:8px';
@@ -3919,7 +3958,7 @@
         var row = document.createElement('div');
         var isSel = m === mat;
         var rowBorder = isSel ? 'border:1.5px solid #1a5252' : 'border:1px solid #e5e5e0';
-        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;border-radius:8px;padding:7px 10px;margin-bottom:4px;' + rowBorder;
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;border-radius:8px;padding:7px 10px;margin-bottom:4px;background:#fff;' + rowBorder;
         if(!hasContract){ row.style.cursor = 'pointer'; }
         var lbl = document.createElement('span');
         lbl.style.cssText = 'font-size:13px;' + (isSel ? 'font-weight:700;color:#1a5252' : 'color:' + (hasContract ? '#999' : '#555'));
@@ -3979,6 +4018,7 @@
         var box = document.createElement('div'); box.className='crm-ch-box';
         var bh = document.createElement('div'); bh.className='crm-ch-h';
         var bt = document.createElement('b'); bt.textContent = 'Изменения к договору';
+        bh.appendChild(secIcon('ti-file-pencil'));
         var add = document.createElement('button'); add.className='crm-vbtn new';
         add.textContent = '\u00B1 Изменение';
         add.addEventListener('click', function(){
@@ -4045,6 +4085,7 @@
       var box = document.createElement('div'); box.className='crm-ch-box';
       var bh = document.createElement('div'); bh.className='crm-ch-h';
       var bt = document.createElement('b'); bt.textContent = 'Бригада';
+      bh.appendChild(secIcon('ti-users'));
       bh.appendChild(bt); box.appendChild(bh);
       if(!EMP_LOADED){
         var ld = document.createElement('div'); ld.className='crm-ch-row'; ld.textContent = 'Загружаю сотрудников...';
@@ -4097,6 +4138,7 @@
       var box = document.createElement('div'); box.className='crm-ch-box';
       var bh = document.createElement('div'); bh.className='crm-ch-h';
       var bt = document.createElement('b'); bt.textContent = 'Доп. работы';
+      bh.appendChild(secIcon('ti-tool'));
       var add = document.createElement('button'); add.className='crm-vbtn new'; add.textContent='+ Доп.работа';
       add.addEventListener('click', function(){
         if(!EMP_LOADED){ toast('\u26A0\uFE0F Сотрудники ещё грузятся \u2014 подожди пару секунд', '#BA7517'); return; }
@@ -4146,6 +4188,7 @@
       var box = document.createElement('div'); box.className='crm-ch-box';
       var bh = document.createElement('div'); bh.className='crm-ch-h';
       var bt = document.createElement('b'); bt.textContent = 'Фото и заметки';
+      bh.appendChild(secIcon('ti-photo'));
       bh.appendChild(bt);
       box.appendChild(bh);
 
@@ -4325,9 +4368,11 @@
     function renderRecl(){
       reclWrap.innerHTML = '';
       if(!o.dogDate) return;
-      var box = document.createElement('div'); box.className='crm-ch-box';
+      var box = document.createElement('div');
+      box.className = RECL_LOADED && reclOf(o.num).length ? 'crm-ch-box recl' : 'crm-ch-box';
       var bh = document.createElement('div'); bh.className='crm-ch-h';
       var bt = document.createElement('b'); bt.textContent = 'Рекламации';
+      bh.appendChild(secIcon('ti-alert-triangle'));
       bh.appendChild(bt);
       box.appendChild(bh);
       if(!RECL_LOADED){
@@ -4412,6 +4457,7 @@
       var box = document.createElement('div'); box.className='crm-ch-box';
       var bh = document.createElement('div'); bh.className='crm-ch-h';
       var bt = document.createElement('b'); bt.textContent = 'Лента событий';
+      bh.appendChild(secIcon('ti-clock'));
       var bRefresh = document.createElement('button'); bRefresh.className='crm-vbtn';
       bRefresh.textContent = '\u21BB'; bRefresh.title = 'Обновить ленту';
       bRefresh.style.cssText = 'padding:2px 8px';
@@ -4451,9 +4497,10 @@
         } else {
           ev.forEach(function(e){
             var r = document.createElement('div'); r.className='crm-ch-row';
+            var fdot = document.createElement('span'); fdot.className='crm-feed-dot';
             var dt = document.createElement('span'); dt.className='dt'; dt.textContent = fmtDate(e.date);
             var ds = document.createElement('span'); ds.className='ds'; ds.textContent = e.icon + ' ' + e.text;
-            r.appendChild(dt); r.appendChild(ds);
+            r.appendChild(fdot); r.appendChild(dt); r.appendChild(ds);
             box.appendChild(r);
           });
         }
