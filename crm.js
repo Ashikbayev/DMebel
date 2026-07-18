@@ -308,6 +308,24 @@
     return s - (Number(o.avans)||0) - (Number(o.paid)||0);
   }
 
+  // Инициалы мастера для аватара на карточке доски (v4.6).
+  // EMP на доску не грузится по умолчанию — подтягивается фоном в
+  // renderBoard, до этого аватара просто нет (не блокируем доску).
+  function initialsOf(name){
+    var parts = String(name || '').trim().split(/\s+/);
+    if(!parts[0]) return '';
+    var s = parts[0].charAt(0);
+    if(parts[1]) s += parts[1].charAt(0);
+    return s.toUpperCase();
+  }
+  function masterOf(o){
+    if(!o.masterId || !EMP_LOADED) return null;
+    for(var i=0;i<EMP.length;i++){
+      if(String(EMP[i].id) === String(o.masterId)) return EMP[i];
+    }
+    return null;
+  }
+
   // ── WhatsApp: телефон → формат wa.me + заготовка текста ──
   // Казахстанская запись 8 7XX XXX XX XX приводится к 7 7XX...,
   // 10 цифр без кода страны получают 7 спереди. Если из телефона
@@ -449,14 +467,18 @@
       '.crm-col-cards{overflow-y:auto;min-height:0}'+
       '.crm-col-h .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}'+
       '.crm-col-h .cnt{margin-left:auto;font-size:11px;color:#999;font-weight:400}'+
-      '.crm-card{background:#fff;border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer;border-left:3px solid #ccc;box-shadow:0 1px 3px rgba(0,0,0,.06)}'+
+      '.crm-card{background:#fff;border-radius:8px;margin-bottom:8px;cursor:pointer;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}'+
       '.crm-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.12)}'+
+      '.crm-card-strip{height:4px}'+
+      '.crm-card-b{padding:8px 10px}'+
+      '.crm-card .sum{font-size:15px;font-weight:700;color:#222;display:flex;align-items:center;gap:5px}'+
+      '.crm-stale{display:inline-block;width:6px;height:6px;border-radius:50%;background:#BA1B1B;flex-shrink:0}'+
       '.crm-card .l1{display:flex;justify-content:space-between;gap:6px;font-size:12px;font-weight:600;color:#222}'+
-      '.crm-stale{display:inline-block;width:6px;height:6px;border-radius:50%;background:#BA1B1B;margin-right:5px;vertical-align:middle;flex-shrink:0}'+
       '.crm-card .l2{font-size:11px;color:#666;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
-      '.crm-card .l3{display:flex;justify-content:space-between;gap:6px;font-size:11px;margin-top:4px}'+
+      '.crm-card .l3{display:flex;justify-content:space-between;gap:6px;font-size:11px;margin-top:4px;align-items:center}'+
+      '.crm-ava{width:20px;height:20px;border-radius:50%;background:#1a5252;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}'+
+      '.crm-daysb{font-size:10px;background:#f1efe8;color:#5F5E5A;padding:2px 7px;border-radius:10px;margin-left:auto}'+
       '.crm-debt{color:#c0392b;font-weight:600}'+
-      '.crm-days{color:#999}'+
       '.crm-list{display:flex;flex-direction:column;gap:6px}'+
       '.crm-row{display:flex;gap:8px;align-items:center;background:#fff;border:1px solid #eee;border-radius:8px;padding:8px 10px;cursor:pointer;flex-wrap:wrap}'+
       '.crm-row:hover{border-color:#1a5252}'+
@@ -3056,32 +3078,54 @@
       e.dataTransfer.setData('text/plain', String(o.num));
       e.dataTransfer.effectAllowed = 'move';
     });
-    d.style.borderLeftColor = ST_COLOR[o.status] || '#ccc';
-    var l1 = document.createElement('div'); l1.className='l1';
-    var t1 = document.createElement('span');
+    var strip = document.createElement('div');
+    strip.className = 'crm-card-strip';
+    strip.style.background = ST_COLOR[o.status] || '#ccc';
+    d.appendChild(strip);
+    var b = document.createElement('div'); b.className = 'crm-card-b';
+    var sum = document.createElement('div'); sum.className = 'sum';
     var st = staleDays(o);
     if(st !== null && st >= STALE_DAYS){
       var sd = document.createElement('span');
       sd.className = 'crm-stale';
       sd.title = 'Заказ не двигали ' + st + ' дн. — статус, цена и расчёт не менялись';
-      t1.appendChild(sd);
+      sum.appendChild(sd);
     }
-    t1.appendChild(document.createTextNode('\u2116' + o.num + (o.furn ? ' \u00B7 ' + o.furn : '')));
-    var t2 = document.createElement('span'); t2.textContent = fm0(o.sogl || o.pred);
-    l1.appendChild(t1); l1.appendChild(t2);
+    sum.appendChild(document.createTextNode(fm0(o.sogl || o.pred)));
+    b.appendChild(sum);
     var l2 = document.createElement('div'); l2.className='l2';
-    l2.textContent = (o.client||'') + (o.city ? ' \u2014 ' + o.city : '');
-    var l3 = document.createElement('div'); l3.className='l3';
+    l2.textContent = (o.client||'') + (o.city ? ' \u00B7 ' + o.city : '');
+    b.appendChild(l2);
+    var l2b = document.createElement('div'); l2b.className='l2';
+    l2b.style.color = '#999';
+    l2b.textContent = '\u2116' + o.num + (o.furn ? ' \u00B7 ' + o.furn : '');
+    b.appendChild(l2b);
     var debt = debtOf(o);
-    var dEl = document.createElement('span');
-    if(debt > 0){ dEl.className='crm-debt'; dEl.textContent = 'долг ' + fm0(debt); }
-    else if(debt < 0){ dEl.className='crm-overpaid'; dEl.textContent = 'переплата ' + fm0(-debt); }
+    if(debt !== 0){
+      var dEl = document.createElement('div');
+      dEl.className = debt > 0 ? 'crm-debt' : 'crm-overpaid';
+      dEl.style.cssText = 'font-size:11px;margin-top:4px';
+      dEl.textContent = debt > 0 ? ('долг ' + fm0(debt)) : ('переплата ' + fm0(-debt));
+      b.appendChild(dEl);
+    }
     var days = daysInWork(o);
-    var dayEl = document.createElement('span');
-    if(days !== null){ dayEl.className='crm-days'; dayEl.textContent = days + ' дн.'; }
-    l3.appendChild(dEl); l3.appendChild(dayEl);
-    d.appendChild(l1); d.appendChild(l2);
-    if(debt!==0 || days!==null) d.appendChild(l3);
+    var m = masterOf(o);
+    if(m || days !== null){
+      var l3 = document.createElement('div'); l3.className='l3';
+      if(m){
+        var av = document.createElement('span'); av.className='crm-ava';
+        av.textContent = initialsOf(m.name);
+        av.title = 'Мастер: ' + m.name;
+        l3.appendChild(av);
+      }
+      if(days !== null){
+        var dayEl = document.createElement('span'); dayEl.className='crm-daysb';
+        dayEl.textContent = days + ' дн.';
+        l3.appendChild(dayEl);
+      }
+      b.appendChild(l3);
+    }
+    d.appendChild(b);
     var nx = nextStatus(o);
     if(nx){
       var nb = document.createElement('button');
@@ -3099,7 +3143,7 @@
           toast('\u26A0\uFE0F Статус не записался: '+err, '#BA7517');
         });
       });
-      d.appendChild(nb);
+      b.appendChild(nb);
     }
     d.addEventListener('click', function(){ openCard(o.num); });
     return d;
@@ -3133,6 +3177,11 @@
     }
     view.appendChild(tabs);
     if(BOARD_TAB === 'rec'){ renderReclBoard(view); return; }
+    // Аватар мастера на карточке. EMP грузим фоном и один раз за сессию:
+    // доску не блокируем, до прихода списка аватаров просто нет.
+    if(!EMP_LOADED){
+      fetchEmp(function(err){ if(!err && VIEW === 'board') renderAll(); });
+    }
     var board = document.createElement('div');
     board.className = 'crm-board';
     var stagesForTab = BOARD_GROUPS[BOARD_TAB] || BOARD_GROUPS.sale;
@@ -3253,9 +3302,13 @@
     var o = orderByNum(rc.num);
     var d = document.createElement('div');
     d.className = 'crm-card';
-    d.style.borderLeftColor = RECL_COLOR[rc.stage] || '#ccc';
     d.draggable = true;
     d.addEventListener('dragstart', function(e){ e.dataTransfer.setData('text/plain', String(rc.id)); e.dataTransfer.effectAllowed='move'; });
+    var strip = document.createElement('div');
+    strip.className = 'crm-card-strip';
+    strip.style.background = RECL_COLOR[rc.stage] || '#ccc';
+    d.appendChild(strip);
+    var b = document.createElement('div'); b.className = 'crm-card-b';
     var l1 = document.createElement('div'); l1.className='l1';
     var n = document.createElement('span'); n.textContent = '\u2116'+rc.num;
     var dt = document.createElement('span'); dt.style.cssText='font-weight:400;color:#999'; dt.textContent = fmtDate(rc.date);
@@ -3265,7 +3318,7 @@
     var l3 = document.createElement('div'); l3.className='l2';
     l3.style.cssText = 'color:#333;white-space:normal';
     l3.textContent = rc.desc;
-    d.appendChild(l1); d.appendChild(l2); d.appendChild(l3);
+    b.appendChild(l1); b.appendChild(l2); b.appendChild(l3);
     var si = RECL_STAGES.indexOf(rc.stage);
     if(si >= 0 && si < RECL_STAGES.length - 1){
       var nx = RECL_STAGES[si+1];
@@ -3284,8 +3337,9 @@
           toast('\u26A0\uFE0F Стадия не записалась: '+err, '#BA7517');
         });
       });
-      d.appendChild(nb);
+      b.appendChild(nb);
     }
+    d.appendChild(b);
     d.addEventListener('click', function(){ openCard(rc.num); });
     return d;
   }
