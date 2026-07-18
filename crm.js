@@ -50,6 +50,66 @@
     }
   }
 
+  // Лайтбокс: увеличенный просмотр фото заказа. files — массив вложений
+  // с полями fileId/comment (тот же формат, что в attachOf), idx — с какого
+  // открыть. Строит оверлей поверх всего, стрелки листают, полоска миниатюр
+  // снизу, Esc/клик по фону закрывает.
+  function openLightbox(files, idx){
+    if(!files || !files.length) return;
+    var cur = idx || 0;
+    var bg = document.createElement('div'); bg.className = 'crm-lb-bg';
+    bg.addEventListener('click', function(e){ if(e.target === bg) close(); });
+    var xBtn = document.createElement('button'); xBtn.className = 'crm-lb-x'; xBtn.textContent = '\u2715';
+    xBtn.title = 'Закрыть'; xBtn.addEventListener('click', close);
+    var main = document.createElement('div'); main.className = 'crm-lb-main';
+    var prev = document.createElement('button'); prev.className = 'crm-lb-arrow'; prev.textContent = '\u2039';
+    prev.title = 'Предыдущее фото'; prev.addEventListener('click', function(){ go(-1); });
+    var next = document.createElement('button'); next.className = 'crm-lb-arrow'; next.textContent = '\u203A';
+    next.title = 'Следующее фото'; next.addEventListener('click', function(){ go(1); });
+    var img = document.createElement('img'); img.className = 'crm-lb-img';
+    main.appendChild(prev); main.appendChild(img); main.appendChild(next);
+    var cap = document.createElement('div'); cap.className = 'crm-lb-cap';
+    var strip = document.createElement('div'); strip.className = 'crm-lb-strip';
+    var thumbs = files.map(function(a, i){
+      var t = document.createElement('img'); t.className = 'crm-lb-thumb';
+      t.src = 'https://drive.google.com/thumbnail?id=' + a.fileId + '&sz=w150';
+      t.alt = a.comment || 'фото';
+      t.addEventListener('click', function(){ cur = i; render(); });
+      strip.appendChild(t);
+      return t;
+    });
+    function render(){
+      var a = files[cur];
+      img.src = 'https://drive.google.com/thumbnail?id=' + a.fileId + '&sz=w1600';
+      img.alt = a.comment || 'фото';
+      cap.textContent = a.comment || '';
+      cap.style.display = a.comment ? '' : 'none';
+      prev.disabled = cur <= 0;
+      next.disabled = cur >= files.length - 1;
+      thumbs.forEach(function(t, i){ t.className = 'crm-lb-thumb' + (i === cur ? ' on' : ''); });
+      thumbs[cur].scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
+    function go(d){
+      var n = cur + d;
+      if(n < 0 || n >= files.length) return;
+      cur = n; render();
+    }
+    function onKey(e){
+      if(e.key === 'Escape') close();
+      else if(e.key === 'ArrowLeft') go(-1);
+      else if(e.key === 'ArrowRight') go(1);
+    }
+    function close(){
+      document.removeEventListener('keydown', onKey);
+      if(bg.parentNode) bg.parentNode.removeChild(bg);
+    }
+    document.addEventListener('keydown', onKey);
+    bg.appendChild(xBtn); bg.appendChild(main); bg.appendChild(cap);
+    if(files.length > 1) bg.appendChild(strip);
+    document.body.appendChild(bg);
+    render();
+  }
+
   function post(payload, onOk, onErr){
     if (!GS_URL) { if (onErr) onErr('не задан URL таблицы'); return; }
     payload.token = getToken();
@@ -167,9 +227,15 @@
     'Договор':'#0F6E56','Контрольный замер':'#5DCAA5','Закупка':'#BA7517','Сборка':'#EF9F27',
     'Установка':'#D85A30','Доделки':'#D4537E','Готова':'#3B6D11','Отказ':'#A32D2D','Отложено':'#5F5E5A'
   };
+  var BOARD_GROUPS = {
+    sale: ['Замер','Дизайн','Расчет','Согласование','Договор'],
+    prod: ['Контрольный замер','Закупка','Сборка','Установка','Доделки','Готова'],
+    archive: ['Отказ','Отложено']
+  };
   var ORDERS = [];
   var LOADED = false;
   var VIEW = localStorage.getItem('moff_crm_view') || 'board';
+  var BOARD_TAB = localStorage.getItem('moff_crm_board_tab') || 'sale';
   var CAL_MONTH = monthKey(new Date());
   var FILTER = 'all';
   var SEARCH = '';
@@ -353,9 +419,13 @@
       '.crm-vbtn{font-size:12px;border:1px solid #ddd;background:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;color:#555}'+
       '.crm-vbtn.on{background:#1a5252;color:#fff;border-color:#1a5252}'+
       '.crm-count{font-size:11px;color:#999;margin-left:auto}'+
+      '.crm-board-tabs{display:flex;gap:6px;margin-bottom:8px}'+
+      '.crm-board-tab{border:none;background:#eeece4;color:#666;font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer}'+
+      '.crm-board-tab.on{background:#1a5252;color:#fff}'+
       '.crm-board{display:flex;gap:10px;overflow-x:auto;padding-bottom:12px;align-items:flex-start}'+
-      '.crm-col{min-width:200px;max-width:200px;background:#f6f6f4;border-radius:10px;padding:8px;flex-shrink:0}'+
-      '.crm-col-h{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#444;padding:2px 4px 8px}'+
+      '.crm-col{min-width:200px;max-width:200px;background:#f6f6f4;border-radius:10px;padding:8px;flex-shrink:0;display:flex;flex-direction:column;max-height:calc(100vh - 320px)}'+
+      '.crm-col-h{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#444;padding:2px 4px 8px;flex-shrink:0}'+
+      '.crm-col-cards{overflow-y:auto;min-height:0}'+
       '.crm-col-h .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}'+
       '.crm-col-h .cnt{margin-left:auto;font-size:11px;color:#999;font-weight:400}'+
       '.crm-card{background:#fff;border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer;border-left:3px solid #ccc;box-shadow:0 1px 3px rgba(0,0,0,.06)}'+
@@ -462,7 +532,19 @@
       '.crm-ch-row .prn:hover{color:#BA7517}'+
       '.crm-over{color:#0F6E56}'+
       '.crm-margin{color:#0F6E56;font-weight:600}'+
-      '.crm-overpaid{color:#0F6E56;font-weight:600}';
+      '.crm-overpaid{color:#0F6E56;font-weight:600}'+
+      '.crm-lb-bg{position:fixed;inset:0;background:rgba(10,10,10,.9);z-index:10050;display:flex;flex-direction:column;align-items:center;justify-content:center}'+
+      '.crm-lb-x{position:absolute;top:14px;right:16px;background:none;border:none;color:#fff;font-size:26px;cursor:pointer;line-height:1;padding:6px;opacity:.85}'+
+      '.crm-lb-x:hover{opacity:1}'+
+      '.crm-lb-main{display:flex;align-items:center;justify-content:center;flex:1;width:100%;min-height:0;position:relative}'+
+      '.crm-lb-img{max-width:88vw;max-height:70vh;object-fit:contain;border-radius:4px}'+
+      '.crm-lb-cap{color:#ddd;font-size:12px;margin-top:10px;text-align:center;padding:0 16px;max-width:80vw}'+
+      '.crm-lb-arrow{background:rgba(255,255,255,.12);border:none;color:#fff;font-size:22px;width:44px;height:44px;border-radius:50%;cursor:pointer;flex-shrink:0;margin:0 10px}'+
+      '.crm-lb-arrow:hover{background:rgba(255,255,255,.22)}'+
+      '.crm-lb-arrow:disabled{opacity:.25;cursor:default}'+
+      '.crm-lb-strip{display:flex;gap:6px;overflow-x:auto;padding:12px 16px;max-width:92vw}'+
+      '.crm-lb-thumb{width:52px;height:52px;object-fit:cover;border-radius:6px;cursor:pointer;opacity:.5;flex-shrink:0;border:2px solid transparent}'+
+      '.crm-lb-thumb.on{opacity:1;border-color:#fff}';
     document.head.appendChild(st);
   }
 
@@ -2928,9 +3010,23 @@
   }
 
   function renderBoard(view, vis){
+    var tabs = document.createElement('div');
+    tabs.className = 'crm-board-tabs';
+    [['sale','Продажа'],['prod','Производство'],['archive','Архив']].forEach(function(t){
+      var b = document.createElement('button');
+      b.className = 'crm-board-tab' + (BOARD_TAB===t[0] ? ' on' : '');
+      b.textContent = t[1];
+      b.addEventListener('click', function(){
+        if(BOARD_TAB===t[0]) return;
+        BOARD_TAB = t[0]; localStorage.setItem('moff_crm_board_tab', t[0]); renderAll();
+      });
+      tabs.appendChild(b);
+    });
+    view.appendChild(tabs);
     var board = document.createElement('div');
     board.className = 'crm-board';
-    STATUSES.forEach(function(st){
+    var stagesForTab = BOARD_GROUPS[BOARD_TAB] || BOARD_GROUPS.sale;
+    stagesForTab.forEach(function(st){
       var inCol = vis.filter(function(o){ return o.status === st; });
       if(!inCol.length && (st==='Отказ' || st==='Отложено')) return;
       var col = document.createElement('div'); col.className='crm-col';
@@ -2958,8 +3054,11 @@
       var c = document.createElement('span'); c.className='cnt'; c.textContent = inCol.length;
       h.appendChild(dot); h.appendChild(nm); h.appendChild(c);
       col.appendChild(h);
+      var cardsWrap = document.createElement('div');
+      cardsWrap.className = 'crm-col-cards';
       inCol.sort(function(a,b){ return String(b.num).localeCompare(String(a.num),'ru',{numeric:true}); });
-      inCol.forEach(function(o){ col.appendChild(makeCard(o)); });
+      inCol.forEach(function(o){ cardsWrap.appendChild(makeCard(o)); });
+      col.appendChild(cardsWrap);
       board.appendChild(col);
     });
     view.appendChild(board);
@@ -3770,12 +3869,17 @@
         if(files.length){
           var grid = document.createElement('div');
           grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;padding:8px 0';
-          files.forEach(function(a){
+          files.forEach(function(a, aIdx){
             var cell = document.createElement('div');
             cell.style.cssText = 'position:relative;width:86px';
             var lnk = document.createElement('a');
             lnk.href = 'https://drive.google.com/file/d/' + a.fileId + '/view';
             lnk.target = '_blank'; lnk.rel = 'noopener';
+            lnk.title = 'Открыть увеличенное фото';
+            lnk.addEventListener('click', function(e){
+              e.preventDefault();
+              openLightbox(files, aIdx);
+            });
             var im = document.createElement('img');
             im.src = 'https://drive.google.com/thumbnail?id=' + a.fileId + '&sz=w400';
             im.alt = a.name || 'фото';
