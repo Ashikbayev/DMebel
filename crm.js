@@ -240,6 +240,7 @@
   var LOADED = false;
   var VIEW = localStorage.getItem('moff_crm_view') || 'board';
   var BOARD_TAB = localStorage.getItem('moff_crm_board_tab') || 'sale';
+  var STALE_ONLY = false;
   var CAL_MONTH = monthKey(new Date());
   var FILTER = 'all';
   var SEARCH = '';
@@ -284,6 +285,22 @@
     if(!o.dogDate || o.status==='Готова' || o.status==='Отказ') return null;
     var d = new Date(o.dogDate); if(isNaN(d.getTime())) return null;
     return Math.max(0, Math.floor((Date.now()-d.getTime())/86400000));
+  }
+  // Сколько дней заказ не двигали (v4.6). Опирается на колонку
+  // «Обновлён» — её пишут createOrder_/saveOrder_/updateOrder_/
+  // bumpOrderSogl_, то есть смена статуса, цены, расчёта, договора.
+  // ⚠️ Фото и платежи «Обновлён» НЕ трогают (addAttach_ намеренно
+  // работает вне общего lock, чтобы загрузка фото не вешала очередь) —
+  // так что индикатор означает «сделка не движется», а не «по заказу
+  // вообще ничего не происходило».
+  // Финальные статусы не считаем: закрытый заказ не должен гореть вечно.
+  var STALE_DAYS = 7;
+  function staleDays(o){
+    if(['Готова','Отказ','Отложено'].indexOf(o.status) >= 0) return null;
+    if(!o.updated) return null;
+    var d = new Date(o.updated);
+    if(isNaN(d.getTime())) return null;
+    return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
   }
   function debtOf(o){
     var s = Number(o.sogl)||0;
@@ -435,6 +452,7 @@
       '.crm-card{background:#fff;border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer;border-left:3px solid #ccc;box-shadow:0 1px 3px rgba(0,0,0,.06)}'+
       '.crm-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.12)}'+
       '.crm-card .l1{display:flex;justify-content:space-between;gap:6px;font-size:12px;font-weight:600;color:#222}'+
+      '.crm-stale{display:inline-block;width:6px;height:6px;border-radius:50%;background:#BA1B1B;margin-right:5px;vertical-align:middle;flex-shrink:0}'+
       '.crm-card .l2{font-size:11px;color:#666;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
       '.crm-card .l3{display:flex;justify-content:space-between;gap:6px;font-size:11px;margin-top:4px}'+
       '.crm-debt{color:#c0392b;font-weight:600}'+
@@ -3040,7 +3058,15 @@
     });
     d.style.borderLeftColor = ST_COLOR[o.status] || '#ccc';
     var l1 = document.createElement('div'); l1.className='l1';
-    var t1 = document.createElement('span'); t1.textContent = '\u2116' + o.num + (o.furn ? ' \u00B7 ' + o.furn : '');
+    var t1 = document.createElement('span');
+    var st = staleDays(o);
+    if(st !== null && st >= STALE_DAYS){
+      var sd = document.createElement('span');
+      sd.className = 'crm-stale';
+      sd.title = 'Заказ не двигали ' + st + ' дн. — статус, цена и расчёт не менялись';
+      t1.appendChild(sd);
+    }
+    t1.appendChild(document.createTextNode('\u2116' + o.num + (o.furn ? ' \u00B7 ' + o.furn : '')));
     var t2 = document.createElement('span'); t2.textContent = fm0(o.sogl || o.pred);
     l1.appendChild(t1); l1.appendChild(t2);
     var l2 = document.createElement('div'); l2.className='l2';
@@ -3092,13 +3118,33 @@
       });
       tabs.appendChild(b);
     });
+    if(BOARD_TAB !== 'rec'){
+      var staleCnt = vis.filter(function(o){
+        var s = staleDays(o);
+        return s !== null && s >= STALE_DAYS && (BOARD_GROUPS[BOARD_TAB] || []).indexOf(o.status) >= 0;
+      }).length;
+      var bStale = document.createElement('button');
+      bStale.className = 'crm-board-tab' + (STALE_ONLY ? ' on' : '');
+      bStale.style.marginLeft = 'auto';
+      bStale.title = 'Показать только заказы, которые не двигали ' + STALE_DAYS + '+ дней';
+      bStale.textContent = '\u25CF Зависшие' + (staleCnt ? ' ' + staleCnt : '');
+      bStale.addEventListener('click', function(){ STALE_ONLY = !STALE_ONLY; renderAll(); });
+      tabs.appendChild(bStale);
+    }
     view.appendChild(tabs);
     if(BOARD_TAB === 'rec'){ renderReclBoard(view); return; }
     var board = document.createElement('div');
     board.className = 'crm-board';
     var stagesForTab = BOARD_GROUPS[BOARD_TAB] || BOARD_GROUPS.sale;
     stagesForTab.forEach(function(st){
-      var inCol = vis.filter(function(o){ return o.status === st; });
+      var inCol = vis.filter(function(o){
+        if(o.status !== st) return false;
+        if(STALE_ONLY){
+          var s = staleDays(o);
+          if(s === null || s < STALE_DAYS) return false;
+        }
+        return true;
+      });
       if(!inCol.length && (st==='Отказ' || st==='Отложено')) return;
       var col = document.createElement('div'); col.className='crm-col';
       col.addEventListener('dragover', function(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; col.classList.add('drag'); });
