@@ -1018,6 +1018,53 @@ function waitReady(dom, tries){
   var neg = null; cl4.changes.forEach(function(x){ if(x.desc === 'Убрали полку') neg = x; });
   ok(c4.ok === true && neg && neg.sum === -50000 && neg.cost === -35000, 'отрицательное изменение с отрицательной себестоимостью записано');
 
+  // ─────────────────────────────────────────────────────────────
+  // v4.8: Касса — идемпотентность op_id + теги начисления по id
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.8: op_id кассы + начисление по id ──');
+  var finRows = [];
+  var finWSheet = mkWritable(finRows);
+  var recRows2 = [];
+  var recWSheet2 = mkWritable(recRows2);
+  var empRowsFin = [];
+  var empWSheetFin = mkWritable(empRowsFin);
+  gsCtx.__finSS = { getSheetByName: function(n){
+    if(n === 'Финансы') return finWSheet;
+    if(n === 'Постоянные') return recWSheet2;
+    if(n === 'Сотрудники') return empWSheetFin;
+    return null;
+  }, insertSheet: function(){ return finWSheet; } };
+
+  var f1 = att("addFin_(__finSS, { type:'Расход', cat:'Материалы', sum:5000, opId:'op-AAA' })");
+  ok(f1.ok === true && !f1.dup && finRows.length === 1, 'операция с op_id записана');
+  var f2 = att("addFin_(__finSS, { type:'Расход', cat:'Материалы', sum:5000, opId:'op-AAA' })");
+  ok(f2.ok === true && f2.dup === true && finRows.length === 1, 'повтор того же op_id: dup, строка не создана');
+  ok(String(f2.id) === String(f1.id), 'dup возвращает id исходной записи');
+  var f3 = att("addFin_(__finSS, { type:'Расход', cat:'Материалы', sum:5000, opId:'op-BBB' })");
+  ok(f3.ok === true && !f3.dup && finRows.length === 2, 'другой op_id: новая строка (две канистры бензина)');
+  var f4 = att("addFin_(__finSS, { type:'Приход', cat:'Прочее', sum:700 })");
+  ok(f4.ok === true && finRows.length === 3, 'старый клиент без op_id работает как раньше');
+
+  var r1v = att("saveRecur_(__finSS, { name:'Аренда Офиса', cat:'Аренда', sum:100000 })");
+  ok(r1v.ok === true, 'постоянный расход создан');
+  var a1 = att("accrueMonth_(__finSS, '2026-07')");
+  ok(a1.ok === true && a1.created === 1, 'начисление создало проводку');
+  var beforeRen = finRows.length;
+  att("saveRecur_(__finSS, { id:'" + r1v.id + "', name:'Аренда офиса (новое имя)', cat:'Аренда', sum:100000 })");
+  var a2 = att("accrueMonth_(__finSS, '2026-07')");
+  ok(a2.ok === true && a2.created === 0 && a2.skipped === 1 && finRows.length === beforeRen, 'переименование + повтор: дубля нет (тег по id)');
+
+  var r2v = att("saveRecur_(__finSS, { name:'Аренда Цеха', cat:'Аренда', sum:250000 })");
+  ok(r2v.ok === true, 'второй постоянный расход создан');
+  finRows.push(['legacy-1', '2026-07-01', 'Расход', 'Аренда', 250000, '', '[Постоянные 2026-07] Аренда Цеха', '2026-07-01']);
+  var legacyLen = finRows.length;
+  var a3 = att("accrueMonth_(__finSS, '2026-07')");
+  ok(a3.created === 0 && a3.skipped === 2 && finRows.length === legacyLen, 'старый тег по имени узнан — дубля нет');
+
+  att("saveEmp_(__finSS, { name:'Серик', role:'Мастер', salary:150000 })");
+  var a4 = att("accrueMonth_(__finSS, '2026-08')");
+  ok(a4.created === 3, 'новый месяц: 2 постоянных + оклад начислены');
+
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');
   process.exit(FAIL ? 1 : 0);

@@ -127,8 +127,68 @@
         if (res && res.ok) { if (onOk) onOk(res); }
         else { if (onErr) onErr((res && res.error) || 'таблица вернула ошибку'); }
       })
-      .catch(function(e){ if (onErr) onErr(String(e && e.message || e)); });
+      .catch(function(e){ if (onErr) onErr(String(e && e.message || e), true); });
   }
+
+  // ── v4.8: очередь неотправленных операций кассы (offline retry).
+  // Только для addFin: у них есть op_id, повтор безопасен —
+  // сервер узнаёт токен и отвечает dup:true без второй строки.
+  var Q_KEY = 'moff_pending_ops';
+  var Q_FLUSHING = false;
+  function qLoad(){
+    try { return JSON.parse(localStorage.getItem(Q_KEY) || '[]'); } catch(e){ return []; }
+  }
+  function qSave(a){
+    try { localStorage.setItem(Q_KEY, JSON.stringify(a)); } catch(e){}
+    qBadge();
+  }
+  function qAdd(fin){ var a = qLoad(); a.push(fin); qSave(a); }
+  function qBadge(){
+    var n = qLoad().length;
+    var el = document.getElementById('moff-q-badge');
+    if(!n){ if(el) el.style.display = 'none'; return; }
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'moff-q-badge';
+      el.style.cssText = 'position:fixed;left:12px;bottom:64px;z-index:9999;background:#FAEEDA;color:#854F0B;border:1px solid #EF9F27;border-radius:20px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit';
+      el.addEventListener('click', function(){ qFlush(); });
+      document.body.appendChild(el);
+    }
+    el.style.display = 'block';
+    el.textContent = '\u23F3 ' + n + ' в очереди — нажми, чтобы отправить';
+  }
+  function qFlush(){
+    if(Q_FLUSHING) return;
+    if(!qLoad().length){ qBadge(); return; }
+    Q_FLUSHING = true;
+    var sent = 0;
+    function step(){
+      var cur = qLoad();
+      if(!cur.length){
+        Q_FLUSHING = false;
+        qBadge();
+        if(sent){ toast('OK очередь отправлена: ' + sent, '#1a5252'); if(window.crmReload) window.crmReload(); }
+        return;
+      }
+      var fin = cur[0];
+      function drop(){
+        var b = qLoad().filter(function(x){ return x.opId !== fin.opId; });
+        qSave(b);
+      }
+      post({ action:'addFin', fin: fin }, function(){
+        drop(); sent++; step();
+      }, function(err, isNet){
+        Q_FLUSHING = false;
+        if(!isNet){
+          drop();
+          toast('\u26A0\uFE0F Операция из очереди отклонена: ' + err, '#BA7517');
+        }
+        qBadge();
+      });
+    }
+    step();
+  }
+  window.addEventListener('online', function(){ qFlush(); });
 
   function splitSnap(obj){
     var s = '';
@@ -686,6 +746,8 @@
 
   window.crmPageOpen = function(){
     injectCrmStyle();
+    qBadge();
+    qFlush();
     if(LOADED){ renderAll(); refreshQuiet(); return; }
     var root = document.getElementById('crm-root');
     if(root) root.innerHTML = '<div class="crm-empty">Загружаю заказы из таблицы...</div>';
@@ -3424,6 +3486,7 @@
   }
 
   function openFinModal(pre){
+    var opId = 'op' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
     var bg = document.createElement('div'); bg.className='crm-modal-bg';
     bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
     var m = document.createElement('div'); m.className='crm-modal';
@@ -3467,6 +3530,15 @@
     b.appendChild(dl);
     b.appendChild(field('Комментарий', iCmt));
 
+    var pendN = qLoad().length;
+    if(pendN){
+      var pWarn = document.createElement('div');
+      pWarn.className = 'crm-fin-note';
+      pWarn.style.cssText = 'background:#FAEEDA;color:#854F0B;border-radius:8px;padding:8px 10px;margin-top:8px';
+      pWarn.textContent = '\u23F3 Ждут отправки: ' + pendN + ' операц. Они уйдут сами — не вводи их повторно';
+      b.appendChild(pWarn);
+    }
+
     var btns = document.createElement('div'); btns.className='crm-m-btns';
     var bSave = document.createElement('button'); bSave.className='crm-m-btn save'; bSave.textContent='Записать';
     bSave.addEventListener('click', function(){
@@ -3475,9 +3547,23 @@
       bSave.disabled = true; bSave.textContent = 'Записываю...';
       var fin = {
         type: selType.value, cat: selCat.value, sum: sum,
-        date: iDate.value, num: iNum.value.trim(), comment: iCmt.value.trim()
+        date: iDate.value, num: iNum.value.trim(), comment: iCmt.value.trim(),
+        opId: opId
       };
+      var same = qLoad().filter(function(x){
+        return x.type === fin.type && x.cat === fin.cat &&
+          Number(x.sum) === Number(fin.sum) && String(x.num || '') === String(fin.num || '');
+      });
+      if(same.length && !confirm('Похожая операция (' + fin.type + ' ' + fm0(fin.sum) + ') уже ждёт отправки в очереди. Всё равно записать новую?')){
+        bSave.disabled = false; bSave.textContent = 'Записать';
+        return;
+      }
       post({ action:'addFin', fin: fin }, function(res){
+        if(res && res.dup){
+          document.body.removeChild(bg);
+          toast('Эта операция уже записана раньше — дубль не создан', '#1a5252');
+          return;
+        }
         FIN.unshift({ id: (res && res.id) || String(Date.now()), date: fin.date, type: fin.type, cat: fin.cat, sum: fin.sum, num: fin.num, comment: fin.comment });
         if(fin.type==='Приход' && fin.cat==='Доплата' && fin.num){
           for(var i=0;i<ORDERS.length;i++){ if(String(ORDERS[i].num)===String(fin.num)){ ORDERS[i].paid = (Number(ORDERS[i].paid)||0) + fin.sum; break; } }
@@ -3485,7 +3571,13 @@
         document.body.removeChild(bg);
         renderAll();
         toast('OK ' + fin.type + ' ' + fm0(fin.sum) + ' записан', '#1a5252');
-      }, function(err){
+      }, function(err, isNet){
+        if(isNet){
+          qAdd(fin);
+          document.body.removeChild(bg);
+          toast('\u23F3 Нет связи — операция в очереди, уйдёт сама. Повторно не вводи', '#854F0B');
+          return;
+        }
         bSave.disabled=false; bSave.textContent='Записать';
         toast('\u26A0\uFE0F Не записалось: '+err, '#BA7517');
       });
