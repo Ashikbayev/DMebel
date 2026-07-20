@@ -58,8 +58,11 @@ var COL = { num:1, status:2, city:3, client:4, phone:5, obj:6, furn:7, note:8,
 
 // ── Лист "Финансы": каждый приход/расход отдельной строкой ──
 var FIN_SHEET = 'Финансы';
-var FIN_HEADER = ['id','Дата','Тип','Категория','Сумма','№ заказа','Комментарий','Создан'];
-var FCOL = { id:1, date:2, type:3, cat:4, sum:5, num:6, comment:7, created:8 };
+var FIN_HEADER = ['id','Дата','Тип','Категория','Сумма','№ заказа','Комментарий','Создан','op_id'];
+var FCOL = { id:1, date:2, type:3, cat:4, sum:5, num:6, comment:7, created:8, opid:9 };
+// v4.8: op_id — токен идемпотентности от клиента. У старого листа заголовок
+// 9-й колонки допиши руками (или сотри строку заголовка — сервер пересоздаст);
+// данные пишутся в колонку и без заголовка — как с колонками 30-32 «Заказов».
 
 // ── Лист "Изменения": доп. соглашения к договору ──
 // Сумма со знаком: +добавили / −убрали. Каждое изменение сдвигает
@@ -67,8 +70,13 @@ var FCOL = { id:1, date:2, type:3, cat:4, sum:5, num:6, comment:7, created:8 };
 // пересчитывает Долг. Аванс и "Оплачено" НЕ трогаем: изменение цены —
 // это изменение обязательства, а не движение денег.
 var CH_SHEET = 'Изменения';
-var CH_HEADER = ['id','№ заказа','Дата','Описание','Сумма','Создан'];
-var CHCOL = { id:1, num:2, date:3, desc:4, sum:5, created:6 };
+// v4.6: колонка "Себестоимость" добавлена В КОНЦЕ (после "Создан") —
+// прежние колонки не сдвигаются, старые листы читаются как раньше.
+// Пустая ячейка означает «себестоимость неизвестна» и это НЕ то же
+// самое, что 0 («изменение — чистая прибыль»): по неизвестным отчёт
+// маржи показывает предупреждение, а не считает их бесплатными.
+var CH_HEADER = ['id','№ заказа','Дата','Описание','Сумма','Создан','Себестоимость'];
+var CHCOL = { id:1, num:2, date:3, desc:4, sum:5, created:6, cost:7 };
 
 // ── Лист "Склад" (v3.6): движения остатков журналом (в стиле "Финансы") ──
 // Остаток отдельно НЕ хранится — вычисляется из строк (stockAgg_).
@@ -151,6 +159,26 @@ var SMIN_SHEET = 'СкладМин';
 var SMIN_HEADER = ['Ключ','Минимум','Обновлён','СрокПоставки'];
 var SMINCOL = { key:1, min:2, updated:3, lead:4 };
 
+// ── Лист "Рекламации" (v4.6): гарантийные обращения по сданным заказам ──
+// Рекламация — САМОСТОЯТЕЛЬНАЯ сущность, привязанная к заказу по №.
+// Заказ при этом НЕ меняет статус и остаётся «Готова»: иначе терялся бы
+// факт сдачи, ломалась конверсия и Ø Договор→Установка, а по одному
+// заказу нельзя было бы вести две рекламации (через год петля, потом
+// столешница). Стадии: Принята → Устраняем → Закрыта.
+// Стоимость устранения тут НЕ хранится намеренно — расход пишется
+// операцией в лист "Финансы" с № заказа (одна цифра в одном месте).
+var RECL_SHEET = 'Рекламации';
+var RECL_HEADER = ['id','№ заказа','Дата','Стадия','Описание','Создан'];
+var RECLCOL = { id:1, num:2, date:3, stage:4, desc:5, created:6 };
+var RECL_STAGES = ['Принята','Устраняем','Закрыта'];
+
+// ── Лист "Задачи" (v4.11): напоминания с дедлайном, привязанные к
+// заказу. Без исполнителя (просто текст+дедлайн) и без email —
+// «напоминание» пока только бейдж просроченных/сегодняшних в СРМ.
+var TASK_SHEET = 'Задачи';
+var TASK_HEADER = ['id','№ заказа','Текст','Дедлайн','Выполнена','Создан'];
+var TASKCOL = { id:1, num:2, text:3, deadline:4, done:5, created:6 };
+
 function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const callback = e && e.parameter && e.parameter.callback;
@@ -166,7 +194,7 @@ function doGet(e) {
   // ── СРМ: список заказов / один заказ ────────────────────────
   // ⚠️ Чтение заказов защищено токеном: имена, телефоны и суммы клиентов
   //    не должны быть видны любому, кто открыл сайт или знает URL скрипта.
-  if (action === 'orders' || action === 'order' || action === 'fin' || action === 'changes' || action === 'stock' || action === 'stockMoves' || action === 'recur' || action === 'employees' || action === 'attach' || action === 'statusLog' || action === 'stockMin' || action === 'dopworks' || action === 'dopTemplates') {
+  if (action === 'orders' || action === 'order' || action === 'fin' || action === 'changes' || action === 'stock' || action === 'stockMoves' || action === 'recur' || action === 'employees' || action === 'attach' || action === 'statusLog' || action === 'stockMin' || action === 'dopworks' || action === 'dopTemplates' || action === 'recl' || action === 'archiveOrders' || action === 'tasks') {
     if (String((e.parameter && e.parameter.token) || '') !== CRM_TOKEN) {
       return out_({ ok: false, error: 'нет доступа' }, callback);
     }
@@ -182,6 +210,10 @@ function doGet(e) {
     if (action === 'stockMin')   return out_(stockMinList_(ss), callback);
     if (action === 'dopworks')   return out_(dopList_(ss), callback);
     if (action === 'dopTemplates') return out_(dopTemplatesList_(ss), callback);
+    if (action === 'recl')         return out_(reclList_(ss), callback);
+    if (action === 'tasks')        return out_(taskList_(ss), callback);
+    // Архив — ленивая загрузка ОТДЕЛЬНОГО файла, вкладка "Заказы" его не трогает.
+    if (action === 'archiveOrders') return out_(archiveOrdersList_(getArchiveSpreadsheet_()), callback);
     return out_(orderOne_(ss, e.parameter.num), callback);
   }
 
@@ -311,6 +343,7 @@ function doPost(e) {
       else if (req.action === 'delStockMove') res = delStockMove_(ss, req.id);
       else if (req.action === 'saveStockMin') res = saveStockMin_(ss, req.smin || {});
       else if (req.action === 'delOrder')    res = delOrder_(ss, req.num);
+      else if (req.action === 'restoreFromArchive') res = restoreFromArchive_(ss, getArchiveSpreadsheet_(), req.num);
       else if (req.action === 'saveRecur')   res = saveRecur_(ss, req.recur || {});
       else if (req.action === 'delRecur')    res = delRecur_(ss, req.id);
       else if (req.action === 'saveEmp')     res = saveEmp_(ss, req.emp || {});
@@ -321,6 +354,12 @@ function doPost(e) {
       else if (req.action === 'delDop')      res = delDop_(ss, req.id);
       else if (req.action === 'saveDopTemplate') res = saveDopTemplate_(ss, req.tpl || {});
       else if (req.action === 'delDopTemplate')  res = delDopTemplate_(ss, req.id);
+      else if (req.action === 'addRecl')      res = addRecl_(ss, req.recl || {});
+      else if (req.action === 'updRecl')      res = updRecl_(ss, req.recl || {});
+      else if (req.action === 'delRecl')      res = delRecl_(ss, req.id);
+      else if (req.action === 'addTask')      res = addTask_(ss, req.task || {});
+      else if (req.action === 'toggleTask')   res = toggleTask_(ss, req.id, req.done);
+      else if (req.action === 'delTask')      res = delTask_(ss, req.id);
       else if (req.action === 'clientLink')  res = clientLink_(ss, req.num);
       else if (req.action === 'accrueMonth') res = accrueMonth_(ss, req.month);
       else res.error = 'неизвестное действие: ' + req.action;
@@ -410,6 +449,20 @@ function addFin_(ss, o) {
   if (sum <= 0) return { ok: false, error: 'сумма должна быть больше нуля' };
   if (o.type !== 'Приход' && o.type !== 'Расход') return { ok: false, error: 'неверный тип операции' };
   var sh = finSheet_(ss);
+  // v4.8: идемпотентность — повтор с тем же op_id не создаёт строку.
+  // Ретрай из очереди несёт тот же токен — сервер отвечает dup:true без записи.
+  var opId = o.opId ? String(o.opId) : '';
+  if (opId) {
+    var lastR = sh.getLastRow();
+    if (lastR >= 2) {
+      var ops = sh.getRange(2, FCOL.opid, lastR - 1, 1).getValues();
+      for (var oi = 0; oi < ops.length; oi++) {
+        if (String(ops[oi][0] || '') === opId) {
+          return { ok: true, dup: true, id: String(sh.getRange(2 + oi, FCOL.id).getValue()) };
+        }
+      }
+    }
+  }
   var row = sh.getLastRow() + 1;
   var id = String(Date.now());
   sh.getRange(row, FCOL.id).setValue(id);
@@ -420,6 +473,7 @@ function addFin_(ss, o) {
   sh.getRange(row, FCOL.num).setValue(o.num ? String(o.num) : '');
   sh.getRange(row, FCOL.comment).setValue(o.comment || '');
   sh.getRange(row, FCOL.created).setValue(new Date());
+  if (opId) sh.getRange(row, FCOL.opid).setValue(opId);
   // Доплата по заказу увеличивает "Оплачено" и уменьшает Долг
   if (o.type === 'Приход' && o.cat === 'Доплата' && o.num) bumpOrderPaid_(ss, String(o.num), sum);
   return { ok: true, id: id };
@@ -474,6 +528,15 @@ function changesSheet_(ss) {
     sh = ss.insertSheet(CH_SHEET);
     sh.getRange(1, 1, 1, CH_HEADER.length).setValues([CH_HEADER]).setFontWeight('bold');
     sh.setFrozenRows(1);
+  } else {
+    // Лист создан до v4.6 — дописываем подпись "Себестоимость".
+    // Данные и так пишутся/читаются по номеру колонки CHCOL.cost;
+    // это косметика, в try/catch — не должна ронять запись изменения.
+    try {
+      if (!sh.getRange(1, CHCOL.cost).getValue()) {
+        sh.getRange(1, CHCOL.cost).setValue(CH_HEADER[CHCOL.cost - 1]).setFontWeight('bold');
+      }
+    } catch (e) {}
   }
   return sh;
 }
@@ -483,16 +546,20 @@ function changesList_(ss) {
   var sh = changesSheet_(ss);
   var last = sh.getLastRow();
   if (last < 2) return { ok: true, changes: [] };
-  var rows = sh.getRange(2, 1, last - 1, CHCOL.created).getValues();
+  var rows = sh.getRange(2, 1, last - 1, CHCOL.cost).getValues();
   var changes = [];
   rows.forEach(function(r){
     if (r[CHCOL.id - 1] === '' && r[CHCOL.sum - 1] === '') return;
+    var rawCost = r[CHCOL.cost - 1];
     changes.push({
       id: String(r[CHCOL.id - 1]),
       num: String(r[CHCOL.num - 1] || ''),
       date: r[CHCOL.date - 1],
       desc: String(r[CHCOL.desc - 1] || ''),
-      sum: Number(r[CHCOL.sum - 1]) || 0
+      sum: Number(r[CHCOL.sum - 1]) || 0,
+      // '' = себестоимость не заполнена (старая запись или не знали).
+      // Отличать от 0 обязательно: 0 значит «чистая прибыль».
+      cost: (rawCost === '' || rawCost === null || rawCost === undefined) ? '' : (Number(rawCost) || 0)
     });
   });
   return { ok: true, changes: changes };
@@ -535,6 +602,16 @@ function addChange_(ss, o) {
   sh.getRange(row, CHCOL.desc).setValue(desc);
   sh.getRange(row, CHCOL.sum).setValue(sum);
   sh.getRange(row, CHCOL.created).setValue(new Date());
+  // Себестоимость необязательна. Пусто оставляем пустым (не 0!) —
+  // отчёт маржи по таким изменениям честно скажет «не знаем».
+  // Знак должен совпадать с суммой: убрали позицию за −50000 при
+  // себестоимости 35000 → cost = −35000, и маржа падает на 15000.
+  if (o.cost !== undefined && o.cost !== null && String(o.cost) !== '') {
+    var cost = Math.round(Number(o.cost) || 0);
+    if (cost && (cost > 0) !== (sum > 0)) return { ok: false, error: 'себестоимость должна быть того же знака, что и сумма' };
+    if (Math.abs(cost) > Math.abs(sum)) return { ok: false, error: 'себестоимость больше суммы изменения — это убыток, проверь цифры' };
+    sh.getRange(row, CHCOL.cost).setValue(cost);
+  }
   return { ok: true, id: id, sogl: bump.sogl };
 }
 
@@ -558,9 +635,173 @@ function delChange_(ss, id) {
   return { ok: false, error: 'изменение не найдено (возможно, уже удалено)' };
 }
 
+// ═══════════════ РЕКЛАМАЦИИ ═══════════════
+
+function reclSheet_(ss) {
+  var sh = ss.getSheetByName(RECL_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(RECL_SHEET);
+    sh.getRange(1, 1, 1, RECL_HEADER.length).setValues([RECL_HEADER]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// Все рекламации (клиент сам фильтрует по № заказа)
+function reclList_(ss) {
+  var sh = reclSheet_(ss);
+  var last = sh.getLastRow();
+  if (last < 2) return { ok: true, recl: [] };
+  var rows = sh.getRange(2, 1, last - 1, RECLCOL.created).getValues();
+  var recl = [];
+  rows.forEach(function(r){
+    if (r[RECLCOL.id - 1] === '' && r[RECLCOL.desc - 1] === '') return;
+    recl.push({
+      id: String(r[RECLCOL.id - 1]),
+      num: String(r[RECLCOL.num - 1] || ''),
+      date: r[RECLCOL.date - 1],
+      stage: String(r[RECLCOL.stage - 1] || RECL_STAGES[0]),
+      desc: String(r[RECLCOL.desc - 1] || '')
+    });
+  });
+  return { ok: true, recl: recl };
+}
+
+// Новая рекламация. Заказ должен существовать, но его статус не трогаем.
+function addRecl_(ss, o) {
+  if (!o.num) return { ok: false, error: 'нет № заказа' };
+  var desc = String(o.desc || '').trim();
+  if (!desc) return { ok: false, error: 'опиши рекламацию (на что жалуется клиент)' };
+  var oSh = ordersSheet_(ss);
+  if (findRowByNum_(oSh, String(o.num)) < 0) return { ok: false, error: 'заказ №' + o.num + ' не найден' };
+  var stage = String(o.stage || '').trim();
+  if (RECL_STAGES.indexOf(stage) < 0) stage = RECL_STAGES[0];
+  var sh = reclSheet_(ss);
+  var row = sh.getLastRow() + 1;
+  var id = String(Date.now()) + '-' + row;
+  sh.getRange(row, RECLCOL.id).setValue(id);
+  sh.getRange(row, RECLCOL.num).setValue(String(o.num));
+  sh.getRange(row, RECLCOL.date).setValue(o.date || new Date());
+  sh.getRange(row, RECLCOL.stage).setValue(stage);
+  sh.getRange(row, RECLCOL.desc).setValue(desc);
+  sh.getRange(row, RECLCOL.created).setValue(new Date());
+  return { ok: true, id: id, stage: stage };
+}
+
+// Смена стадии рекламации (кнопка → или перетаскивание на доске).
+function updRecl_(ss, o) {
+  if (!o.id) return { ok: false, error: 'нет id рекламации' };
+  var stage = String(o.stage || '').trim();
+  if (RECL_STAGES.indexOf(stage) < 0) return { ok: false, error: 'неизвестная стадия: ' + stage };
+  var sh = reclSheet_(ss);
+  var last = sh.getLastRow();
+  for (var r = 2; r <= last; r++) {
+    if (String(sh.getRange(r, RECLCOL.id).getValue()) === String(o.id)) {
+      sh.getRange(r, RECLCOL.stage).setValue(stage);
+      return { ok: true, stage: stage };
+    }
+  }
+  return { ok: false, error: 'рекламация не найдена (возможно, уже удалена)' };
+}
+
+function delRecl_(ss, id) {
+  if (!id) return { ok: false, error: 'нет id рекламации' };
+  var sh = reclSheet_(ss);
+  var last = sh.getLastRow();
+  for (var r = 2; r <= last; r++) {
+    if (String(sh.getRange(r, RECLCOL.id).getValue()) === String(id)) {
+      sh.deleteRow(r);
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: 'рекламация не найдена (возможно, уже удалена)' };
+}
+
+// ═══════════════ ЗАДАЧИ ═══════════════
+// Напоминания с дедлайном, привязанные к заказу. Без исполнителя —
+// просто текст+дедлайн. Удаление заказа уносит его задачи каскадом
+// (delOrder_) — как Рекламации: задача на несуществующий № была бы
+// сиротой и ломала бы открытие карточки из вкладки «Задачи».
+
+function tasksSheet_(ss) {
+  var sh = ss.getSheetByName(TASK_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(TASK_SHEET);
+    sh.getRange(1, 1, 1, TASK_HEADER.length).setValues([TASK_HEADER]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// Все задачи (сквозная вкладка + карточка заказа фильтрует по num сама).
+function taskList_(ss) {
+  var sh = tasksSheet_(ss);
+  var last = sh.getLastRow();
+  if (last < 2) return { ok: true, tasks: [] };
+  var rows = sh.getRange(2, 1, last - 1, TASKCOL.created).getValues();
+  var tasks = [];
+  rows.forEach(function(r){
+    if (r[TASKCOL.id - 1] === '' && r[TASKCOL.text - 1] === '') return;
+    tasks.push({
+      id: String(r[TASKCOL.id - 1]),
+      num: String(r[TASKCOL.num - 1] || ''),
+      text: String(r[TASKCOL.text - 1] || ''),
+      deadline: r[TASKCOL.deadline - 1],
+      done: !!r[TASKCOL.done - 1]
+    });
+  });
+  return { ok: true, tasks: tasks };
+}
+
+function addTask_(ss, o) {
+  if (!o.num) return { ok: false, error: 'нет № заказа' };
+  var text = String(o.text || '').trim();
+  if (!text) return { ok: false, error: 'опиши задачу' };
+  if (!o.deadline) return { ok: false, error: 'нет дедлайна' };
+  var oSh = ordersSheet_(ss);
+  if (findRowByNum_(oSh, String(o.num)) < 0) return { ok: false, error: 'заказ №' + o.num + ' не найден' };
+  var sh = tasksSheet_(ss);
+  var row = sh.getLastRow() + 1;
+  var id = String(Date.now()) + '-' + row;
+  sh.getRange(row, TASKCOL.id).setValue(id);
+  sh.getRange(row, TASKCOL.num).setValue(String(o.num));
+  sh.getRange(row, TASKCOL.text).setValue(text);
+  sh.getRange(row, TASKCOL.deadline).setValue(o.deadline);
+  sh.getRange(row, TASKCOL.done).setValue(false);
+  sh.getRange(row, TASKCOL.created).setValue(new Date());
+  return { ok: true, id: id };
+}
+
+// Отметка выполнена/не выполнена (чекбокс — обе стороны, снятие тоже нужно).
+function toggleTask_(ss, id, done) {
+  if (!id) return { ok: false, error: 'нет id задачи' };
+  var sh = tasksSheet_(ss);
+  var last = sh.getLastRow();
+  for (var r = 2; r <= last; r++) {
+    if (String(sh.getRange(r, TASKCOL.id).getValue()) === String(id)) {
+      sh.getRange(r, TASKCOL.done).setValue(!!done);
+      return { ok: true, done: !!done };
+    }
+  }
+  return { ok: false, error: 'задача не найдена (возможно, уже удалена)' };
+}
+
+function delTask_(ss, id) {
+  if (!id) return { ok: false, error: 'нет id задачи' };
+  var sh = tasksSheet_(ss);
+  var last = sh.getLastRow();
+  for (var r = 2; r <= last; r++) {
+    if (String(sh.getRange(r, TASKCOL.id).getValue()) === String(id)) {
+      sh.deleteRow(r);
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: 'задача не найдена (возможно, уже удалена)' };
+}
+
 // ═══════════════ УДАЛЕНИЕ ЗАКАЗА ═══════════════
 // Удаляет строку "Заказы" (вместе со снимком) и КАСКАДОМ все его
-// "Изменения" — без заказа они бессмысленны.
+// "Изменения" и "Рекламации" — без заказа они бессмысленны.
 // Операции в "Финансах" ОСТАЮТСЯ (деньги реально двигались, касса
 // должна сходиться с жизнью), но ОТВЯЗЫВАЮТСЯ от №: номер очищается,
 // в комментарий дописывается пометка. Иначе createOrder_ выдаст этот
@@ -583,6 +824,26 @@ function delOrder_(ss, num) {
       }
     }
   }
+  var reclSh = ss.getSheetByName(RECL_SHEET);
+  var removedRecl = 0;
+  if (reclSh) {
+    for (var r3 = reclSh.getLastRow(); r3 >= 2; r3--) {
+      if (String(reclSh.getRange(r3, RECLCOL.num).getValue()) === String(num)) {
+        reclSh.deleteRow(r3);
+        removedRecl++;
+      }
+    }
+  }
+  var taskSh = ss.getSheetByName(TASK_SHEET);
+  var removedTasks = 0;
+  if (taskSh) {
+    for (var r4 = taskSh.getLastRow(); r4 >= 2; r4--) {
+      if (String(taskSh.getRange(r4, TASKCOL.num).getValue()) === String(num)) {
+        taskSh.deleteRow(r4);
+        removedTasks++;
+      }
+    }
+  }
   var finSh = ss.getSheetByName(FIN_SHEET);
   var detached = 0;
   if (finSh) {
@@ -595,7 +856,7 @@ function delOrder_(ss, num) {
       }
     }
   }
-  return { ok: true, removedChanges: removed, detachedFin: detached };
+  return { ok: true, removedChanges: removed, removedRecl: removedRecl, removedTasks: removedTasks, detachedFin: detached };
 }
 
 // Лист "Заказы": вернуть, создать при отсутствии
@@ -630,27 +891,43 @@ function saveOrder_(ss, o) {
   var sh = ordersSheet_(ss);
   var row = findRowByNum_(sh, o.num);
   var isNew = row < 0;
-  var prevClient = '';
-  if (!isNew) prevClient = String(sh.getRange(row, COL.client).getValue() || '');
+
+  // v4.11 БАТЧ-ЗАПИСЬ (тот же приём, что updateOrder_ в v4.9): один
+  // read-modify-write диапазоном 1-25 вместо ~13 отдельных
+  // getRange/setValue. В отличие от updateOrder_, снимки (20-22) тут
+  // ВСЕГДА пишутся — поэтому не выносим их отдельным диапазоном, а
+  // просто включаем в один: 1-19 (осн. поля) + 20-22 (снимки) +
+  // 23-25 (маржа) идут подряд без разрыва. Колонки 26-33
+  // (заработки/бригада/материал — договорные, из updateOrder_)
+  // saveOrder_ никогда не трогает, поэтому вне диапазона.
+  var LEN = 25;
+  var a, prevClient = '';
   if (isNew) {
     row = sh.getLastRow() + 1;
-    sh.getRange(row, COL.num).setValue(String(o.num));
-    sh.getRange(row, COL.status).setValue('Расчет');
+    a = new Array(LEN).fill('');
+    a[COL.num - 1] = String(o.num);
+    a[COL.status - 1] = 'Расчет';
     logStatus_(ss, String(o.num), 'Расчет');
+  } else {
+    a = sh.getRange(row, 1, 1, LEN).getValues()[0];
+    prevClient = String(a[COL.client - 1] || '');
   }
-  if (o.client) sh.getRange(row, COL.client).setValue(o.client);
-  if (o.obj)    sh.getRange(row, COL.obj).setValue(o.obj);
-  sh.getRange(row, COL.pred).setValue(o.predPrice || 0);
-  sh.getRange(row, COL.totL).setValue(o.totL || 0);
-  sh.getRange(row, COL.totP).setValue(o.totP || 0);
-  sh.getRange(row, COL.totK).setValue(o.totK || 0);
-  sh.getRange(row, COL.margL).setValue(o.margL || 0);
-  sh.getRange(row, COL.margP).setValue(o.margP || 0);
-  sh.getRange(row, COL.margK).setValue(o.margK || 0);
-  sh.getRange(row, COL.updated).setValue(new Date());
-  sh.getRange(row, COL.snap1).setValue(o.snap1 || '');
-  sh.getRange(row, COL.snap2).setValue(o.snap2 || '');
-  sh.getRange(row, COL.snap3).setValue(o.snap3 || '');
+  if (o.client) a[COL.client - 1] = o.client;
+  if (o.obj)    a[COL.obj - 1] = o.obj;
+  a[COL.pred - 1]  = o.predPrice || 0;
+  a[COL.totL - 1]  = o.totL || 0;
+  a[COL.totP - 1]  = o.totP || 0;
+  a[COL.totK - 1]  = o.totK || 0;
+  a[COL.margL - 1] = o.margL || 0;
+  a[COL.margP - 1] = o.margP || 0;
+  a[COL.margK - 1] = o.margK || 0;
+  a[COL.updated - 1] = new Date();
+  a[COL.snap1 - 1] = o.snap1 || '';
+  a[COL.snap2 - 1] = o.snap2 || '';
+  a[COL.snap3 - 1] = o.snap3 || '';
+
+  sh.getRange(row, 1, 1, LEN).setValues([a]);
+
   var res = { ok: true, row: row, created: isNew };
   if (!isNew && prevClient && o.client && prevClient !== o.client) res.prevClient = prevClient;
   return res;
@@ -663,58 +940,85 @@ function updateOrder_(ss, o) {
   var sh = ordersSheet_(ss);
   var row = findRowByNum_(sh, o.num);
   var isNew = row < 0;
-  var existingDog = isNew ? '' : sh.getRange(row, COL.dogDate).getValue();
-  var hasDog = !!(existingDog && String(existingDog) !== '');
+
+  // v4.9 БАТЧ-ЗАПИСЬ: read-modify-write двумя диапазонами вместо ~20
+  // отдельных getRange/setValue (было ×1 API-вызов на ячейку).
+  // Диапазон A = колонки 1-19 (осн. поля + Долг/Обновлён).
+  // Диапазон B = колонки 23-33 (маржа/заработки/бригада/материал).
+  // Колонки 20-22 (Снимок1-3, до 45к символов) СОЗНАТЕЛЬНО вне обоих
+  // диапазонов: updateOrder_ их никогда не меняет — не читаем и не
+  // пишем, чтобы не гонять большие ячейки туда-обратно без нужды.
+  var LEN_A = 19, START_B = 23, LEN_B = ORDERS_HEADER.length - START_B + 1;
+
+  var a, existingDog, hasDog, prevStatus;
+  if (isNew) {
+    a = new Array(LEN_A).fill('');
+    existingDog = '';
+    hasDog = false;
+    prevStatus = '';
+  } else {
+    a = sh.getRange(row, 1, 1, LEN_A).getValues()[0];
+    existingDog = a[COL.dogDate - 1];
+    hasDog = !!(existingDog && String(existingDog) !== '');
+    prevStatus = String(a[COL.status - 1] || '');
+  }
+
   // ПРЕДОХРАНИТЕЛЬ: повторная генерация договора (fromDogovor) при уже
   // существующей Дате договора НИЧЕГО не меняет в СРМ — ни цену, ни аванс,
   // ни статус, ни дату. Изменения после договора фиксируются только через
   // лист "Изменения" (карточка → "± Изменение"). Если договор нужно
   // пересоздать с нуля — очисти ячейку "Дата договора" в таблице руками.
+  // (Диапазон B ещё не читан — на защищённом повторе экономим вызов.)
   if (o.fromDogovor && hasDog) {
     return { ok: true, protected: true, dogDate: existingDog };
   }
+
+  var b = isNew ? new Array(LEN_B).fill('') : sh.getRange(row, START_B, 1, LEN_B).getValues()[0];
+
   if (isNew) {
     row = sh.getLastRow() + 1;
-    sh.getRange(row, COL.num).setValue(String(o.num));
-    if (o.client) sh.getRange(row, COL.client).setValue(o.client);
-    if (o.obj)    sh.getRange(row, COL.obj).setValue(o.obj);
+    a[COL.num - 1] = String(o.num);
+    if (o.client) a[COL.client - 1] = o.client;
+    if (o.obj)    a[COL.obj - 1] = o.obj;
   }
-  var prevStatus = isNew ? '' : String(sh.getRange(row, COL.status).getValue() || '');
-  if (o.status)  sh.getRange(row, COL.status).setValue(o.status);
+  if (o.status)  a[COL.status - 1] = o.status;
   if (o.status && String(o.status) !== prevStatus) logStatus_(ss, String(o.num), String(o.status));
-  if (o.client)  sh.getRange(row, COL.client).setValue(o.client);
-  if (o.obj)     sh.getRange(row, COL.obj).setValue(o.obj);
-  if (o.city !== undefined)      sh.getRange(row, COL.city).setValue(o.city);
-  if (o.phone !== undefined)     sh.getRange(row, COL.phone).setValue(o.phone);
-  if (o.furn !== undefined)      sh.getRange(row, COL.furn).setValue(o.furn);
-  if (o.note !== undefined)      sh.getRange(row, COL.note).setValue(o.note);
-  if (o.mountDate !== undefined) sh.getRange(row, COL.mountDate).setValue(o.mountDate);
-  if (o.paid !== undefined)      sh.getRange(row, COL.paid).setValue(o.paid);
-  if (o.soglPrice !== undefined) sh.getRange(row, COL.sogl).setValue(o.soglPrice);
-  if (o.avans !== undefined)     sh.getRange(row, COL.avans).setValue(o.avans);
-  if (o.margin !== undefined)    sh.getRange(row, COL.margin).setValue(o.margin);
-  if (o.earnMaster !== undefined)   sh.getRange(row, COL.earnMaster).setValue(o.earnMaster);
-  if (o.earnDesigner !== undefined) sh.getRange(row, COL.earnDesigner).setValue(o.earnDesigner);
-  if (o.masterId !== undefined)  sh.getRange(row, COL.masterId).setValue(String(o.masterId || ''));
-  if (o.helperId !== undefined)  sh.getRange(row, COL.helperId).setValue(String(o.helperId || ''));
-  if (o.helperPay !== undefined) sh.getRange(row, COL.helperPay).setValue(Math.round(Number(o.helperPay) || 0));
+  if (o.client)  a[COL.client - 1] = o.client;
+  if (o.obj)     a[COL.obj - 1] = o.obj;
+  if (o.city !== undefined)      a[COL.city - 1] = o.city;
+  if (o.phone !== undefined)     a[COL.phone - 1] = o.phone;
+  if (o.furn !== undefined)      a[COL.furn - 1] = o.furn;
+  if (o.note !== undefined)      a[COL.note - 1] = o.note;
+  if (o.mountDate !== undefined) a[COL.mountDate - 1] = o.mountDate;
+  if (o.paid !== undefined)      a[COL.paid - 1] = o.paid;
+  if (o.soglPrice !== undefined) a[COL.sogl - 1] = o.soglPrice;
+  if (o.avans !== undefined)     a[COL.avans - 1] = o.avans;
+  if (o.margin !== undefined)    b[COL.margin - START_B] = o.margin;
+  if (o.earnMaster !== undefined)   b[COL.earnMaster - START_B] = o.earnMaster;
+  if (o.earnDesigner !== undefined) b[COL.earnDesigner - START_B] = o.earnDesigner;
+  if (o.masterId !== undefined)  b[COL.masterId - START_B] = String(o.masterId || '');
+  if (o.helperId !== undefined)  b[COL.helperId - START_B] = String(o.helperId || '');
+  if (o.helperPay !== undefined) b[COL.helperPay - START_B] = Math.round(Number(o.helperPay) || 0);
   // material: выбор ДО договора ('L'/'P'/'K'), после подписания карточка
   // больше его не шлёт (fromDogovor не трогает это поле).
   if (o.material !== undefined && !o.fromDogovor) {
     var mv = String(o.material || '');
-    if (mv === 'L' || mv === 'P' || mv === 'K' || mv === '') sh.getRange(row, COL.material).setValue(mv);
+    if (mv === 'L' || mv === 'P' || mv === 'K' || mv === '') b[COL.material - START_B] = mv;
   }
-  var soglV = Number(sh.getRange(row, COL.sogl).getValue()) || 0;
-  var avV   = Number(sh.getRange(row, COL.avans).getValue()) || 0;
-  var paidV = Number(sh.getRange(row, COL.paid).getValue()) || 0;
-  if (soglV > 0) sh.getRange(row, COL.debt).setValue(soglV - avV - paidV);
+  var soglV = Number(a[COL.sogl - 1]) || 0;
+  var avV   = Number(a[COL.avans - 1]) || 0;
+  var paidV = Number(a[COL.paid - 1]) || 0;
+  if (soglV > 0) a[COL.debt - 1] = soglV - avV - paidV;
   if (o.status === 'Договор') {
     // Дату ставим ТОЛЬКО один раз: сохранение карточки в статусе "Договор"
     // не должно сбрасывать её на сегодня (иначе Продажи уедут в другой месяц).
-    if (!hasDog) sh.getRange(row, COL.dogDate).setValue(new Date());
+    if (!hasDog) a[COL.dogDate - 1] = new Date();
     if ((Number(o.avans) || 0) > 0) upsertAvansFin_(ss, String(o.num), Number(o.avans) || 0);
   }
-  sh.getRange(row, COL.updated).setValue(new Date());
+  a[COL.updated - 1] = new Date();
+
+  sh.getRange(row, 1, 1, LEN_A).setValues([a]);
+  sh.getRange(row, START_B, 1, LEN_B).setValues([b]);
   return { ok: true, row: row, created: isNew };
 }
 
@@ -765,6 +1069,138 @@ function orderOne_(ss, num) {
       snapshot: snap
     }
   };
+}
+
+// ============================================================
+// АРХИВ ЗАКАЗОВ (v4.9)
+// ============================================================
+// Готовые/отказные заказы старше ARCHIVE_DAYS уезжают в ОТДЕЛЬНЫЙ файл
+// таблицы (не лист) — рабочий "Заказы" не пухнет, ordersList_ остаётся
+// быстрым. Финансы/Изменения/Рекламации/Вложения ОСТАЮТСЯ в рабочем
+// файле и продолжают ссылаться на № как раньше — в отличие от
+// delOrder_, здесь ничего не отвязывается и не удаляется, переезжает
+// только сама строка "Заказы".
+// Отсчёт "N дней с Готова/Отказ" — по журналу "Статусы" (SLOG),
+// последний переход ИМЕННО В ЭТОТ статус. Не берём общую "Обновлён" —
+// её сдвигает любая правка карточки уже после сдачи заказа.
+// Не уезжает, пока по заказу есть незакрытая рекламация (стадия != Закрыта).
+//
+// Функции ниже принимают ss/archiveSs явными параметрами (как весь
+// остальной код) — тестируются моками без реального PropertiesService/
+// SpreadsheetApp.create. Реальное разрешение файла архива — в
+// getArchiveSpreadsheet_() (см. конец файла), она в юнит-тестах не участвует.
+var ARCHIVE_DAYS = 30;
+var ARCHIVE_STATUSES = ['Готова', 'Отказ'];
+
+// Дата последнего перехода заказа num В статус status по журналу "Статусы".
+// null, если такого перехода в журнале нет (старый заказ до появления SLOG,
+// либо статус выставлен напрямую в таблице руками, без сохранения через СРМ).
+function lastStatusDate_(ss, num, status) {
+  var sh = ss.getSheetByName(SLOG_SHEET);
+  if (!sh) return null;
+  var last = sh.getLastRow();
+  if (last < 2) return null;
+  var rows = sh.getRange(2, 1, last - 1, SLCOL.date).getValues();
+  for (var i = rows.length - 1; i >= 0; i--) {
+    if (String(rows[i][SLCOL.num - 1]) === String(num) && String(rows[i][SLCOL.status - 1]) === String(status)) {
+      return rows[i][SLCOL.date - 1];
+    }
+  }
+  return null;
+}
+
+// Есть ли по заказу num незакрытая рекламация (стадия != "Закрыта")?
+function hasOpenRecl_(ss, num) {
+  var sh = ss.getSheetByName(RECL_SHEET);
+  if (!sh) return false;
+  var last = sh.getLastRow();
+  if (last < 2) return false;
+  var rows = sh.getRange(2, 1, last - 1, RECLCOL.created).getValues();
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][RECLCOL.num - 1]) === String(num) && String(rows[i][RECLCOL.stage - 1]) !== 'Закрыта') return true;
+  }
+  return false;
+}
+
+// Переносит из ss в archiveSs все заказы Готова/Отказ старше ARCHIVE_DAYS
+// дней (по журналу статусов), без незакрытых рекламаций. Идемпотентна —
+// повторный вызов без новых кандидатов просто ничего не находит.
+function archiveEligibleOrders_(ss, archiveSs) {
+  var sh = ordersSheet_(ss);
+  var last = sh.getLastRow();
+  if (last < 2) return { ok: true, archived: [], count: 0 };
+  var cutoff = new Date(Date.now() - ARCHIVE_DAYS * 24 * 60 * 60 * 1000);
+  var archived = [];
+  // Снизу вверх — deleteRow не сдвигает ещё не проверенные строки выше.
+  for (var r = last; r >= 2; r--) {
+    var num = String(sh.getRange(r, COL.num).getValue() || '');
+    if (!num) continue;
+    var status = String(sh.getRange(r, COL.status).getValue() || '');
+    if (ARCHIVE_STATUSES.indexOf(status) < 0) continue;
+    var statusDate = lastStatusDate_(ss, num, status);
+    if (!statusDate || new Date(statusDate) > cutoff) continue;
+    if (hasOpenRecl_(ss, num)) continue;
+    var rowVals = sh.getRange(r, 1, 1, ORDERS_HEADER.length).getValues()[0];
+    var aSh = ordersSheet_(archiveSs);
+    aSh.getRange(aSh.getLastRow() + 1, 1, 1, ORDERS_HEADER.length).setValues([rowVals]);
+    sh.deleteRow(r);
+    archived.push(num);
+  }
+  return { ok: true, archived: archived, count: archived.length };
+}
+
+// Список архивных заказов — та же форма, что ordersList_ (переиспользуем
+// её же: archiveSs устроен как обычный рабочий файл, лист "Заказы" тот же).
+function archiveOrdersList_(archiveSs) {
+  return ordersList_(archiveSs);
+}
+
+// Возврат заказа num из архива в рабочий файл. Отклоняется, если номер
+// уже (снова) занят в рабочем файле — например, createOrder_ выдал его
+// заново, пока заказ лежал в архиве.
+function restoreFromArchive_(ss, archiveSs, num) {
+  if (!num) return { ok: false, error: 'нет № заказа' };
+  var aSh = ordersSheet_(archiveSs);
+  var aRow = findRowByNum_(aSh, String(num));
+  if (aRow < 0) return { ok: false, error: 'заказ №' + num + ' не найден в архиве' };
+  var sh = ordersSheet_(ss);
+  if (findRowByNum_(sh, String(num)) >= 0) return { ok: false, error: 'заказ №' + num + ' уже есть в рабочем файле' };
+  var rowVals = aSh.getRange(aRow, 1, 1, ORDERS_HEADER.length).getValues()[0];
+  sh.getRange(sh.getLastRow() + 1, 1, 1, ORDERS_HEADER.length).setValues([rowVals]);
+  aSh.deleteRow(aRow);
+  return { ok: true, row: sh.getLastRow() };
+}
+
+// Реальное разрешение файла архива — создаётся автоматически при первом
+// обращении, ID хранится в Свойствах скрипта, руками заводить не нужно.
+// В юнит-тестах не участвует (PropertiesService/SpreadsheetApp.create не
+// мокаются) — тестируются только archiveEligibleOrders_/archiveOrdersList_/
+// restoreFromArchive_ выше, с обычными ss-моками.
+function getArchiveSpreadsheet_() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('ARCHIVE_SS_ID');
+  if (id) {
+    try { return SpreadsheetApp.openById(id); } catch (e) { /* файл удалили руками — создадим заново */ }
+  }
+  var ss = SpreadsheetApp.create('MebelOFF — Архив заказов');
+  props.setProperty('ARCHIVE_SS_ID', ss.getId());
+  return ss;
+}
+
+// Запуск: триггер по времени (как dailyBackup) на функцию dailyArchive.
+// Первый запуск — руками (Выполнить → dailyArchive), дальше по триггеру
+// раз в сутки. Отдельный lock — пишет в тот же лист "Заказы", что и doPost.
+function dailyArchive() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var archiveSs = getArchiveSpreadsheet_();
+    var res = archiveEligibleOrders_(ss, archiveSs);
+    Logger.log('dailyArchive: перенесено ' + res.count + ' заказ(ов): ' + res.archived.join(', '));
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ── Прежние функции v1 — без изменений ──────────────────────
@@ -1547,21 +1983,30 @@ function accrueMonth_(ss, month) {
   if (!/^\d{4}-\d{2}$/.test(m)) return { ok: false, error: 'месяц в формате ГГГГ-ММ' };
   var finSh = finSheet_(ss);
   // Собрать уже начисленные метки этого месяца (по комментарию)
-  var existing = {};
+  // v4.8: теги месяца привязаны к id записи — переименование строки
+  // или сотрудника больше не рождает дубль при повторном начислении.
+  // Старые проводки с тегом-по-имени тоже узнаются (legacyTag ниже).
+  var cmtList = [];
   var last = finSh.getLastRow();
   if (last >= 2) {
     var cmts = finSh.getRange(2, FCOL.comment, last - 1, 1).getValues();
     for (var i = 0; i < cmts.length; i++) {
       var c = String(cmts[i][0] || '');
-      if (c.indexOf('[') === 0) existing[c] = true;
+      if (c.indexOf('[') === 0) cmtList.push(c);
     }
+  }
+  function hasTag(t) {
+    for (var j = 0; j < cmtList.length; j++) {
+      if (cmtList[j].indexOf(t) === 0) return true;
+    }
+    return false;
   }
   var mp = m.split('-');
   var when = new Date(+mp[0], +mp[1] - 1, 1);
   var created = 0, skipped = 0;
 
-  function addExpense(cat, sum, tag) {
-    if (existing[tag]) { skipped++; return; }
+  function addExpense(cat, sum, tagPrefix, legacyTag, name) {
+    if (hasTag(tagPrefix) || hasTag(legacyTag)) { skipped++; return; }
     if (!(sum > 0)) return;
     var row = finSh.getLastRow() + 1;
     finSh.getRange(row, FCOL.id).setValue(String(Date.now()) + '-' + row);
@@ -1570,9 +2015,9 @@ function accrueMonth_(ss, month) {
     finSh.getRange(row, FCOL.cat).setValue(cat);
     finSh.getRange(row, FCOL.sum).setValue(Math.round(sum));
     finSh.getRange(row, FCOL.num).setValue('');
-    finSh.getRange(row, FCOL.comment).setValue(tag);
+    finSh.getRange(row, FCOL.comment).setValue(tagPrefix + ' ' + name);
     finSh.getRange(row, FCOL.created).setValue(new Date());
-    existing[tag] = true;
+    cmtList.push(tagPrefix + ' ' + name);
     created++;
   }
 
@@ -1580,14 +2025,14 @@ function accrueMonth_(ss, month) {
   var rec = recurList_(ss).recur || [];
   rec.forEach(function(x){
     if (!x.active || !(x.sum > 0)) return;
-    addExpense(x.cat || 'Прочее', x.sum, '[Постоянные ' + m + '] ' + x.name);
+    addExpense(x.cat || 'Прочее', x.sum, '[Постоянные ' + m + ' #' + x.id + ']', '[Постоянные ' + m + '] ' + x.name, x.name);
   });
   // Оклады сотрудников
   var emp = empList_(ss).employees || [];
   emp.forEach(function(x){
     if (!x.active || !(x.salary > 0)) return;
     var cat = x.role === 'Дизайнер' ? 'Оплата дизайнеру' : 'Оплата мастеру';
-    addExpense(cat, x.salary, '[Оклад ' + m + '] ' + x.name);
+    addExpense(cat, x.salary, '[Оклад ' + m + ' #' + x.id + ']', '[Оклад ' + m + '] ' + x.name, x.name);
   });
 
   return { ok: true, created: created, skipped: skipped, month: m };

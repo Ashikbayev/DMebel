@@ -1,7 +1,8 @@
-// Smoke-тест редизайна openCard, раздела "Архив" (v4.9) и optimistic UI
-// Кассы (v4.11): crm.js исполняется в jsdom, заказы подсовываются через
-// мок fetch (как в проде, с разбором action= в URL), карточка/архив/
-// касса открываются реальными кликами — полный боевой путь.
+// Smoke-тест редизайна openCard, раздела "Архив" (v4.9), optimistic UI
+// Кассы и «Задач» (v4.11): crm.js исполняется в jsdom, заказы
+// подсовываются через мок fetch (как в проде, с разбором action= в
+// URL), карточка/архив/касса/задачи открываются реальными кликами —
+// полный боевой путь.
 const fs = require('fs');
 const { JSDOM, VirtualConsole } = require('jsdom');
 
@@ -47,6 +48,15 @@ const finFail = {
   sum: 30000, num: '', comment: 'СИД-Отказ'
 };
 
+// v4.11: Задачи — даты СЧИТАЮТСЯ от реального «сегодня» (не хардкод),
+// иначе тест сгниёт: просрочка/сегодня иначе через полгода станут неверными.
+const isoOffset = (days) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+const taskA = { id: 'ta1', num: '214', text: 'Позвонить, узнать про замер', deadline: isoOffset(-2), done: false }; // просрочена
+const taskB = { id: 'ta2', num: '214', text: 'Отправить смету', deadline: isoOffset(0), done: false }; // сегодня; toggleTask на неё мок валит (откат)
+const taskC = { id: 'ta3', num: '214', text: 'Уточнить цвет фасада', deadline: isoOffset(7), done: false }; // не просрочена; delTask штатно
+const taskD = { id: 'ta4', num: '214', text: 'Забрать доплату', deadline: isoOffset(7), done: false }; // delTask на неё мок валит (откат)
+const taskDone = { id: 'ta5', num: '214', text: 'Уже сделанная задача', deadline: isoOffset(-5), done: true }; // скрыта по умолчанию
+
 const vc = new VirtualConsole();
 let pageErrors = [];
 vc.on('jsdomError', e => pageErrors.push(String(e && (e.detail && e.detail.message || e.message))));
@@ -83,6 +93,23 @@ w.fetch = function(url, opts){
       if (String(body.id) === 'f2') return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: false, error: 'сервер отклонил удаление' }) });
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
     }
+    // v4.11: addTask — та же схема меток текста, что addFin.
+    if (body && body.action === 'addTask') {
+      const tx = body.task && body.task.text;
+      if (tx === 'СИД-ОФФЛАЙН') return Promise.reject(new Error('Failed to fetch'));
+      if (tx === 'СИД-ОШИБКА') return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: false, error: 'сервер отклонил' }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, id: 'srv-task-' + Date.now() }) });
+    }
+    // v4.11: toggleTask — id ta2 всегда отклоняется (проверка отката).
+    if (body && body.action === 'toggleTask') {
+      if (String(body.id) === 'ta2') return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: false, error: 'сервер отклонил отметку' }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, done: body.done }) });
+    }
+    // v4.11: delTask — id ta4 всегда отклоняется (проверка отката).
+    if (body && body.action === 'delTask') {
+      if (String(body.id) === 'ta4') return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: false, error: 'сервер отклонил удаление' }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
+    }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
   }
   const u = String(url);
@@ -91,6 +118,9 @@ w.fetch = function(url, opts){
   }
   if(u.indexOf('action=fin') >= 0){
     return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, fin: [finKeep, finFail] }) });
+  }
+  if(u.indexOf('action=tasks') >= 0){
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, tasks: [taskA, taskB, taskC, taskD, taskDone] }) });
   }
   return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, orders: [order] }) });
 };
@@ -250,10 +280,118 @@ setTimeout(() => {
                       ok(!!rowDel2 && !rowDel2.classList.contains('crm-op-leaving'), 'после отказа сервера строка СИД-Отказ откатилась назад (разворачивается)');
                       ok(opRows().some(r => r.textContent.indexOf('СИД-Отказ') >= 0), 'операция СИД-Отказ осталась в списке (не удалена, только визуально сворачивалась)');
 
-                      ok(pageErrors.length === 0, 'ошибок страницы нет (' + pageErrors.length + ')');
-                      pageErrors.slice(0,5).forEach(e => console.log('   ' + e));
-                      console.log(fails ? 'SMOKE FAIL' : 'SMOKE OK');
-                      process.exit(fails ? 1 : 0);
+                      // ── v4.11: «Задачи» — бейдж, сквозной список, optimistic toggle/delete, карточка ──
+                      const navBtns3 = Array.from(doc.querySelectorAll('.crm-vbtn'));
+                      const bTasksNav = navBtns3.find(b => b.textContent.trim().indexOf('Задачи') === 0);
+                      ok(!!bTasksNav, 'кнопка «Задачи» есть в навигации');
+                      const badgeEl = bTasksNav && bTasksNav.querySelector('.crm-task-badge');
+                      ok(!!badgeEl && badgeEl.textContent === '2', 'бейдж «Задачи» = 2 (просрочена + сегодня) сразу при открытии СРМ, без захода во вкладку: ' + (badgeEl && badgeEl.textContent));
+                      if (bTasksNav) bTasksNav.click();
+                      setTimeout(() => {
+                        const taskRows = () => Array.from(doc.querySelectorAll('.crm-task-row:not(.compact)'));
+                        ok(taskRows().some(r => r.textContent.indexOf('Позвонить, узнать про замер') >= 0), 'просроченная задача (ta1) видна в списке');
+                        ok(taskRows().some(r => r.textContent.indexOf('Отправить смету') >= 0), 'сегодняшняя задача (ta2) видна в списке');
+                        ok(taskRows().some(r => r.textContent.indexOf('Уточнить цвет фасада') >= 0), 'будущая задача (ta3) видна в списке');
+                        ok(!taskRows().some(r => r.textContent.indexOf('Уже сделанная задача') >= 0), 'выполненная задача (ta5) скрыта по умолчанию');
+
+                        const showDoneCb = Array.from(doc.querySelectorAll('input[type=checkbox]')).find(cb => cb.parentNode && cb.parentNode.textContent.indexOf('показать выполненные') >= 0);
+                        ok(!!showDoneCb, 'чекбокс «показать выполненные» найден');
+                        if (showDoneCb) showDoneCb.click();
+                        setTimeout(() => {
+                          const doneRow = taskRows().find(r => r.textContent.indexOf('Уже сделанная задача') >= 0);
+                          ok(!!doneRow, 'после включения тумблера выполненная задача (ta5) видна');
+                          ok(!!doneRow && !!doneRow.querySelector('.tx.done'), 'она отображается зачёркнутой');
+                          const showDoneCb2 = Array.from(doc.querySelectorAll('input[type=checkbox]')).find(cb => cb.parentNode && cb.parentNode.textContent.indexOf('показать выполненные') >= 0);
+                          if (showDoneCb2) showDoneCb2.click(); // вернуть скрытие обратно
+                          setTimeout(() => {
+                            // ── отметка «сделано»: в общем списке сворачивается сразу (ta1) ──
+                            const rowA = taskRows().find(r => r.textContent.indexOf('Позвонить, узнать про замер') >= 0);
+                            ok(!!rowA, 'строка ta1 найдена для теста отметки «сделано»');
+                            const cbA = rowA && rowA.querySelector('input[type=checkbox]');
+                            if (cbA) cbA.click();
+                            ok(!!rowA && rowA.classList.contains('crm-task-leaving'), 'строка ta1 сворачивается оптимистично сразу по отметке, до ответа сервера');
+                            setTimeout(() => {
+                              ok(!taskRows().some(r => r.textContent.indexOf('Позвонить, узнать про замер') >= 0), 'после успешной отметки задача ta1 пропала из активного списка');
+
+                              // ── отметка «сделано» с отказом сервера — откат (ta2) ──
+                              const rowB = taskRows().find(r => r.textContent.indexOf('Отправить смету') >= 0);
+                              ok(!!rowB, 'строка ta2 найдена для теста отката отметки');
+                              const cbB = rowB && rowB.querySelector('input[type=checkbox]');
+                              if (cbB) cbB.click();
+                              ok(!!rowB && rowB.classList.contains('crm-task-leaving'), 'строка ta2 тоже сворачивается оптимистично сразу по клику');
+                              setTimeout(() => {
+                                ok(!!rowB && !rowB.classList.contains('crm-task-leaving'), 'после отказа сервера строка ta2 откатилась назад (разворачивается)');
+                                ok(taskRows().some(r => r.textContent.indexOf('Отправить смету') >= 0), 'задача ta2 осталась активной (не выполнена)');
+                                const cbB2 = rowB && rowB.querySelector('input[type=checkbox]');
+                                ok(!!cbB2 && cbB2.checked === false, 'чекбокс ta2 вернулся в неотмеченное состояние');
+
+                                // ── удаление: штатный успех (ta3) ──
+                                const rowC = taskRows().find(r => r.textContent.indexOf('Уточнить цвет фасада') >= 0);
+                                ok(!!rowC, 'строка ta3 найдена для теста удаления');
+                                const delC = rowC && Array.from(rowC.querySelectorAll('button')).find(b => b.textContent.indexOf('✕') >= 0);
+                                if (delC) delC.click();
+                                ok(!!rowC && rowC.classList.contains('crm-task-leaving'), 'строка ta3 сворачивается оптимистично сразу по клику ✕');
+                                setTimeout(() => {
+                                  ok(!taskRows().some(r => r.textContent.indexOf('Уточнить цвет фасада') >= 0), 'после успешного удаления задача ta3 пропала из списка');
+
+                                  // ── удаление: отказ сервера — откат (ta4) ──
+                                  const rowD = taskRows().find(r => r.textContent.indexOf('Забрать доплату') >= 0);
+                                  ok(!!rowD, 'строка ta4 найдена для теста отката удаления');
+                                  const delD = rowD && Array.from(rowD.querySelectorAll('button')).find(b => b.textContent.indexOf('✕') >= 0);
+                                  if (delD) delD.click();
+                                  ok(!!rowD && rowD.classList.contains('crm-task-leaving'), 'строка ta4 сворачивается оптимистично сразу по клику ✕');
+                                  setTimeout(() => {
+                                    ok(!!rowD && !rowD.classList.contains('crm-task-leaving'), 'после отказа сервера строка ta4 откатилась назад (разворачивается)');
+                                    ok(taskRows().some(r => r.textContent.indexOf('Забрать доплату') >= 0), 'задача ta4 осталась в списке (не удалена)');
+
+                                    // ── добавление через модалку «+ Задача» ──
+                                    const bAddTask = Array.from(doc.querySelectorAll('.crm-vbtn.new')).find(b => b.textContent.trim() === '+ Задача');
+                                    ok(!!bAddTask, 'кнопка «+ Задача» есть');
+                                    if (bAddTask) bAddTask.click();
+                                    const taskModal = doc.querySelector('.crm-modal');
+                                    ok(!!taskModal, 'модалка «+ Задача» открывается по клику');
+                                    if (taskModal) {
+                                      const findF = (label) => {
+                                        const flds = Array.from(taskModal.querySelectorAll('.crm-f'));
+                                        const f = flds.find(x => { const l = x.querySelector('label'); return l && l.textContent.trim() === label; });
+                                        return f ? f.querySelector('input,select') : null;
+                                      };
+                                      const fNum = findF('№ заказа'), fText = findF('Что сделать'), fDeadline = findF('Дедлайн');
+                                      if (fNum) fNum.value = '214';
+                                      if (fText) fText.value = 'Новая задача из модалки';
+                                      if (fDeadline) fDeadline.value = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+                                      const saveBtn = taskModal.querySelector('.crm-m-btn.save');
+                                      if (saveBtn) saveBtn.click();
+                                    }
+                                    ok(!doc.querySelector('.crm-modal'), 'модалка «+ Задача» закрывается сразу по «Сохранить» (оптимистично)');
+                                    ok(taskRows().some(r => r.textContent.indexOf('Новая задача из модалки') >= 0), 'новая задача появляется в списке сразу, до ответа сервера');
+
+                                    // ── карточка заказа: клик по тексту задачи открывает карточку ──
+                                    const newRow = taskRows().find(r => r.textContent.indexOf('Новая задача из модалки') >= 0);
+                                    const newRowTx = newRow && newRow.querySelector('.tx');
+                                    if (newRowTx) newRowTx.click();
+                                    const cardModal = doc.querySelector('.crm-modal');
+                                    ok(!!cardModal && !!cardModal.querySelector('.crm-card-strip'), 'клик по тексту задачи открывает карточку заказа №214');
+                                    if (cardModal) {
+                                      const cardTaskRows = Array.from(cardModal.querySelectorAll('.crm-task-row.compact'));
+                                      ok(cardTaskRows.length > 0, 'в карточке отрисован блок «Задачи»: ' + cardTaskRows.length + ' строк');
+                                      ok(cardTaskRows.every(r => r.textContent.indexOf('№214') < 0), 'задачи в карточке БЕЗ префикса «№214 ·» (компактный режим)');
+                                      ok(cardTaskRows.some(r => r.textContent.indexOf('Новая задача из модалки') >= 0), 'новая задача видна и в блоке карточки');
+                                      const cardDoneRow = cardTaskRows.find(r => r.textContent.indexOf('Позвонить, узнать про замер') >= 0);
+                                      ok(!!cardDoneRow && !!cardDoneRow.querySelector('.tx.done'), 'в карточке выполненная задача ta1 осталась видна зачёркнутой — не пропала, как в общем списке (история сделки)');
+                                    }
+
+                                    ok(pageErrors.length === 0, 'ошибок страницы нет (' + pageErrors.length + ')');
+                                    pageErrors.slice(0,5).forEach(e => console.log('   ' + e));
+                                    console.log(fails ? 'SMOKE FAIL' : 'SMOKE OK');
+                                    process.exit(fails ? 1 : 0);
+                                  }, 200);
+                                }, 200);
+                              }, 200);
+                            }, 200);
+                          }, 200);
+                        }, 200);
+                      }, 300);
                     }, 200);
                   }, 200);
                 }, 200);

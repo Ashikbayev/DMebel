@@ -665,6 +665,20 @@
       '.crm-op .sm.out{color:#c0392b}'+
       '.crm-op .del{background:none;border:none;color:#ccc;cursor:pointer;font-size:13px;line-height:1;padding:2px}'+
       '.crm-op .del:hover{color:#c0392b}'+
+      '.crm-task-badge{background:#c0392b;color:#fff;border-radius:8px;padding:1px 6px;font-size:10px;margin-left:4px;vertical-align:middle}'+
+      '.crm-tasklist{background:#fff;border:1px solid #eee;border-radius:10px;overflow:hidden}'+
+      '.crm-task-row{display:flex;align-items:center;gap:10px;padding:9px 14px;font-size:12px;color:#555;border-bottom:1px solid #f7f7f5;max-height:60px;overflow:hidden;transition:max-height .3s ease,opacity .3s ease,padding .3s ease,border-width .3s ease}'+
+      '.crm-task-row:last-child{border-bottom:none}'+
+      '.crm-task-row.crm-task-leaving{max-height:0;opacity:0;padding-top:0;padding-bottom:0;border-width:0}'+
+      '.crm-task-row.compact{padding:5px 0;border-bottom:1px solid #f7f7f5;max-height:40px}'+
+      '.crm-task-row .tx{flex:1}'+
+      '.crm-task-row .tx.done{color:#aaa;text-decoration:line-through}'+
+      '.crm-task-row .dl{font-size:11px;white-space:nowrap;color:#999}'+
+      '.crm-task-row .dl.over{color:#c0392b;font-weight:700}'+
+      '.crm-task-row .dl.today{color:#BA7517;font-weight:700}'+
+      '.crm-task-row .dl.done{color:#bbb}'+
+      '.crm-task-row .del{background:none;border:none;color:#ccc;cursor:pointer;font-size:13px;line-height:1;padding:2px}'+
+      '.crm-task-row .del:hover{color:#c0392b}'+
       '.crm-sec-t{font-size:13px;font-weight:600;color:#444;margin:14px 0 8px}'+
       '.crm-ch-box{background:#f6f6f4;border-radius:10px;margin-bottom:10px;overflow:hidden}'+
       '.crm-ch-box.recl{background:#FCEBEB}'+
@@ -762,14 +776,20 @@
     injectCrmStyle();
     qBadge();
     qFlush();
-    if(LOADED){ renderAll(); refreshQuiet(); return; }
+    if(LOADED){
+      if(!TASKS_LOADED){ fetchTasks(function(){ renderAll(); refreshQuiet(); }); return; }
+      renderAll(); refreshQuiet(); return;
+    }
     var root = document.getElementById('crm-root');
     if(root) root.innerHTML = '<div class="crm-empty">Загружаю заказы из таблицы...</div>';
     fetchOrders(function(err){
       if(err === '__no_key__'){ renderKeyGate(false); return; }
       if(err === '__bad_key__'){ setToken(''); renderKeyGate(true); return; }
       if(err){ if(root) root.innerHTML = '<div class="crm-empty">Не удалось загрузить: '+err+'<br><br><button class="crm-vbtn" onclick="crmReload()">Повторить</button></div>'; return; }
-      renderAll();
+      // Задачи — заранее, вместе с заказами (см. комментарий у fetchTasks).
+      // Ошибку молча проглатываем: заказы уже загрузились, работать можно,
+      // просто бейдж «Задачи» не покажется до захода во вкладку.
+      fetchTasks(function(){ renderAll(); });
     });
   };
   window.crmReload = function(){
@@ -778,6 +798,35 @@
   };
   function refreshQuiet(){
     fetchOrders(function(err){ if(!err) renderAll(); });
+    fetchTasks(function(err){ if(!err) renderAll(); });
+  }
+
+  // v4.11: 'over' — дедлайн прошёл, 'today' — сегодня, 'ok' — позже
+  // (или задача уже выполнена/без дедлайна — тогда всегда 'ok').
+  function taskDueStatus(t){
+    if(t.done || !t.deadline) return 'ok';
+    var d = new Date(t.deadline);
+    if(isNaN(d.getTime())) return 'ok';
+    var now = new Date();
+    var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    var dStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    if(dStart < todayStart) return 'over';
+    if(dStart === todayStart) return 'today';
+    return 'ok';
+  }
+  function taskBadgeCount(){
+    var n = 0;
+    TASKS.forEach(function(t){ var s = taskDueStatus(t); if(s === 'over' || s === 'today') n++; });
+    return n;
+  }
+  function taskDeadlineLabel_(t){
+    if(!t.deadline) return '';
+    var lbl = fmtDate(t.deadline);
+    if(t.done) return lbl;
+    var s = taskDueStatus(t);
+    if(s === 'over') return lbl + ' \u00B7 просрочено';
+    if(s === 'today') return lbl + ' \u00B7 сегодня';
+    return lbl;
   }
 
   function buildAlerts(){
@@ -897,8 +946,13 @@
     bArchive.textContent = 'Архив';
     bArchive.title = 'Заказы Готова/Отказ старше 30 дней — отдельный файл';
     bArchive.addEventListener('click', function(){ VIEW='archive'; localStorage.setItem('moff_crm_view','archive'); renderAll(); });
-    tools.appendChild(bBoard); tools.appendChild(bList); tools.appendChild(bCal); tools.appendChild(bFin); tools.appendChild(bStock); tools.appendChild(bArchive);
-    if(VIEW !== 'fin' && VIEW !== 'stock' && VIEW !== 'cal' && VIEW !== 'archive'){
+    var bTasks = document.createElement('button');
+    bTasks.className = 'crm-vbtn' + (VIEW==='tasks' ? ' on' : '');
+    var tBadge = taskBadgeCount();
+    bTasks.innerHTML = 'Задачи' + (tBadge ? ' <span class="crm-task-badge">' + tBadge + '</span>' : '');
+    bTasks.addEventListener('click', function(){ VIEW='tasks'; localStorage.setItem('moff_crm_view','tasks'); renderAll(); });
+    tools.appendChild(bBoard); tools.appendChild(bList); tools.appendChild(bCal); tools.appendChild(bFin); tools.appendChild(bStock); tools.appendChild(bTasks); tools.appendChild(bArchive);
+    if(VIEW !== 'fin' && VIEW !== 'stock' && VIEW !== 'cal' && VIEW !== 'archive' && VIEW !== 'tasks'){
     var search = document.createElement('input');
     search.type = 'search'; search.placeholder = 'Поиск: №, клиент, телефон, город...';
     search.value = SEARCH; search.style.flex = '1'; search.style.minWidth = '140px';
@@ -982,6 +1036,7 @@
     var cnt = document.getElementById('crm-count');
     if(VIEW === 'stock'){ if(cnt) cnt.textContent = ''; renderStock(view); return; }
     if(VIEW === 'archive'){ if(cnt) cnt.textContent = ''; renderArchive(view); return; }
+    if(VIEW === 'tasks'){ if(cnt) cnt.textContent = ''; renderTasks(view); return; }
     if(VIEW === 'fin'){
       if(cnt) cnt.textContent = '';
       renderFin(view);
@@ -1273,6 +1328,9 @@
   var ARCHIVE = [];
   var ARCHIVE_LOADED = false;
   var ARCHIVE_SEARCH = '';
+  var TASKS = [];
+  var TASKS_LOADED = false;
+  var TASKS_SHOW_DONE = false;
   var AGG_MANUAL = []; // сводная закупка: позиции, добавленные вручную (только в модалке, не сохраняются)
   var STOCK_MOVES = [];
   var STOCK_MOVES_LOADED = false;
@@ -1476,6 +1534,20 @@
       .then(function(r){ return r.json(); })
       .then(function(res){
         if(res && res.ok){ FIN = res.fin || []; FIN_LOADED = true; cb(null); }
+        else cb((res && res.error) || 'таблица вернула ошибку');
+      })
+      .catch(function(e){ cb(String(e && e.message || e)); });
+  }
+
+  // v4.11: задачи грузим НЕ лениво (в отличие от Кассы/Архива/Склада) —
+  // бейдж просроченных в навигации должен появиться сразу при открытии
+  // СРМ, а не только после захода во вкладку «Задачи».
+  function fetchTasks(cb){
+    if(!getToken()){ cb('__no_key__'); return; }
+    fetch(GS_URL + '?action=tasks&token=' + encodeURIComponent(getToken()))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(res && res.ok){ TASKS = res.tasks || []; TASKS_LOADED = true; cb(null); }
         else cb((res && res.error) || 'таблица вернула ошибку');
       })
       .catch(function(e){ cb(String(e && e.message || e)); });
@@ -1783,6 +1855,172 @@
       skWrap.remove();
       paintArchiveList();
     });
+  }
+
+  // ── v4.11: Задачи — сквозной список по всем сделкам. Optimistic UI —
+  // тот же приём, что Архив (v4.10) и Касса (v4.11): визуальный отклик
+  // сразу по клику, данные/полный renderAll() — только при подтверждении
+  // от сервера, откат — по ошибке.
+  function taskRowEl(t, compact){
+    var r = document.createElement('div');
+    r.className = 'crm-task-row' + (compact ? ' compact' : '');
+    var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!t.done;
+    cb.addEventListener('click', function(){ toggleTaskDone(t, r, compact); });
+    var body = document.createElement('span');
+    body.className = 'tx' + (t.done ? ' done' : '');
+    body.textContent = (compact ? '' : ('\u2116' + t.num + ' \u00B7 ')) + t.text;
+    if(!compact){
+      body.style.cursor = 'pointer';
+      body.addEventListener('click', function(){ openCard(t.num); });
+    }
+    var dl = document.createElement('span');
+    dl.className = 'dl ' + (t.done ? 'done' : taskDueStatus(t));
+    dl.textContent = taskDeadlineLabel_(t);
+    var del = document.createElement('button'); del.className = 'del'; del.textContent = '\u2715';
+    del.title = 'Удалить задачу';
+    del.addEventListener('click', function(){ deleteTask(t, r); });
+    r.appendChild(cb); r.appendChild(body); r.appendChild(dl); r.appendChild(del);
+    return r;
+  }
+  // Перекрашивает существующую DOM-строку задачи на месте (без пересборки
+  // списка) — используется и для оптимистичного отклика, и для отката.
+  function paintTaskRow_(r, t){
+    var cbEl = r.querySelector('input[type=checkbox]'); if(cbEl) cbEl.checked = !!t.done;
+    var body = r.querySelector('.tx'); if(body) body.classList.toggle('done', !!t.done);
+    var dl = r.querySelector('.dl');
+    if(dl){ dl.className = 'dl ' + (t.done ? 'done' : taskDueStatus(t)); dl.textContent = taskDeadlineLabel_(t); }
+  }
+  // compact=false (сквозная вкладка «Задачи»): отметка «сделано» сразу
+  // сворачивает строку — как удаление в Кассе. compact=true (карточка
+  // заказа): по решению Дали задача остаётся видна зачёркнутой — это
+  // история по сделке, а не рабочий список на сегодня.
+  function toggleTaskDone(t, r, compact){
+    var prevDone = t.done;
+    var newDone = !prevDone;
+    t.done = newDone;
+    var willCollapse = !compact && newDone;
+    if(willCollapse) r.classList.add('crm-task-leaving');
+    else paintTaskRow_(r, t);
+    post({ action:'toggleTask', id: t.id, done: newDone }, function(){
+      renderAll(); // бейдж мог измениться (сегодня/просрочено) — обновляем нав
+    }, function(err){
+      t.done = prevDone;
+      if(willCollapse) r.classList.remove('crm-task-leaving');
+      paintTaskRow_(r, t); // чекбокс браузер переключает нативно по клику независимо от нас — сверяем визуал с откаченными данными в любом случае
+      toast('\u26A0\uFE0F Не удалось сохранить: ' + err, '#BA7517');
+    });
+  }
+  // Без confirm() — это не деньги (в отличие от delFin), цена ошибки ниже.
+  function deleteTask(t, r){
+    r.classList.add('crm-task-leaving');
+    post({ action:'delTask', id: t.id }, function(){
+      TASKS = TASKS.filter(function(x){ return x.id !== t.id; });
+      renderAll();
+    }, function(err){
+      r.classList.remove('crm-task-leaving');
+      toast('\u26A0\uFE0F Не удалилось: ' + err, '#BA7517');
+    });
+  }
+
+  function renderTasks(view){
+    if(!TASKS_LOADED){
+      var ld = document.createElement('div'); ld.className = 'crm-empty';
+      ld.textContent = 'Загружаю задачи...';
+      view.appendChild(ld);
+      fetchTasks(function(err){
+        if(err === '__no_key__'){ ld.textContent = 'Введи ключ доступа во вкладке заказов.'; return; }
+        if(err){ ld.textContent = 'Задачи не загрузились: ' + err; return; }
+        renderView();
+      });
+      return;
+    }
+    var head = document.createElement('div');
+    head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px';
+    var t0 = document.createElement('b'); t0.textContent = 'Задачи';
+    var right = document.createElement('div'); right.style.cssText = 'display:flex;align-items:center;gap:12px';
+    var showDoneLbl = document.createElement('label');
+    showDoneLbl.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:11px;color:#888;cursor:pointer';
+    var showDoneCb = document.createElement('input'); showDoneCb.type = 'checkbox'; showDoneCb.checked = TASKS_SHOW_DONE;
+    showDoneCb.addEventListener('change', function(){ TASKS_SHOW_DONE = showDoneCb.checked; renderAll(); });
+    showDoneLbl.appendChild(showDoneCb); showDoneLbl.appendChild(document.createTextNode('показать выполненные'));
+    var bAdd = document.createElement('button'); bAdd.className = 'crm-vbtn new'; bAdd.textContent = '+ Задача';
+    bAdd.addEventListener('click', openTaskModal);
+    right.appendChild(showDoneLbl); right.appendChild(bAdd);
+    head.appendChild(t0); head.appendChild(right);
+    view.appendChild(head);
+
+    var sorted = TASKS.filter(function(t){ return TASKS_SHOW_DONE || !t.done; }).slice().sort(function(a,b){
+      var da = a.deadline ? new Date(a.deadline).getTime() : Infinity;
+      var db = b.deadline ? new Date(b.deadline).getTime() : Infinity;
+      return da - db;
+    });
+    if(!sorted.length){
+      var e = document.createElement('div'); e.className = 'crm-empty';
+      e.textContent = TASKS_SHOW_DONE ? 'Задач нет.' : 'Активных задач нет.';
+      view.appendChild(e);
+      return;
+    }
+    var list = document.createElement('div'); list.className = 'crm-tasklist';
+    sorted.forEach(function(t){ list.appendChild(taskRowEl(t, false)); });
+    view.appendChild(list);
+  }
+
+  // Модалка «+ Задача»: № заказа (автодополнение) + текст + дедлайн.
+  // Optimistic — как + Операция в Кассе: закрывается и попадает в
+  // список сразу, откат по ошибке.
+  function openTaskModal(pre){
+    pre = (pre && pre.num !== undefined) ? pre : {};
+    var bg = document.createElement('div'); bg.className = 'crm-modal-bg';
+    bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
+    var m = document.createElement('div'); m.className = 'crm-modal'; m.style.maxWidth = '360px';
+    var h = document.createElement('div'); h.className = 'crm-m-h';
+    var hcol = document.createElement('div'); hcol.style.minWidth = '0';
+    var title = document.createElement('div'); title.className = 'crm-h-t'; title.textContent = '+ Задача';
+    hcol.appendChild(title);
+    var x = document.createElement('button'); x.className = 'crm-m-x'; x.textContent = '\u00D7';
+    x.addEventListener('click', function(){ document.body.removeChild(bg); });
+    h.appendChild(hcol); h.appendChild(x);
+    var b = document.createElement('div'); b.className = 'crm-m-b';
+
+    var iNum = inp(pre.num || '');
+    iNum.setAttribute('list', 'crm-task-nums');
+    var dl = document.createElement('datalist'); dl.id = 'crm-task-nums';
+    ORDERS.forEach(function(o){ var op = document.createElement('option'); op.value = o.num; op.label = o.client || ''; dl.appendChild(op); });
+    var iText = inp('');
+    var iDeadline = inp('', 'date');
+
+    b.appendChild(field('\u2116 заказа', iNum));
+    b.appendChild(dl);
+    b.appendChild(field('Что сделать', iText));
+    b.appendChild(field('Дедлайн', iDeadline));
+
+    var btns = document.createElement('div'); btns.className = 'crm-m-btns';
+    var bSave = document.createElement('button'); bSave.className = 'crm-m-btn save'; bSave.textContent = 'Сохранить';
+    bSave.addEventListener('click', function(){
+      var num = iNum.value.trim();
+      var text = iText.value.trim();
+      var deadline = iDeadline.value;
+      if(!num){ toast('\u26A0\uFE0F Укажи № заказа', '#BA7517'); return; }
+      if(!text){ toast('\u26A0\uFE0F Опиши задачу', '#BA7517'); return; }
+      if(!deadline){ toast('\u26A0\uFE0F Укажи дедлайн', '#BA7517'); return; }
+      document.body.removeChild(bg);
+      var rec = { id: 'tmp' + Date.now(), num: num, text: text, deadline: deadline, done: false };
+      TASKS.unshift(rec);
+      renderAll();
+      post({ action:'addTask', task: { num: num, text: text, deadline: deadline } }, function(res){
+        if(res && res.id) rec.id = res.id;
+      }, function(err){
+        TASKS = TASKS.filter(function(x){ return x.id !== rec.id; });
+        renderAll();
+        toast('\u26A0\uFE0F Не сохранилось: ' + err, '#BA7517');
+      });
+    });
+    btns.appendChild(bSave);
+    b.appendChild(btns);
+    m.appendChild(h); m.appendChild(b);
+    bg.appendChild(m);
+    document.body.appendChild(bg);
+    setTimeout(function(){ try{ iNum.focus(); }catch(e){} }, 50);
   }
 
   // Балансовая вкладка: «Пора докупить», склад в деньгах, поиск,
@@ -4174,6 +4412,61 @@
     secObj.appendChild(field('Примечание', iNote));
     secObj.appendChild(field('Дата установки', iMount));
     b.appendChild(secObj);
+
+    // ── v4.11: Задачи по этой сделке — компактный блок, отмеченные
+    // остаются видны зачёркнутыми (история по сделке, в отличие от
+    // сквозной вкладки «Задачи», где готовое сворачивается сразу). ──
+    var secTasks = document.createElement('div'); secTasks.className='crm-sec';
+    secTasks.appendChild(secHead('ti-clock', 'Задачи'));
+    var taskListWrap = document.createElement('div');
+    secTasks.appendChild(taskListWrap);
+    var taskAddRow = document.createElement('div');
+    taskAddRow.style.cssText = 'display:flex;gap:6px;margin-top:6px';
+    var cText = inp(''); cText.placeholder = 'Что сделать\u2026'; cText.style.flex = '1';
+    var cDeadline = inp('', 'date'); cDeadline.style.width = '140px';
+    var cSave = document.createElement('button'); cSave.className='crm-vbtn new'; cSave.textContent='+';
+    function renderCardTasks(){
+      taskListWrap.innerHTML = '';
+      if(!TASKS_LOADED){
+        var ldT = document.createElement('div'); ldT.style.cssText='font-size:11px;color:#999'; ldT.textContent = 'Загружаю задачи...';
+        taskListWrap.appendChild(ldT);
+        return;
+      }
+      var mine = TASKS.filter(function(t){ return String(t.num) === String(o.num); }).sort(function(ta, tb){
+        var da = ta.deadline ? new Date(ta.deadline).getTime() : Infinity;
+        var db = tb.deadline ? new Date(tb.deadline).getTime() : Infinity;
+        return da - db;
+      });
+      if(!mine.length){
+        var eT = document.createElement('div'); eT.style.cssText='font-size:11px;color:#999'; eT.textContent = 'Задач по этой сделке пока нет.';
+        taskListWrap.appendChild(eT);
+        return;
+      }
+      mine.forEach(function(t){ taskListWrap.appendChild(taskRowEl(t, true)); });
+    }
+    cSave.addEventListener('click', function(){
+      var text = cText.value.trim();
+      var deadline = cDeadline.value;
+      if(!text){ toast('\u26A0\uFE0F Опиши задачу', '#BA7517'); return; }
+      if(!deadline){ toast('\u26A0\uFE0F Укажи дедлайн', '#BA7517'); return; }
+      var rec = { id: 'tmp' + Date.now(), num: String(o.num), text: text, deadline: deadline, done: false };
+      TASKS.unshift(rec);
+      cText.value = ''; cDeadline.value = '';
+      renderCardTasks();
+      post({ action:'addTask', task: { num: String(o.num), text: text, deadline: deadline } }, function(res){
+        if(res && res.id) rec.id = res.id;
+      }, function(err){
+        TASKS = TASKS.filter(function(x){ return x.id !== rec.id; });
+        renderCardTasks();
+        toast('\u26A0\uFE0F Не сохранилось: ' + err, '#BA7517');
+      });
+    });
+    taskAddRow.appendChild(cText); taskAddRow.appendChild(cDeadline); taskAddRow.appendChild(cSave);
+    secTasks.appendChild(taskAddRow);
+    renderCardTasks();
+    if(!TASKS_LOADED) fetchTasks(function(err){ if(!err) renderCardTasks(); });
+    b.appendChild(secTasks);
+
     var payFld = field('Оплачено дополнительно, \u20B8', payWrap);
 
     var moneyWrap = document.createElement('div'); moneyWrap.className='crm-sec';

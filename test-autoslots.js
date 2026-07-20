@@ -850,7 +850,15 @@ function waitReady(dom, tries){
           setValue: function(v){ var r = row - 2; while(rows.length <= r) rows.push([]); rows[r][col - 1] = v; return this; },
           getValue: function(){ var r = rows[row - 2] || []; return r[col - 1] === undefined ? '' : r[col - 1]; },
           getValues: function(){ var out = []; for(var i = 0; i < (numRows || 1); i++){ var src = rows[row - 2 + i] || []; var line = []; for(var j = 0; j < (numCols || 1); j++) line.push(src[col - 1 + j] === undefined ? '' : src[col - 1 + j]); out.push(line); } return out; },
-          setValues: function(){ return this; }, setFontWeight: function(){ return this; }
+          setValues: function(v){
+            for(var i = 0; i < v.length; i++){
+              var r = row - 2 + i;
+              while(rows.length <= r) rows.push([]);
+              for(var j = 0; j < v[i].length; j++) rows[r][col - 1 + j] = v[i][j];
+            }
+            return this;
+          },
+          setFontWeight: function(){ return this; }
         };
       }
     };
@@ -938,13 +946,20 @@ function waitReady(dom, tries){
   console.log('── v4.6: Рекламации ──');
   var reclRows = [];
   var reclWSheet = mkWritable(reclRows);
+  var reclCascadeTaskRows = [];
+  var reclCascadeTaskWSheet = mkWritable(reclCascadeTaskRows);
   gsCtx.__reclSS = {
     getSheetByName: function(n){
       if(n === 'Рекламации') return reclWSheet;
+      if(n === 'Задачи') return reclCascadeTaskWSheet;
       if(n === 'Заказы') return ordSheet;
       return null;
     },
-    insertSheet: function(n){ return n === 'Рекламации' ? reclWSheet : ordSheet; }
+    insertSheet: function(n){
+      if(n === 'Рекламации') return reclWSheet;
+      if(n === 'Задачи') return reclCascadeTaskWSheet;
+      return ordSheet;
+    }
   };
 
   ok(att("addRecl_(__reclSS, { num:'77', desc:'' })").ok === false, 'рекламация без описания отклонена');
@@ -978,14 +993,63 @@ function waitReady(dom, tries){
   ok(rd1.ok === true && rl4.recl.length === 1 && rl4.recl[0].desc === 'Отошла столешница', 'рекламация удаляется');
   ok(att("delRecl_(__reclSS, 'нет')").ok === false, 'удаление несуществующей рекламации отклонено');
 
-  // Удаление заказа каскадом уносит его рекламации
+  // Удаление заказа каскадом уносит его рекламации И задачи
   var rcDel = att("addRecl_(__reclSS, { num:'78', desc:'Царапина' })");
+  var tkDel = att("addTask_(__reclSS, { num:'78', text:'Перезвонить по гарантии', deadline:'2026-08-01' })");
   var rlBefore = att("reclList_(__reclSS)");
   var doDel = att("delOrder_(__reclSS, '78')");
   var rlAfter = att("reclList_(__reclSS)");
+  var tlAfterDel = att("taskList_(__reclSS)");
   ok(rcDel.ok === true && rlBefore.recl.length === 2, 'рекламация по заказу 78 заведена');
+  ok(tkDel.ok === true, 'задача по заказу 78 заведена (для проверки каскада)');
   ok(doDel.ok === true && doDel.removedRecl === 1, 'delOrder_ отчитался об удалённой рекламации');
+  ok(doDel.ok === true && doDel.removedTasks === 1, 'delOrder_ отчитался об удалённой задаче');
   ok(rlAfter.recl.length === 1 && rlAfter.recl[0].num === '77', 'рекламации удалённого заказа ушли каскадом, чужие целы');
+  ok(tlAfterDel.tasks.length === 0, 'задачи удалённого заказа ушли каскадом (сирот с несуществующим № не осталось)');
+
+  // ─────────────────────────────────────────────────────────────
+  // v4.11: Задачи (напоминания с дедлайном, привязанные к заказу,
+  // без исполнителя — просто текст+дедлайн)
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.11: Задачи ──');
+  var taskRows = [];
+  var taskWSheet = mkWritable(taskRows);
+  gsCtx.__taskSS = {
+    getSheetByName: function(n){
+      if(n === 'Задачи') return taskWSheet;
+      if(n === 'Заказы') return ordSheet;
+      return null;
+    },
+    insertSheet: function(n){ return n === 'Задачи' ? taskWSheet : ordSheet; }
+  };
+
+  ok(att("addTask_(__taskSS, { num:'77', text:'', deadline:'2026-07-25' })").ok === false, 'задача без текста отклонена');
+  ok(att("addTask_(__taskSS, { num:'77', text:'Позвонить клиенту' })").ok === false, 'задача без дедлайна отклонена');
+  ok(att("addTask_(__taskSS, { num:'999', text:'Позвонить', deadline:'2026-07-25' })").ok === false, 'задача по несуществующему заказу отклонена');
+
+  var t1 = att("addTask_(__taskSS, { num:'77', text:'Позвонить, уточнить замер', deadline:'2026-07-25' })");
+  ok(t1.ok === true && !!t1.id, 'задача добавлена');
+  var tl1 = att("taskList_(__taskSS)");
+  ok(tl1.tasks.length === 1 && tl1.tasks[0].num === '77' && tl1.tasks[0].text === 'Позвонить, уточнить замер' && tl1.tasks[0].done === false, 'задача отдаётся в списке, по умолчанию не выполнена');
+
+  var t2 = att("addTask_(__taskSS, { num:'77', text:'Отправить смету', deadline:'2026-07-28' })");
+  var tl2 = att("taskList_(__taskSS)");
+  ok(t2.ok === true && tl2.tasks.length === 2, 'по одному заказу заводятся две задачи');
+
+  var tt1 = att("toggleTask_(__taskSS, '" + t1.id + "', true)");
+  var tl3 = att("taskList_(__taskSS)");
+  var got1 = tl3.tasks.filter(function(x){ return x.id === t1.id; })[0];
+  ok(tt1.ok === true && got1 && got1.done === true, 'задача отмечается выполненной');
+  var tt2 = att("toggleTask_(__taskSS, '" + t1.id + "', false)");
+  var tl4 = att("taskList_(__taskSS)");
+  var got2 = tl4.tasks.filter(function(x){ return x.id === t1.id; })[0];
+  ok(tt2.ok === true && got2 && got2.done === false, 'снятие отметки выполнения работает (обратимо)');
+  ok(att("toggleTask_(__taskSS, 'нет', true)").ok === false, 'отметка несуществующей задачи отклонена');
+
+  var td1 = att("delTask_(__taskSS, '" + t2.id + "')");
+  var tl5 = att("taskList_(__taskSS)");
+  ok(td1.ok === true && tl5.tasks.length === 1 && tl5.tasks[0].id === t1.id, 'задача удаляется');
+  ok(att("delTask_(__taskSS, 'нет')").ok === false, 'удаление несуществующей задачи отклонено');
 
   // ─────────────────────────────────────────────────────────────
   // v4.6: Себестоимость изменения к договору (поправка маржи)
@@ -1091,6 +1155,29 @@ function waitReady(dom, tries){
   var oo2 = att("orderOne_(__ordSS, '501')");
   ok(oo2.ok === true && oo2.order.snapshot === (bigSnap1 + bigSnap2 + bigSnap3), 'снимок НЕ тронут после updateOrder_ (диапазон 20-22 вне батча)');
 
+  // ── v4.11: Батч-запись saveOrder_ (тем же приёмом, что updateOrder_) ──
+  // В отличие от updateOrder_, saveOrder_ ВСЕГДА пишет снимки — поэтому
+  // у него один диапазон 1-25 (а не два), и повторный saveOrder_ поверх
+  // заказа, уже помеченного updateOrder_ (статус/оплата/бригада), не
+  // должен затереть эти поля.
+  console.log('── v4.11: Батч-запись saveOrder_ ──');
+  var so2 = att("saveOrder_(__ordSS, { num:'501', client:'Тест Снимок', obj:'ул. Тест 1 (пересчёт)', predPrice:110000, totL:110000, totP:0, totK:0, margL:22000, margP:0, margK:0, snap1:'x', snap2:'y', snap3:'z' })");
+  ok(so2.ok === true, 'повторный saveOrder_ (пересчёт) поверх заказа с уже проставленным договором прошёл');
+  var ol501b = att("ordersList_(__ordSS)");
+  var o501b = null; ol501b.orders.forEach(function(x){ if(x.num === '501') o501b = x; });
+  ok(o501b && o501b.status === 'Договор', 'повторный saveOrder_ НЕ затирает статус «Договор» (колонка 2, внутри батч-диапазона, но saveOrder_ её не пишет)');
+  ok(o501b && o501b.paid === 5000, 'повторный saveOrder_ НЕ затирает Оплачено (колонка 12, внутри батч-диапазона, но saveOrder_ её не пишет)');
+  ok(o501b && o501b.masterId === 'e1', 'повторный saveOrder_ НЕ затирает мастера (колонка 30 — вне батч-диапазона 1-25 в принципе)');
+  ok(o501b && o501b.pred === 110000 && typeof o501b.pred === 'number', 'предв. цена обновилась и приезжает ЧИСЛОМ после батч-записи saveOrder_');
+  ok(o501b && o501b.margL === 22000 && typeof o501b.margL === 'number', 'маржа ЛДСП обновилась и приезжает ЧИСЛОМ (колонка 23, конец батч-диапазона)');
+  var oo3 = att("orderOne_(__ordSS, '501')");
+  ok(oo3.ok === true && oo3.order.snapshot === 'xyz', 'снимок обновился повторным saveOrder_ (снимки теперь внутри единого батч-диапазона)');
+
+  var so3 = att("saveOrder_(__ordSS, { num:'777', client:'Первый Клиент', obj:'ул. Новая 1', predPrice:50000, totL:50000 })");
+  ok(so3.ok === true && so3.created === true, 'новый заказ через батч saveOrder_ создаётся (isNew, диапазон инициализирован пусто)');
+  var so4 = att("saveOrder_(__ordSS, { num:'777', client:'Второй Клиент', obj:'ул. Новая 1', predPrice:60000, totL:60000 })");
+  ok(so4.ok === true && so4.created === false && so4.prevClient === 'Первый Клиент', 'saveOrder_ детектит смену клиента (prevClient) из батч-прочитанного диапазона: ' + JSON.stringify(so4));
+
   var ol501 = att("ordersList_(__ordSS)");
   var o501 = null; ol501.orders.forEach(function(x){ if(x.num === '501') o501 = x; });
   ok(o501 && o501.status === 'Договор' && o501.paid === 5000 && o501.masterId === 'e1', 'ordersList отдаёт поля из обоих батч-диапазонов (A: статус/оплата, B: бригада)');
@@ -1100,6 +1187,87 @@ function waitReady(dom, tries){
   var ol999 = att("ordersList_(__ordSS)");
   var o999 = null; ol999.orders.forEach(function(x){ if(x.num === '999') o999 = x; });
   ok(o999 && o999.client === 'Новый Клиент' && o999.status === 'Договор' && o999.margin === 15000, 'новый заказ: поля из обоих диапазонов (A и B) применились корректно');
+
+  // ─────────────────────────────────────────────────────────────
+  // v4.9: Архив заказов — перенос по возрасту (Готова/Отказ, 30 дней
+  // по журналу "Статусы"), незакрытая рекламация блокирует перенос,
+  // список архива, возврат из архива.
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.9: Архив заказов ──');
+  var arOrdRows = [];
+  var arOrdSheet = mkWritable(arOrdRows);
+  var arSlogRows = [];
+  var arSlogSheet = mkWritable(arSlogRows);
+  var arReclRows = [];
+  var arReclSheet = mkWritable(arReclRows);
+  gsCtx.__arSS = {
+    getSheetByName: function(n){
+      if(n === 'Заказы') return arOrdSheet;
+      if(n === 'Статусы') return arSlogSheet;
+      if(n === 'Рекламации') return arReclSheet;
+      return null;
+    },
+    insertSheet: function(n){
+      if(n === 'Статусы') return arSlogSheet;
+      if(n === 'Рекламации') return arReclSheet;
+      return arOrdSheet;
+    }
+  };
+  var arArchRows = [];
+  var arArchSheet = mkWritable(arArchRows);
+  gsCtx.__arArchiveSS = {
+    getSheetByName: function(n){ return n === 'Заказы' ? arArchSheet : null; },
+    insertSheet: function(){ return arArchSheet; }
+  };
+
+  // 601: Готова 40 дней назад, без рекламаций → должен уехать.
+  att("saveOrder_(__arSS, { num:'601', client:'Старый Клиент', obj:'ул. Архивная 1', predPrice:200000, totL:200000 })");
+  att("updateOrder_(__arSS, { num:'601', status:'Готова' })");
+  (function(){ arSlogRows[arSlogRows.length - 1][3] = new Date(Date.now() - 40*24*60*60*1000); })();
+
+  // 602: Готова 40 дней назад, НО есть незакрытая рекламация → НЕ уезжает.
+  att("saveOrder_(__arSS, { num:'602', client:'Рекламационный', obj:'ул. Архивная 2', predPrice:150000, totL:150000 })");
+  att("updateOrder_(__arSS, { num:'602', status:'Готова' })");
+  (function(){ arSlogRows[arSlogRows.length - 1][3] = new Date(Date.now() - 40*24*60*60*1000); })();
+  att("addRecl_(__arSS, { num:'602', desc:'Скрипит петля' })");
+
+  // 603: Готова только 5 дней назад → рано, НЕ уезжает.
+  att("saveOrder_(__arSS, { num:'603', client:'Свежий', obj:'ул. Архивная 3', predPrice:90000, totL:90000 })");
+  att("updateOrder_(__arSS, { num:'603', status:'Готова' })");
+  (function(){ arSlogRows[arSlogRows.length - 1][3] = new Date(Date.now() - 5*24*60*60*1000); })();
+
+  // 604: статус "Сборка" (не терминальный) → не кандидат вообще.
+  att("saveOrder_(__arSS, { num:'604', client:'В работе', obj:'ул. Архивная 4', predPrice:80000, totL:80000 })");
+  att("updateOrder_(__arSS, { num:'604', status:'Сборка' })");
+
+  var arRun = att("archiveEligibleOrders_(__arSS, __arArchiveSS)");
+  ok(arRun.ok === true && arRun.archived.indexOf('601') >= 0, '601 (Готова, 40 дней, без рекламаций) перенесён в архив');
+  ok(arRun.archived.indexOf('602') < 0, '602 (Готова, 40 дней, НО открытая рекламация) остался в рабочем файле');
+  ok(arRun.archived.indexOf('603') < 0, '603 (Готова, всего 5 дней) остался — рано');
+  ok(arRun.archived.indexOf('604') < 0, '604 (статус «Сборка», не терминальный) не кандидат');
+  ok(arRun.count === 1, 'ровно один заказ перенесён за этот прогон');
+
+  var arWorkList = att("ordersList_(__arSS)");
+  ok(!arWorkList.orders.some(function(x){ return x.num === '601'; }), '601 пропал из рабочего ordersList_');
+  ok(arWorkList.orders.some(function(x){ return x.num === '602'; }), '602 остался в рабочем ordersList_');
+
+  var arArchList = att("archiveOrdersList_(__arArchiveSS)");
+  var arch601 = null; arArchList.orders.forEach(function(x){ if(x.num === '601') arch601 = x; });
+  ok(!!arch601 && arch601.client === 'Старый Клиент' && arch601.status === 'Готова', 'архивный список отдаёт перенесённый заказ с теми же полями');
+
+  var arRun2 = att("archiveEligibleOrders_(__arSS, __arArchiveSS)");
+  ok(arRun2.ok === true && arRun2.count === 0, 'повторный прогон архивации идемпотентен (601 уже уехал, новых кандидатов нет)');
+
+  var arRestoreBad = att("restoreFromArchive_(__arSS, __arArchiveSS, '999-нет')");
+  ok(arRestoreBad.ok === false, 'возврат несуществующего в архиве номера отклонён');
+  var arRestore = att("restoreFromArchive_(__arSS, __arArchiveSS, '601')");
+  ok(arRestore.ok === true, '601 возвращён из архива');
+  var arWorkList2 = att("ordersList_(__arSS)");
+  ok(arWorkList2.orders.some(function(x){ return x.num === '601'; }), '601 снова виден в рабочем ordersList_ после возврата');
+  var arArchList2 = att("archiveOrdersList_(__arArchiveSS)");
+  ok(!arArchList2.orders.some(function(x){ return x.num === '601'; }), '601 пропал из архивного списка после возврата');
+  var arRestoreDup = att("restoreFromArchive_(__arSS, __arArchiveSS, '601')");
+  ok(arRestoreDup.ok === false, 'повторный возврат того же номера отклонён (его уже нет в архиве)');
 
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');
