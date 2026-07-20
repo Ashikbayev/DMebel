@@ -23,6 +23,17 @@ const archivedOrder = {
   totL: 300000, totP: 0, totK: 0, material: 'L',
   masterId: '', helperId: '', helperPay: 0, updated: '2026-05-10'
 };
+// v4.10: второй архивный заказ — на нём мок POST специально валит
+// restoreFromArchive, чтобы проверить откат оптимистичного UI (строка
+// разворачивается назад, заказ остаётся в архиве).
+const archivedOrder2 = {
+  num: '088', client: 'Тестовый Провал', phone: '+77019998877',
+  city: 'Сатпаев', furn: 'кухня', obj: 'ул. Тестовая 1',
+  note: '', status: 'Отказ', pred: 200000, sogl: 200000,
+  avans: 0, paid: 0, mountDate: '', dogDate: '2026-03-01',
+  totL: 200000, totP: 0, totK: 0, material: 'L',
+  masterId: '', helperId: '', helperPay: 0, updated: '2026-04-01'
+};
 
 const vc = new VirtualConsole();
 let pageErrors = [];
@@ -42,12 +53,17 @@ w.CRM_GS_URL = 'https://fake/gs';
 let lastPost = null;
 w.fetch = function(url, opts){
   if(opts && opts.method === 'POST'){
-    try { lastPost = JSON.parse(opts.body); } catch(e){ lastPost = null; }
+    let body = null;
+    try { body = JSON.parse(opts.body); } catch(e){ body = null; }
+    lastPost = body;
+    if (body && body.action === 'restoreFromArchive' && String(body.num) === '088') {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: false, error: 'сеть недоступна' }) });
+    }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
   }
   const u = String(url);
   if(u.indexOf('action=archiveOrders') >= 0){
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, orders: [archivedOrder] }) });
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, orders: [archivedOrder, archivedOrder2] }) });
   }
   return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, orders: [order] }) });
 };
@@ -98,20 +114,40 @@ setTimeout(() => {
     const bArchive = navBtns.find(b => b.textContent.trim() === 'Архив');
     ok(!!bArchive, 'кнопка «Архив» есть в навигации');
     if (bArchive) bArchive.click();
+    // v4.10: skeleton-заглушки должны быть в DOM СРАЗУ после клика — синхронно,
+    // до того как замоканный fetchArchive успеет резолвнуться (иначе это уже
+    // не skeleton, а случайно совпавшая по классу разметка).
+    ok(doc.querySelectorAll('.crm-sk').length > 0, 'skeleton-заглушки отрисовались сразу при открытии архива');
     setTimeout(() => {
-      const row = doc.querySelector('.crm-arch-row');
+      const rows = () => Array.from(doc.querySelectorAll('.crm-arch-row'));
+      const row = rows().find(r => r.textContent.indexOf('Архивный Клиент') >= 0);
       ok(!!row, 'строка архивного заказа отрисовалась');
       ok(!!row && row.textContent.indexOf('Архивный Клиент') >= 0, 'в строке архива виден клиент: ' + (row && row.textContent));
       const bRet = row && Array.from(row.querySelectorAll('button')).find(b => b.textContent.indexOf('Вернуть') >= 0);
       ok(!!bRet, 'кнопка «Вернуть» есть в строке');
       if (bRet) bRet.click();
+      // Optimistic: строка должна свернуться СРАЗУ по клику, не дожидаясь ответа сервера.
+      ok(!!row && row.classList.contains('crm-arch-leaving'), 'строка №099 сворачивается оптимистично сразу по клику');
       setTimeout(() => {
         ok(!!lastPost && lastPost.action === 'restoreFromArchive' && String(lastPost.num) === '099', 'клик «Вернуть» шлёт restoreFromArchive для №099: ' + JSON.stringify(lastPost));
 
-        ok(pageErrors.length === 0, 'ошибок страницы нет (' + pageErrors.length + ')');
-        pageErrors.slice(0,5).forEach(e => console.log('   ' + e));
-        console.log(fails ? 'SMOKE FAIL' : 'SMOKE OK');
-        process.exit(fails ? 1 : 0);
+        // v4.10: откат — заказ №088, у которого мок специально валит restoreFromArchive.
+        const row2 = rows().find(r => r.textContent.indexOf('Тестовый Провал') >= 0);
+        ok(!!row2, 'строка заказа №088 (для проверки отката) отрисовалась');
+        const bRet2 = row2 && Array.from(row2.querySelectorAll('button')).find(b => b.textContent.indexOf('Вернуть') >= 0);
+        ok(!!bRet2, 'кнопка «Вернуть» есть у строки №088');
+        if (bRet2) bRet2.click();
+        ok(!!row2 && row2.classList.contains('crm-arch-leaving'), 'строка №088 тоже сворачивается оптимистично сразу по клику');
+        setTimeout(() => {
+          ok(!!lastPost && lastPost.action === 'restoreFromArchive' && String(lastPost.num) === '088', 'клик «Вернуть» шлёт restoreFromArchive для №088: ' + JSON.stringify(lastPost));
+          ok(!!row2 && !row2.classList.contains('crm-arch-leaving'), 'после ошибки сервера строка №088 откатилась назад (разворачивается)');
+          ok(!!row2 && !!row2.parentNode, 'строка №088 осталась в DOM (не удалена, вернулась в архив)');
+
+          ok(pageErrors.length === 0, 'ошибок страницы нет (' + pageErrors.length + ')');
+          pageErrors.slice(0,5).forEach(e => console.log('   ' + e));
+          console.log(fails ? 'SMOKE FAIL' : 'SMOKE OK');
+          process.exit(fails ? 1 : 0);
+        }, 200);
       }, 200);
     }, 300);
   }, 300);

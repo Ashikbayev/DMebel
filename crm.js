@@ -580,7 +580,8 @@
       '.crm-row .sub{font-size:11px;color:#888}'+
       '.crm-row .money{font-size:12px;font-weight:600;color:#222;margin-left:auto}'+
       '.crm-arch-cnt{font-size:11px;color:#999;margin-bottom:6px}'+
-      '.crm-arch-row{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #eee;border-radius:8px;padding:8px 10px;margin-bottom:6px}'+
+      '.crm-arch-row{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #eee;border-radius:8px;padding:8px 10px;margin-bottom:6px;max-height:90px;overflow:hidden;transition:max-height .3s ease,opacity .3s ease,padding .3s ease,margin .3s ease,border-width .3s ease}'+
+      '.crm-arch-row.crm-arch-leaving{max-height:0;opacity:0;padding-top:0;padding-bottom:0;margin-bottom:0;border-width:0}'+
       '.crm-arch-strip{width:4px;align-self:stretch;border-radius:2px;flex-shrink:0}'+
       '.crm-arch-av{width:28px;height:28px;border-radius:50%;background:#1a5252;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}'+
       '.crm-arch-mid{flex:1;min-width:0}'+
@@ -589,6 +590,8 @@
       '.crm-arch-right{text-align:right;flex-shrink:0}'+
       '.crm-arch-sum{font-size:13px;font-weight:700;color:#222}'+
       '.crm-arch-upd{font-size:10px;color:#999}'+
+      '.crm-sk{background:#eee;border-radius:4px;animation:crmPulse 1.3s ease-in-out infinite}'+
+      '@keyframes crmPulse{0%{opacity:.45}50%{opacity:.9}100%{opacity:.45}}'+
       '.crm-empty{font-size:12px;color:#999;padding:20px;text-align:center}'+
       '.crm-modal-bg{position:fixed;inset:0;background:rgba(20,20,20,.5);z-index:9999;display:flex;align-items:center;justify-content:center}'+
       '.crm-modal{background:#fff;border-radius:12px;max-width:480px;width:94%;max-height:88vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}'+
@@ -1673,8 +1676,22 @@
     wrap.appendChild(listBox);
     view.appendChild(wrap);
 
-    var ld = document.createElement('div'); ld.className = 'crm-empty'; ld.textContent = 'Загружаю архив...';
-    listBox.appendChild(ld);
+    function skRow(w){
+      var r = document.createElement('div');
+      r.className = 'crm-arch-row';
+      var strip = document.createElement('div'); strip.className = 'crm-sk'; strip.style.cssText = 'width:4px;align-self:stretch;border-radius:2px;flex-shrink:0';
+      var av = document.createElement('div'); av.className = 'crm-sk'; av.style.cssText = 'width:28px;height:28px;border-radius:50%;flex-shrink:0';
+      var mid = document.createElement('div'); mid.style.cssText = 'flex:1;display:flex;flex-direction:column;gap:6px';
+      var t = document.createElement('div'); t.className = 'crm-sk'; t.style.cssText = 'height:12px;width:' + w + '%';
+      var sub = document.createElement('div'); sub.className = 'crm-sk'; sub.style.cssText = 'height:10px;width:' + Math.round(w * 0.6) + '%';
+      mid.appendChild(t); mid.appendChild(sub);
+      var btn = document.createElement('div'); btn.className = 'crm-sk'; btn.style.cssText = 'height:26px;width:64px;flex-shrink:0';
+      r.appendChild(strip); r.appendChild(av); r.appendChild(mid); r.appendChild(btn);
+      return r;
+    }
+    var skWrap = document.createElement('div');
+    [65, 50, 58].forEach(function(w){ skWrap.appendChild(skRow(w)); });
+    listBox.appendChild(skWrap);
 
     function archiveRow(o){
       var r = document.createElement('div');
@@ -1706,16 +1723,22 @@
       bRet.addEventListener('click', function(e){
         e.stopPropagation();
         if(!confirm('Вернуть заказ \u2116' + o.num + ' из архива в рабочий список?')) return;
-        bRet.disabled = true; bRet.textContent = '...';
+        // Optimistic: строка сворачивается и заказ переезжает в ORDERS сразу,
+        // запрос уходит в фоне. Ошибка — откат (строка разворачивается назад,
+        // заказ возвращается в ARCHIVE). paintArchiveList() тут не нужен —
+        // ARCHIVE уже не содержит заказ, а сама строка убирается transition'ом.
+        r.classList.add('crm-arch-leaving');
+        ARCHIVE = ARCHIVE.filter(function(x){ return String(x.num) !== String(o.num); });
+        ORDERS.push(o);
+        toast('OK \u2116' + o.num + ' возвращён из архива', '#1a5252');
         post({ action:'restoreFromArchive', num: String(o.num) }, function(){
-          ARCHIVE = ARCHIVE.filter(function(x){ return String(x.num) !== String(o.num); });
-          ORDERS.push(o);
-          paintArchiveList();
-          toast('OK \u2116' + o.num + ' возвращён из архива', '#1a5252');
+          setTimeout(function(){ if(r.parentNode) r.remove(); }, 320);
         }, function(err){
-          bRet.disabled = false; bRet.textContent = '\u21a9 Вернуть';
-          if(err === '__no_key__'){ toast('\u26A0\uFE0F Введи ключ доступа', '#BA7517'); return; }
-          toast('\u26A0\uFE0F Не вернулся: ' + err, '#BA7517');
+          ORDERS = ORDERS.filter(function(x){ return String(x.num) !== String(o.num); });
+          ARCHIVE.push(o);
+          r.classList.remove('crm-arch-leaving');
+          if(err === '__no_key__'){ toast('\u26A0\uFE0F Введи ключ доступа \u2014 заказ остался в архиве', '#BA7517'); return; }
+          toast('\u26A0\uFE0F Не вернулся: ' + err + ' \u2014 заказ снова в архиве', '#BA7517');
         });
       });
       r.appendChild(strip); r.appendChild(av); r.appendChild(mid); r.appendChild(right); r.appendChild(bRet);
@@ -1744,8 +1767,19 @@
     }
 
     fetchArchive(function(err){
-      if(err === '__no_key__'){ ld.textContent = 'Введи ключ доступа во вкладке заказов.'; return; }
-      if(err){ ld.textContent = 'Архив не загрузился: ' + err; return; }
+      if(err === '__no_key__'){
+        skWrap.innerHTML = '';
+        var e0 = document.createElement('div'); e0.className = 'crm-empty'; e0.textContent = 'Введи ключ доступа во вкладке заказов.';
+        skWrap.appendChild(e0);
+        return;
+      }
+      if(err){
+        skWrap.innerHTML = '';
+        var e1 = document.createElement('div'); e1.className = 'crm-empty'; e1.textContent = 'Архив не загрузился: ' + err;
+        skWrap.appendChild(e1);
+        return;
+      }
+      skWrap.remove();
       paintArchiveList();
     });
   }
