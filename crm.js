@@ -579,6 +579,16 @@
       '.crm-row .cli{font-size:12px;color:#333;flex:1;min-width:120px}'+
       '.crm-row .sub{font-size:11px;color:#888}'+
       '.crm-row .money{font-size:12px;font-weight:600;color:#222;margin-left:auto}'+
+      '.crm-arch-cnt{font-size:11px;color:#999;margin-bottom:6px}'+
+      '.crm-arch-row{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #eee;border-radius:8px;padding:8px 10px;margin-bottom:6px}'+
+      '.crm-arch-strip{width:4px;align-self:stretch;border-radius:2px;flex-shrink:0}'+
+      '.crm-arch-av{width:28px;height:28px;border-radius:50%;background:#1a5252;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}'+
+      '.crm-arch-mid{flex:1;min-width:0}'+
+      '.crm-arch-t{font-size:12px;font-weight:600;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+      '.crm-arch-sub{font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+      '.crm-arch-right{text-align:right;flex-shrink:0}'+
+      '.crm-arch-sum{font-size:13px;font-weight:700;color:#222}'+
+      '.crm-arch-upd{font-size:10px;color:#999}'+
       '.crm-empty{font-size:12px;color:#999;padding:20px;text-align:center}'+
       '.crm-modal-bg{position:fixed;inset:0;background:rgba(20,20,20,.5);z-index:9999;display:flex;align-items:center;justify-content:center}'+
       '.crm-modal{background:#fff;border-radius:12px;max-width:480px;width:94%;max-height:88vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}'+
@@ -878,8 +888,13 @@
     bCal.textContent = '\uD83D\uDCC5';
     bCal.title = 'Календарь установок';
     bCal.addEventListener('click', function(){ VIEW='cal'; localStorage.setItem('moff_crm_view','cal'); renderAll(); });
-    tools.appendChild(bBoard); tools.appendChild(bList); tools.appendChild(bCal); tools.appendChild(bFin); tools.appendChild(bStock);
-    if(VIEW !== 'fin' && VIEW !== 'stock' && VIEW !== 'cal'){
+    var bArchive = document.createElement('button');
+    bArchive.className = 'crm-vbtn' + (VIEW==='archive' ? ' on' : '');
+    bArchive.textContent = 'Архив';
+    bArchive.title = 'Заказы Готова/Отказ старше 30 дней — отдельный файл';
+    bArchive.addEventListener('click', function(){ VIEW='archive'; localStorage.setItem('moff_crm_view','archive'); renderAll(); });
+    tools.appendChild(bBoard); tools.appendChild(bList); tools.appendChild(bCal); tools.appendChild(bFin); tools.appendChild(bStock); tools.appendChild(bArchive);
+    if(VIEW !== 'fin' && VIEW !== 'stock' && VIEW !== 'cal' && VIEW !== 'archive'){
     var search = document.createElement('input');
     search.type = 'search'; search.placeholder = 'Поиск: №, клиент, телефон, город...';
     search.value = SEARCH; search.style.flex = '1'; search.style.minWidth = '140px';
@@ -962,6 +977,7 @@
     });
     var cnt = document.getElementById('crm-count');
     if(VIEW === 'stock'){ if(cnt) cnt.textContent = ''; renderStock(view); return; }
+    if(VIEW === 'archive'){ if(cnt) cnt.textContent = ''; renderArchive(view); return; }
     if(VIEW === 'fin'){
       if(cnt) cnt.textContent = '';
       renderFin(view);
@@ -1250,6 +1266,9 @@
   var EMP_LOADED = false;
   var STOCK = [];
   var STOCK_LOADED = false;
+  var ARCHIVE = [];
+  var ARCHIVE_LOADED = false;
+  var ARCHIVE_SEARCH = '';
   var AGG_MANUAL = []; // сводная закупка: позиции, добавленные вручную (только в модалке, не сохраняются)
   var STOCK_MOVES = [];
   var STOCK_MOVES_LOADED = false;
@@ -1480,6 +1499,19 @@
       .catch(function(e){ cb(String(e && e.message || e)); });
   }
 
+  // Архив заказов (v4.9): отдельный файл таблицы, лениво грузится
+  // только при заходе на вкладку "Архив" — вкладка "Заказы" его не трогает.
+  function fetchArchive(cb){
+    if(!getToken()){ cb('__no_key__'); return; }
+    fetch(GS_URL + '?action=archiveOrders&token=' + encodeURIComponent(getToken()))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(res && res.ok){ ARCHIVE = res.orders || []; ARCHIVE_LOADED = true; cb(null); }
+        else cb((res && res.error) || 'таблица вернула ошибку');
+      })
+      .catch(function(e){ cb(String(e && e.message || e)); });
+  }
+
   // ── Склад v3.6: остатки + приход/выдача ──────────────────
   function fetchStock(cb){
     if(!getToken()){ cb('__no_key__'); return; }
@@ -1615,6 +1647,106 @@
         ld.style.display = 'none';
         buildBalance(view);
       });
+    });
+  }
+
+  // Архив заказов (v4.9): плоский список (не доска — тащить статусы
+  // архивным заказам незачем), грузится лениво при заходе на вкладку.
+  // Клик по строке ничего не открывает — карточку архивных заказов не
+  // редактируют, всё действие — кнопка "Вернуть".
+  function archiveMatches(o){
+    if(!ARCHIVE_SEARCH) return true;
+    var s = ARCHIVE_SEARCH.toLowerCase();
+    return String(o.num).toLowerCase().indexOf(s)>=0 ||
+      String(o.client||'').toLowerCase().indexOf(s)>=0 ||
+      String(o.phone||'').toLowerCase().indexOf(s)>=0 ||
+      String(o.city||'').toLowerCase().indexOf(s)>=0;
+  }
+  function renderArchive(view){
+    var wrap = document.createElement('div');
+    var search = document.createElement('input');
+    search.type = 'search'; search.placeholder = 'Поиск: №, клиент, телефон, город...';
+    search.value = ARCHIVE_SEARCH; search.style.width = '100%'; search.style.marginBottom = '10px';
+    search.addEventListener('input', function(){ ARCHIVE_SEARCH = search.value.trim(); paintArchiveList(); });
+    wrap.appendChild(search);
+    var listBox = document.createElement('div');
+    wrap.appendChild(listBox);
+    view.appendChild(wrap);
+
+    var ld = document.createElement('div'); ld.className = 'crm-empty'; ld.textContent = 'Загружаю архив...';
+    listBox.appendChild(ld);
+
+    function archiveRow(o){
+      var r = document.createElement('div');
+      r.className = 'crm-arch-row';
+      var strip = document.createElement('div');
+      strip.className = 'crm-arch-strip';
+      strip.style.background = ST_COLOR[o.status] || '#888780';
+      var av = document.createElement('div');
+      av.className = 'crm-arch-av';
+      av.textContent = initialsOf(o.client);
+      var mid = document.createElement('div');
+      mid.className = 'crm-arch-mid';
+      var t = document.createElement('div'); t.className = 'crm-arch-t';
+      t.textContent = '\u2116' + o.num + ' \u00b7 ' + (o.client || '\u2014');
+      var sub = document.createElement('div'); sub.className = 'crm-arch-sub';
+      sub.textContent = [o.city, o.furn, o.status].filter(Boolean).join(' \u00b7 ');
+      mid.appendChild(t); mid.appendChild(sub);
+      var right = document.createElement('div');
+      right.className = 'crm-arch-right';
+      var sum = document.createElement('div'); sum.className = 'crm-arch-sum';
+      sum.textContent = fm0(o.sogl || o.pred);
+      var upd = document.createElement('div'); upd.className = 'crm-arch-upd';
+      upd.textContent = o.updated ? 'обновлён ' + fmtDate(o.updated) : '';
+      right.appendChild(sum); right.appendChild(upd);
+      var bRet = document.createElement('button');
+      bRet.className = 'crm-vbtn';
+      bRet.textContent = '\u21a9 Вернуть';
+      bRet.title = 'Вернуть заказ из архива в рабочий список';
+      bRet.addEventListener('click', function(e){
+        e.stopPropagation();
+        if(!confirm('Вернуть заказ \u2116' + o.num + ' из архива в рабочий список?')) return;
+        bRet.disabled = true; bRet.textContent = '...';
+        post({ action:'restoreFromArchive', num: String(o.num) }, function(){
+          ARCHIVE = ARCHIVE.filter(function(x){ return String(x.num) !== String(o.num); });
+          ORDERS.push(o);
+          paintArchiveList();
+          toast('OK \u2116' + o.num + ' возвращён из архива', '#1a5252');
+        }, function(err){
+          bRet.disabled = false; bRet.textContent = '\u21a9 Вернуть';
+          if(err === '__no_key__'){ toast('\u26A0\uFE0F Введи ключ доступа', '#BA7517'); return; }
+          toast('\u26A0\uFE0F Не вернулся: ' + err, '#BA7517');
+        });
+      });
+      r.appendChild(strip); r.appendChild(av); r.appendChild(mid); r.appendChild(right); r.appendChild(bRet);
+      return r;
+    }
+
+    function paintArchiveList(){
+      listBox.innerHTML = '';
+      var vis = ARCHIVE.filter(archiveMatches);
+      if(!ARCHIVE.length){
+        var e0 = document.createElement('div'); e0.className = 'crm-empty';
+        e0.textContent = 'Архив пуст. Заказы Готова/Отказ уезжают сюда автоматически через 30 дней (без незакрытых рекламаций).';
+        listBox.appendChild(e0);
+        return;
+      }
+      if(!vis.length){
+        var e1 = document.createElement('div'); e1.className = 'crm-empty';
+        e1.textContent = 'Ничего не найдено по запросу.';
+        listBox.appendChild(e1);
+        return;
+      }
+      var cntEl = document.createElement('div'); cntEl.className = 'crm-arch-cnt';
+      cntEl.textContent = vis.length + ' из ' + ARCHIVE.length;
+      listBox.appendChild(cntEl);
+      vis.forEach(function(o){ listBox.appendChild(archiveRow(o)); });
+    }
+
+    fetchArchive(function(err){
+      if(err === '__no_key__'){ ld.textContent = 'Введи ключ доступа во вкладке заказов.'; return; }
+      if(err){ ld.textContent = 'Архив не загрузился: ' + err; return; }
+      paintArchiveList();
     });
   }
 
@@ -3224,7 +3356,7 @@
   function renderBoard(view, vis){
     var tabs = document.createElement('div');
     tabs.className = 'crm-board-tabs';
-    [['sale','Продажа'],['prod','Производство'],['archive','Архив'],['rec','Рекламации']].forEach(function(t){
+    [['sale','Продажа'],['prod','Производство'],['archive','Отказ/Отложено'],['rec','Рекламации']].forEach(function(t){
       var b = document.createElement('button');
       b.className = 'crm-board-tab' + (BOARD_TAB===t[0] ? ' on' : '');
       b.textContent = t[1];
