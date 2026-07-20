@@ -48,13 +48,17 @@ var ORDERS_HEADER = ['№','Статус','Город','Клиент','Теле�
   'Предв. цена','Согл. цена','Аванс','Оплачено','Долг','Дата договора','Дата установки',
   'Итог ЛДСП','Итог Плёнка','Итог Краска','Обновлён','Снимок1','Снимок2','Снимок3',
   'Маржа ЛДСП','Маржа Плёнка','Маржа Краска','Маржа договора','Заработок мастера','Заработок дизайнера','Ключ клиента',
-  'Мастер','Помощник','Помощнику ₸','Материал'];
+  'Мастер','Помощник','Помощнику ₸','Материал','Источник'];
 // Индексы (1-based)
 var COL = { num:1, status:2, city:3, client:4, phone:5, obj:6, furn:7, note:8,
   pred:9, sogl:10, avans:11, paid:12, debt:13, dogDate:14, mountDate:15,
   totL:16, totP:17, totK:18, updated:19, snap1:20, snap2:21, snap3:22,
   margL:23, margP:24, margK:25, margin:26, earnMaster:27, earnDesigner:28, clientKey:29,
-  masterId:30, helperId:31, helperPay:32, material:33 };
+  masterId:30, helperId:31, helperPay:32, material:33, source:34 };
+// v4.11: Источник лида — фиксированный набор (реклама/сарафан/партнёр),
+// без суб-полей (какой именно партнёр и т.п.) — Дали сознательно сузил
+// до «просто знать, откуда идёт поток», без будущей комиссии.
+var LEAD_SOURCES = ['Реклама', 'Сарафан', 'Партнёр'];
 
 // ── Лист "Финансы": каждый приход/расход отдельной строкой ──
 var FIN_SHEET = 'Финансы';
@@ -395,6 +399,10 @@ function createOrder_(ss, o) {
   if (o.furn)   sh.getRange(row, COL.furn).setValue(o.furn);
   if (o.obj)    sh.getRange(row, COL.obj).setValue(o.obj);
   if (o.note)   sh.getRange(row, COL.note).setValue(o.note);
+  if (o.source) {
+    var srcV0 = String(o.source || '');
+    if (LEAD_SOURCES.indexOf(srcV0) >= 0) sh.getRange(row, COL.source).setValue(srcV0);
+  }
   sh.getRange(row, COL.updated).setValue(new Date());
   logStatus_(ss, num, o.status || 'Замер');
   return { ok: true, num: num };
@@ -1005,6 +1013,13 @@ function updateOrder_(ss, o) {
     var mv = String(o.material || '');
     if (mv === 'L' || mv === 'P' || mv === 'K' || mv === '') b[COL.material - START_B] = mv;
   }
+  // Источник лида — редактируется свободно в любой момент (в отличие от
+  // material выше, которое договор блокирует): это просто метка канала,
+  // а не расчётное поле.
+  if (o.source !== undefined) {
+    var srcV = String(o.source || '');
+    if (srcV === '' || LEAD_SOURCES.indexOf(srcV) >= 0) b[COL.source - START_B] = srcV;
+  }
   var soglV = Number(a[COL.sogl - 1]) || 0;
   var avV   = Number(a[COL.avans - 1]) || 0;
   var paidV = Number(a[COL.paid - 1]) || 0;
@@ -1029,9 +1044,9 @@ function updateOrder_(ss, o) {
 function ordersList_(ss) {
   var sh = ss.getSheetByName(ORDERS_SHEET);
   if (!sh || sh.getLastRow() < 2) return { ok: true, orders: [] };
-  // Читаем до material (33): clientKey(29) в диапазон попадает, но в вывод
+  // Читаем до source (34): clientKey(29) в диапазон попадает, но в вывод
   // НЕ идёт — он секретный (личные ссылки клиентов).
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, COL.material).getValues();
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, COL.source).getValues();
   var orders = vals.filter(function(r){ return r[COL.num - 1] !== ''; }).map(function(r){
     return {
       num: String(r[COL.num - 1]), status: r[COL.status - 1], city: r[COL.city - 1],
@@ -1047,6 +1062,7 @@ function ordersList_(ss) {
       masterId: String(r[COL.masterId - 1] || ''), helperId: String(r[COL.helperId - 1] || ''),
       helperPay: Number(r[COL.helperPay - 1]) || 0,
       material: String(r[COL.material - 1] || ''),
+      source: String(r[COL.source - 1] || ''),
       updated: r[COL.updated - 1]
     };
   });

@@ -296,6 +296,8 @@
     prod: ['Контрольный замер','Закупка','Сборка','Установка','Доделки','Готова'],
     archive: ['Отказ','Отложено']
   };
+  // v4.11: Источник лида — просто метка канала, без суб-полей.
+  var LEAD_SOURCES = ['Реклама', 'Сарафан', 'Партнёр'];
   var ORDERS = [];
   var LOADED = false;
   var VIEW = localStorage.getItem('moff_crm_view') || 'board';
@@ -4225,6 +4227,11 @@
     var r2 = document.createElement('div'); r2.className='crm-2col';
     r2.appendChild(field('Город', iCity)); r2.appendChild(field('Тип мебели', iFurn));
     b.appendChild(r2);
+    var selSource = document.createElement('select');
+    var srcOpt0 = document.createElement('option'); srcOpt0.value = ''; srcOpt0.textContent = '\u2014 не указан \u2014';
+    selSource.appendChild(srcOpt0);
+    LEAD_SOURCES.forEach(function(src){ var op = document.createElement('option'); op.value = src; op.textContent = src; selSource.appendChild(op); });
+    b.appendChild(field('Источник', selSource));
     b.appendChild(field('Адрес / объект', iObj));
     b.appendChild(field('Примечание', iNote));
 
@@ -4243,7 +4250,8 @@
         city: iCity.value.trim(),
         furn: iFurn.value.trim(),
         obj: iObj.value.trim(),
-        note: iNote.value.trim()
+        note: iNote.value.trim(),
+        source: selSource.value
       };
       var numVal = iNum.value.trim();
       if(numVal) order.num = numVal;
@@ -4255,7 +4263,7 @@
         }
         ORDERS.unshift({
           num: res.num, status: order.status, client: order.client, phone: order.phone,
-          city: order.city, furn: order.furn, obj: order.obj, note: order.note,
+          city: order.city, furn: order.furn, obj: order.obj, note: order.note, source: order.source,
           pred: 0, sogl: 0, avans: 0, paid: 0, totL: 0, totP: 0, totK: 0,
           dogDate: '', mountDate: '', updated: new Date().toISOString()
         });
@@ -4304,6 +4312,11 @@
     if(STATUSES.indexOf(o.status)>=0) selSt.value=o.status;
     var iClient = inp(o.client), iPhone = inp(o.phone), iCity = inp(o.city);
     var iFurn = inp(o.furn), iObj = inp(o.obj);
+    var iSource = document.createElement('select');
+    var srcOpt0c = document.createElement('option'); srcOpt0c.value = ''; srcOpt0c.textContent = '\u2014 не указан \u2014';
+    iSource.appendChild(srcOpt0c);
+    LEAD_SOURCES.forEach(function(src){ var op = document.createElement('option'); op.value = src; op.textContent = src; iSource.appendChild(op); });
+    iSource.value = o.source || '';
     var iNote = document.createElement('textarea'); iNote.rows=2; iNote.value=o.note||'';
     var iMount = inp(o.mountDate ? String(new Date(o.mountDate).getFullYear())+'-'+('0'+(new Date(o.mountDate).getMonth()+1)).slice(-2)+'-'+('0'+new Date(o.mountDate).getDate()).slice(-2) : '', 'date');
     var payWrap = document.createElement('div');
@@ -4410,7 +4423,9 @@
     secObj.appendChild(r2);
     secObj.appendChild(field('Адрес / объект', iObj));
     secObj.appendChild(field('Примечание', iNote));
-    secObj.appendChild(field('Дата установки', iMount));
+    var r3 = document.createElement('div'); r3.className='crm-2col';
+    r3.appendChild(field('Дата установки', iMount)); r3.appendChild(field('Источник', iSource));
+    secObj.appendChild(r3);
     b.appendChild(secObj);
 
     // ── v4.11: Задачи по этой сделке — компактный блок, отмеченные
@@ -5203,7 +5218,8 @@
         city: iCity.value.trim(),
         furn: iFurn.value.trim(),
         note: iNote.value.trim(),
-        mountDate: iMount.value
+        mountDate: iMount.value,
+        source: iSource.value
       };
       // Бригада: шлём только если селекты построены (сотрудники загрузились
       // и есть хоть один мастер). Пустая строка мастера/помощника = снять.
@@ -5214,7 +5230,7 @@
       }
       post({ action:'updateOrder', order: upd }, function(){
         o.status=upd.status; o.client=upd.client; o.obj=upd.obj; o.phone=upd.phone;
-        o.city=upd.city; o.furn=upd.furn; o.note=upd.note; o.mountDate=upd.mountDate;
+        o.city=upd.city; o.furn=upd.furn; o.note=upd.note; o.mountDate=upd.mountDate; o.source=upd.source;
         if(upd.masterId !== undefined){ o.masterId=upd.masterId; o.helperId=upd.helperId; o.helperPay=upd.helperPay; }
         document.body.removeChild(bg);
         renderAll();

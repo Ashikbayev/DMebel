@@ -926,6 +926,40 @@ function waitReady(dom, tries){
   var o77m4 = null; oml4.orders.forEach(function(x){ if(x.num === '77') o77m4 = x; });
   ok(um3.ok === true && o77m4.material === '', 'fromDogovor НЕ трогает материал (фиксация только через карточку до договора)');
 
+  // ─────────────────────────────────────────────────────────────
+  // v4.11: Источник лида (реклама/сарафан/партнёр) — просто метка
+  // канала, без комиссий и без блокировки договором (в отличие от
+  // material выше).
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.11: Источник лида ──');
+  var us1 = att("updateOrder_(__ordSS, { num:'77', source:'Сарафан' })");
+  ok(us1.ok === true, 'источник «Сарафан» записан в заказ');
+  var osl1 = att("ordersList_(__ordSS)");
+  var o77s1 = null; osl1.orders.forEach(function(x){ if(x.num === '77') o77s1 = x; });
+  ok(o77s1 && o77s1.source === 'Сарафан', 'ordersList отдаёт source');
+  var us2 = att("updateOrder_(__ordSS, { num:'77', source:'Инопланетяне' })");
+  var osl2 = att("ordersList_(__ordSS)");
+  var o77s2 = null; osl2.orders.forEach(function(x){ if(x.num === '77') o77s2 = x; });
+  ok(us2.ok === true && o77s2.source === 'Сарафан', 'неизвестный источник не перезаписывает поле (белый список)');
+  att("updateOrder_(__ordSS, { num:'77', source:'' })");
+  var osl3 = att("ordersList_(__ordSS)");
+  var o77s3 = null; osl3.orders.forEach(function(x){ if(x.num === '77') o77s3 = x; });
+  ok(o77s3.source === '', 'источник можно снять (пустая строка)');
+  var us3 = att("updateOrder_(__ordSS, { num:'77', status:'Договор', source:'Партнёр' })");
+  var osl4 = att("ordersList_(__ordSS)");
+  var o77s4 = null; osl4.orders.forEach(function(x){ if(x.num === '77') o77s4 = x; });
+  ok(us3.ok === true && o77s4.source === 'Партнёр' && o77s4.status === 'Договор', 'источник редактируется свободно даже после договора (в отличие от материала)');
+
+  var co1 = att("createOrder_(__ordSS, { client:'Новый С Рекламы', phone:'+77010001122', source:'Реклама' })");
+  ok(co1.ok === true, 'новый заказ с источником создан');
+  var osl5 = att("ordersList_(__ordSS)");
+  var oNew = null; osl5.orders.forEach(function(x){ if(x.num === co1.num) oNew = x; });
+  ok(oNew && oNew.source === 'Реклама', 'источник, заданный при создании, отдаётся в списке');
+  var co2 = att("createOrder_(__ordSS, { client:'Без Источника', phone:'+77010001133' })");
+  var osl6 = att("ordersList_(__ordSS)");
+  var oNew2 = null; osl6.orders.forEach(function(x){ if(x.num === co2.num) oNew2 = x; });
+  ok(co2.ok === true && oNew2 && oNew2.source === '', 'источник необязателен при создании (пустая строка по умолчанию)');
+
   var dtRows = [];
   var dtWSheet = mkWritable(dtRows);
   gsCtx.__dtSS = { getSheetByName: function(n){ return n === 'ШаблоныДопРабот' ? dtWSheet : null; }, insertSheet: function(){ return dtWSheet; } };

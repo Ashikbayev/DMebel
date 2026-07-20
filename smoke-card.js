@@ -1,7 +1,7 @@
 // Smoke-тест редизайна openCard, раздела "Архив" (v4.9), optimistic UI
-// Кассы и «Задач» (v4.11): crm.js исполняется в jsdom, заказы
-// подсовываются через мок fetch (как в проде, с разбором action= в
-// URL), карточка/архив/касса/задачи открываются реальными кликами —
+// Кассы, «Задач» и Источника лида (v4.11): crm.js исполняется в jsdom,
+// заказы подсовываются через мок fetch (как в проде, с разбором action=
+// в URL), карточка/архив/касса/задачи открываются реальными кликами —
 // полный боевой путь.
 const fs = require('fs');
 const { JSDOM, VirtualConsole } = require('jsdom');
@@ -13,7 +13,7 @@ const order = {
   city: 'Сатпаев', furn: 'кухня', obj: 'мкр. Достык 14-56',
   note: '', status: 'Договор', pred: 900000, sogl: 980000,
   avans: 490000, paid: 340000, mountDate: '', dogDate: '2026-07-12',
-  totL: 980000, totP: 0, totK: 0, material: 'L',
+  totL: 980000, totP: 0, totK: 0, material: 'L', source: 'Сарафан',
   masterId: '', helperId: '', helperPay: 0
 };
 const archivedOrder = {
@@ -379,6 +379,33 @@ setTimeout(() => {
                                       ok(cardTaskRows.some(r => r.textContent.indexOf('Новая задача из модалки') >= 0), 'новая задача видна и в блоке карточки');
                                       const cardDoneRow = cardTaskRows.find(r => r.textContent.indexOf('Позвонить, узнать про замер') >= 0);
                                       ok(!!cardDoneRow && !!cardDoneRow.querySelector('.tx.done'), 'в карточке выполненная задача ta1 осталась видна зачёркнутой — не пропала, как в общем списке (история сделки)');
+
+                                      // ── v4.11: Источник лида — предзаполнен, редактируется, уходит в updateOrder ──
+                                      const findCardF = (label) => {
+                                        const flds = Array.from(cardModal.querySelectorAll('.crm-f'));
+                                        const f = flds.find(x => { const l = x.querySelector('label'); return l && l.textContent.trim() === label; });
+                                        return f ? f.querySelector('input,select') : null;
+                                      };
+                                      const srcSel = findCardF('Источник');
+                                      ok(!!srcSel && srcSel.value === 'Сарафан', 'в карточке источник предзаполнен текущим значением заказа: ' + (srcSel && srcSel.value));
+                                      if (srcSel) srcSel.value = 'Партнёр';
+                                      const mainSaveBtn = cardModal.querySelector('.crm-m-btn.save');
+                                      ok(!!mainSaveBtn, 'кнопка «Сохранить» карточки найдена');
+                                      if (mainSaveBtn) mainSaveBtn.click();
+                                      ok(!!lastPost && lastPost.action === 'updateOrder' && lastPost.order && lastPost.order.source === 'Партнёр', 'смена источника в карточке уходит в updateOrder: ' + JSON.stringify(lastPost && lastPost.order));
+                                    }
+
+                                    // ── новый заказ: поле «Источник» присутствует с ожидаемыми вариантами ──
+                                    const bNewOrder = Array.from(doc.querySelectorAll('.crm-vbtn.new')).find(b => b.textContent.trim() === '+ Заказ');
+                                    ok(!!bNewOrder, 'кнопка «+ Заказ» есть');
+                                    if (bNewOrder) bNewOrder.click();
+                                    const newOrderModal = doc.querySelector('.crm-modal');
+                                    if (newOrderModal) {
+                                      const flds2 = Array.from(newOrderModal.querySelectorAll('.crm-f'));
+                                      const srcFld = flds2.find(x => { const l = x.querySelector('label'); return l && l.textContent.trim() === 'Источник'; });
+                                      const srcSelect = srcFld && srcFld.querySelector('select');
+                                      const opts = srcSelect ? Array.from(srcSelect.options).map(o => o.value) : [];
+                                      ok(srcSelect && opts.join(',') === ',Реклама,Сарафан,Партнёр', 'модалка нового заказа предлагает источник с вариантами реклама/сарафан/партнёр: ' + opts.join(','));
                                     }
 
                                     ok(pageErrors.length === 0, 'ошибок страницы нет (' + pageErrors.length + ')');
