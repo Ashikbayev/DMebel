@@ -1,7 +1,7 @@
-// Smoke-тест редизайна openCard + раздела "Архив" (v4.9): crm.js
-// исполняется в jsdom, заказы подсовываются через мок fetch (как в
-// проде, с разбором action= в URL), карточка/архив открываются
-// реальными кликами — полный боевой путь.
+// Smoke-тест редизайна openCard, раздела "Архив" (v4.9) и optimistic UI
+// Кассы (v4.11): crm.js исполняется в jsdom, заказы подсовываются через
+// мок fetch (как в проде, с разбором action= в URL), карточка/архив/
+// касса открываются реальными кликами — полный боевой путь.
 const fs = require('fs');
 const { JSDOM, VirtualConsole } = require('jsdom');
 
@@ -35,6 +35,18 @@ const archivedOrder2 = {
   masterId: '', helperId: '', helperPay: 0, updated: '2026-04-01'
 };
 
+// v4.11: две операции кассы — СИД-Успех удаляется штатно, СИД-Отказ на
+// нём мок POST специально валит delFin, чтобы проверить откат
+// оптимистичного удаления (строка разворачивается назад, остаётся в FIN).
+const finKeep = {
+  id: 'f1', date: '2026-07-10', type: 'Расход', cat: 'Материалы',
+  sum: 50000, num: '', comment: 'СИД-Успех'
+};
+const finFail = {
+  id: 'f2', date: '2026-07-09', type: 'Расход', cat: 'Материалы',
+  sum: 30000, num: '', comment: 'СИД-Отказ'
+};
+
 const vc = new VirtualConsole();
 let pageErrors = [];
 vc.on('jsdomError', e => pageErrors.push(String(e && (e.detail && e.detail.message || e.message))));
@@ -59,11 +71,26 @@ w.fetch = function(url, opts){
     if (body && body.action === 'restoreFromArchive' && String(body.num) === '088') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: false, error: 'сеть недоступна' }) });
     }
+    // v4.11: addFin — метка в комментарии решает, как ответит мок.
+    if (body && body.action === 'addFin') {
+      const c = body.fin && body.fin.comment;
+      if (c === 'СИД-ОФФЛАЙН') return Promise.reject(new Error('Failed to fetch'));
+      if (c === 'СИД-ОШИБКА') return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: false, error: 'сервер отклонил' }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, id: 'srv-' + Date.now() }) });
+    }
+    // v4.11: delFin — №088-аналог для кассы: id f2 всегда отклоняется сервером.
+    if (body && body.action === 'delFin') {
+      if (String(body.id) === 'f2') return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: false, error: 'сервер отклонил удаление' }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
+    }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
   }
   const u = String(url);
   if(u.indexOf('action=archiveOrders') >= 0){
     return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, orders: [archivedOrder, archivedOrder2] }) });
+  }
+  if(u.indexOf('action=fin') >= 0){
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, fin: [finKeep, finFail] }) });
   }
   return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, orders: [order] }) });
 };
@@ -108,6 +135,10 @@ setTimeout(() => {
     ok(heads.indexOf('Клиент') >= 0, 'секция «Клиент»');
     ok(heads.indexOf('Объект') >= 0, 'секция «Объект»');
     ok(modal.querySelectorAll('.crm-ch-h .ti').length >= 4, 'иконки в заголовках блоков: ' + modal.querySelectorAll('.crm-ch-h .ti').length);
+    // Закрываем карточку — иначе она остаётся первым «.crm-modal» в DOM и
+    // более поздние проверки (архив/касса) по ошибке хватают именно её.
+    const cardBg = modal.closest('.crm-modal-bg');
+    if (cardBg && cardBg.parentNode) cardBg.parentNode.removeChild(cardBg);
 
     // ── v4.9: раздел "Архив" — реальный клик по кнопке навигации ──
     const navBtns = Array.from(doc.querySelectorAll('.crm-vbtn'));
@@ -143,10 +174,92 @@ setTimeout(() => {
           ok(!!row2 && !row2.classList.contains('crm-arch-leaving'), 'после ошибки сервера строка №088 откатилась назад (разворачивается)');
           ok(!!row2 && !!row2.parentNode, 'строка №088 осталась в DOM (не удалена, вернулась в архив)');
 
-          ok(pageErrors.length === 0, 'ошибок страницы нет (' + pageErrors.length + ')');
-          pageErrors.slice(0,5).forEach(e => console.log('   ' + e));
-          console.log(fails ? 'SMOKE FAIL' : 'SMOKE OK');
-          process.exit(fails ? 1 : 0);
+          // ── v4.11: «Финансы → Касса» — optimistic UI (добавление + удаление) ──
+          const navBtns2 = Array.from(doc.querySelectorAll('.crm-vbtn'));
+          const bFin = navBtns2.find(b => b.textContent.trim() === 'Финансы');
+          ok(!!bFin, 'кнопка «Финансы» есть в навигации');
+          if (bFin) bFin.click();
+          setTimeout(() => {
+            const opRows = () => Array.from(doc.querySelectorAll('.crm-op'));
+            ok(opRows().some(r => r.textContent.indexOf('СИД-Успех') >= 0), 'операция СИД-Успех отрисовалась в Кассе');
+            ok(opRows().some(r => r.textContent.indexOf('СИД-Отказ') >= 0), 'операция СИД-Отказ отрисовалась в Кассе');
+
+            function findField(modal, label){
+              const flds = Array.from(modal.querySelectorAll('.crm-f'));
+              const f = flds.find(x => { const l = x.querySelector('label'); return l && l.textContent.trim() === label; });
+              return f ? f.querySelector('input,select') : null;
+            }
+            function openAdd(){
+              const addBtn = doc.querySelector('.crm-ops-h button.crm-vbtn.new');
+              if (addBtn) addBtn.click();
+              return doc.querySelector('.crm-modal');
+            }
+            function fillAndSave(modal, sum, comment){
+              findField(modal, 'Сумма, ₸').value = String(sum);
+              findField(modal, 'Комментарий').value = comment;
+              modal.querySelector('.crm-m-btn.save').click();
+            }
+
+            // ── добавление: штатный успех ──
+            let modal = openAdd();
+            ok(!!modal, 'модалка «+ Операция» открывается по клику');
+            fillAndSave(modal, 15000, 'СИД-Успех-Добавление');
+            ok(!doc.querySelector('.crm-modal'), 'модалка закрывается сразу по клику «Записать» (оптимистично)');
+            ok(opRows().some(r => r.textContent.indexOf('СИД-Успех-Добавление') >= 0), 'новая операция появляется в списке сразу, до ответа сервера');
+            setTimeout(() => {
+              ok(opRows().some(r => r.textContent.indexOf('СИД-Успех-Добавление') >= 0), 'штатно добавленная операция осталась в списке после ответа сервера');
+
+              // ── добавление: офлайн — тихий откат в очередь (поведение не меняем) ──
+              modal = openAdd();
+              fillAndSave(modal, 12000, 'СИД-ОФФЛАЙН');
+              ok(opRows().some(r => r.textContent.indexOf('СИД-ОФФЛАЙН') >= 0), 'операция для офлайн-теста появляется в списке сразу (оптимистично)');
+              setTimeout(() => {
+                ok(!opRows().some(r => r.textContent.indexOf('СИД-ОФФЛАЙН') >= 0), 'после сетевой ошибки строка тихо откатилась — не видна, как и раньше');
+                let pending = [];
+                try { pending = JSON.parse(w.localStorage.getItem('moff_pending_ops') || '[]'); } catch (e) {}
+                ok(pending.some(x => x.comment === 'СИД-ОФФЛАЙН'), 'операция ушла в offline-очередь moff_pending_ops');
+
+                // ── добавление: явный отказ сервера — откат с ошибкой, НЕ в очередь ──
+                modal = openAdd();
+                fillAndSave(modal, 9000, 'СИД-ОШИБКА');
+                ok(opRows().some(r => r.textContent.indexOf('СИД-ОШИБКА') >= 0), 'операция для теста отказа появляется в списке сразу (оптимистично)');
+                setTimeout(() => {
+                  ok(!opRows().some(r => r.textContent.indexOf('СИД-ОШИБКА') >= 0), 'после отказа сервера строка откатилась (удалена из списка)');
+                  let pending2 = [];
+                  try { pending2 = JSON.parse(w.localStorage.getItem('moff_pending_ops') || '[]'); } catch (e) {}
+                  ok(!pending2.some(x => x.comment === 'СИД-ОШИБКА'), 'операция с явным отказом сервера НЕ попала в offline-очередь');
+
+                  // ── удаление: штатный успех (СИД-Успех, id f1) ──
+                  const rowDel = opRows().find(r => r.textContent.indexOf('СИД-Успех') >= 0 && r.textContent.indexOf('Добавление') < 0);
+                  ok(!!rowDel, 'строка СИД-Успех (f1) для теста удаления найдена');
+                  const bDel = rowDel && Array.from(rowDel.querySelectorAll('button')).find(b => b.textContent.indexOf('✕') >= 0);
+                  ok(!!bDel, 'кнопка удаления (✕) есть в строке');
+                  if (bDel) bDel.click();
+                  ok(!!rowDel && rowDel.classList.contains('crm-op-leaving'), 'строка сворачивается оптимистично сразу по клику ✕, до ответа сервера');
+                  setTimeout(() => {
+                    ok(!opRows().some(r => r.textContent.indexOf('СИД-Успех') >= 0 && r.textContent.indexOf('Добавление') < 0), 'после успешного удаления строка физически убрана из списка');
+
+                    // ── удаление: отказ сервера — откат (СИД-Отказ, id f2) ──
+                    const rowDel2 = opRows().find(r => r.textContent.indexOf('СИД-Отказ') >= 0);
+                    ok(!!rowDel2, 'строка СИД-Отказ (f2) для проверки отката удаления найдена');
+                    const bDel2 = rowDel2 && Array.from(rowDel2.querySelectorAll('button')).find(b => b.textContent.indexOf('✕') >= 0);
+                    ok(!!bDel2, 'кнопка удаления (✕) есть у строки СИД-Отказ');
+                    if (bDel2) bDel2.click();
+                    ok(!!rowDel2 && rowDel2.classList.contains('crm-op-leaving'), 'строка СИД-Отказ тоже сворачивается оптимистично сразу по клику');
+                    setTimeout(() => {
+                      ok(!!rowDel2 && !rowDel2.classList.contains('crm-op-leaving'), 'после отказа сервера строка СИД-Отказ откатилась назад (разворачивается)');
+                      ok(opRows().some(r => r.textContent.indexOf('СИД-Отказ') >= 0), 'операция СИД-Отказ осталась в списке (не удалена, только визуально сворачивалась)');
+
+                      ok(pageErrors.length === 0, 'ошибок страницы нет (' + pageErrors.length + ')');
+                      pageErrors.slice(0,5).forEach(e => console.log('   ' + e));
+                      console.log(fails ? 'SMOKE FAIL' : 'SMOKE OK');
+                      process.exit(fails ? 1 : 0);
+                    }, 200);
+                  }, 200);
+                }, 200);
+              }, 200);
+            }, 200);
+          }, 300);
         }, 200);
       }, 200);
     }, 300);

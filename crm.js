@@ -654,8 +654,9 @@
       '.crm-ops{background:#fff;border:1px solid #eee;border-radius:10px;margin-bottom:10px;overflow:hidden}'+
       '.crm-ops-h{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #f0f0ee}'+
       '.crm-ops-h b{font-size:12px;color:#444}'+
-      '.crm-op{display:flex;gap:8px;align-items:center;padding:7px 12px;font-size:11px;color:#555;border-bottom:1px solid #f7f7f5;flex-wrap:wrap}'+
+      '.crm-op{display:flex;gap:8px;align-items:center;padding:7px 12px;font-size:11px;color:#555;border-bottom:1px solid #f7f7f5;flex-wrap:wrap;max-height:60px;overflow:hidden;transition:max-height .3s ease,opacity .3s ease,padding .3s ease,border-width .3s ease}'+
       '.crm-op:last-child{border-bottom:none}'+
+      '.crm-op.crm-op-leaving{max-height:0;opacity:0;padding-top:0;padding-bottom:0;border-width:0}'+
       '.crm-op .dt{color:#999;min-width:64px}'+
       '.crm-op .cat{font-weight:600;color:#333}'+
       '.crm-op .cmt{color:#999;flex:1;min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
@@ -3078,6 +3079,12 @@
         del.addEventListener('click', function(){
           var sure = confirm('Удалить операцию «' + f.cat + ' ' + fm0(f.sum) + '»?' + (f.cat==='Доплата'&&f.num ? ' Оплачено по заказу №'+f.num+' уменьшится.' : ''));
           if(!sure) return;
+          // Optimistic: строка сворачивается сразу по клику, запрос — в
+          // фоне. FIN/суммы/график не трогаем до ответа сервера — они
+          // обновятся вместе с renderAll() при успехе. Ошибка — просто
+          // снимаем класс, ничего откатывать в данных не нужно (их и не
+          // меняли).
+          r.classList.add('crm-op-leaving');
           post({ action:'delFin', id: f.id }, function(){
             FIN = FIN.filter(function(x){ return x.id !== f.id; });
             if(f.type==='Приход' && f.cat==='Доплата' && f.num){
@@ -3085,7 +3092,10 @@
             }
             renderAll();
             toast('OK Операция удалена', '#1a5252');
-          }, function(err){ toast('⚠️ Не удалилось: ' + err, '#BA7517'); });
+          }, function(err){
+            r.classList.remove('crm-op-leaving');
+            toast('⚠️ Не удалилось: ' + err, '#BA7517');
+          });
         });
         r.appendChild(dt); r.appendChild(cat); r.appendChild(cmt); r.appendChild(sm); r.appendChild(del);
         ops.appendChild(r);
@@ -3710,7 +3720,6 @@
     bSave.addEventListener('click', function(){
       var sum = parseFloat(iSum.value) || 0;
       if(sum <= 0){ toast('\u26A0\uFE0F Введи сумму', '#BA7517'); return; }
-      bSave.disabled = true; bSave.textContent = 'Записываю...';
       var fin = {
         type: selType.value, cat: selCat.value, sum: sum,
         date: iDate.value, num: iNum.value.trim(), comment: iCmt.value.trim(),
@@ -3721,30 +3730,45 @@
           Number(x.sum) === Number(fin.sum) && String(x.num || '') === String(fin.num || '');
       });
       if(same.length && !confirm('Похожая операция (' + fin.type + ' ' + fm0(fin.sum) + ') уже ждёт отправки в очереди. Всё равно записать новую?')){
-        bSave.disabled = false; bSave.textContent = 'Записать';
         return;
       }
+      // Optimistic: модалка закрывается и запись сразу попадает в список,
+      // запрос — в фоне. Офлайн — тихий откат в очередь (строка не видна,
+      // ровно как раньше, "не вводи повторно"). Отказ сервера — откат с
+      // явной ошибкой; заново открывать модалку с введёнными данными не
+      // пытаемся — редкий путь, цена ниже, чем постоянно блокировать
+      // кнопку в обычном (сетевом) случае.
+      document.body.removeChild(bg);
+      var rec = { id: 'tmp' + Date.now(), date: fin.date, type: fin.type, cat: fin.cat, sum: fin.sum, num: fin.num, comment: fin.comment };
+      FIN.unshift(rec);
+      if(fin.type==='Приход' && fin.cat==='Доплата' && fin.num){
+        for(var i=0;i<ORDERS.length;i++){ if(String(ORDERS[i].num)===String(fin.num)){ ORDERS[i].paid = (Number(ORDERS[i].paid)||0) + fin.sum; break; } }
+      }
+      renderAll();
+      toast('OK ' + fin.type + ' ' + fm0(fin.sum) + ' записан', '#1a5252');
+
+      function rollbackAdd(){
+        FIN = FIN.filter(function(x){ return x.id !== rec.id; });
+        if(fin.type==='Приход' && fin.cat==='Доплата' && fin.num){
+          for(var i=0;i<ORDERS.length;i++){ if(String(ORDERS[i].num)===String(fin.num)){ ORDERS[i].paid = Math.max(0,(Number(ORDERS[i].paid)||0) - fin.sum); break; } }
+        }
+        renderAll();
+      }
+
       post({ action:'addFin', fin: fin }, function(res){
         if(res && res.dup){
-          document.body.removeChild(bg);
+          rollbackAdd();
           toast('Эта операция уже записана раньше — дубль не создан', '#1a5252');
           return;
         }
-        FIN.unshift({ id: (res && res.id) || String(Date.now()), date: fin.date, type: fin.type, cat: fin.cat, sum: fin.sum, num: fin.num, comment: fin.comment });
-        if(fin.type==='Приход' && fin.cat==='Доплата' && fin.num){
-          for(var i=0;i<ORDERS.length;i++){ if(String(ORDERS[i].num)===String(fin.num)){ ORDERS[i].paid = (Number(ORDERS[i].paid)||0) + fin.sum; break; } }
-        }
-        document.body.removeChild(bg);
-        renderAll();
-        toast('OK ' + fin.type + ' ' + fm0(fin.sum) + ' записан', '#1a5252');
+        if(res && res.id) rec.id = res.id;
       }, function(err, isNet){
+        rollbackAdd();
         if(isNet){
           qAdd(fin);
-          document.body.removeChild(bg);
           toast('\u23F3 Нет связи — операция в очереди, уйдёт сама. Повторно не вводи', '#854F0B');
           return;
         }
-        bSave.disabled=false; bSave.textContent='Записать';
         toast('\u26A0\uFE0F Не записалось: '+err, '#BA7517');
       });
     });
