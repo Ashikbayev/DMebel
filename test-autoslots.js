@@ -664,7 +664,14 @@ function waitReady(dom, tries){
           }
           return out;
         },
-        setValues: function(){ return this; },
+        setValues: function(v){
+          for(var i = 0; i < v.length; i++){
+            var r = row - 2 + i;
+            while(ordRows.length <= r) ordRows.push([]);
+            for(var j = 0; j < v[i].length; j++) ordRows[r][col - 1 + j] = v[i][j];
+          }
+          return this;
+        },
         setFontWeight: function(){ return this; }
       };
     }
@@ -1064,6 +1071,35 @@ function waitReady(dom, tries){
   att("saveEmp_(__finSS, { name:'Серик', role:'Мастер', salary:150000 })");
   var a4 = att("accrueMonth_(__finSS, '2026-08')");
   ok(a4.created === 3, 'новый месяц: 2 постоянных + оклад начислены');
+
+  // ─────────────────────────────────────────────────────────────
+  // v4.9: Батч-запись updateOrder_ (диапазоны 1-19 и 23-33) —
+  // снимок расчёта (колонки 20-22, до 45к символов каждая) вне
+  // обоих диапазонов и должен остаться байт-в-байт нетронутым.
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.9: Батч-запись updateOrder_ + целостность снимка ──');
+  var bigSnap1 = 'A'.repeat(45000);
+  var bigSnap2 = 'B'.repeat(45000);
+  var bigSnap3 = 'C'.repeat(12345);
+  var so1 = att("saveOrder_(__ordSS, { num:'501', client:'Тест Снимок', obj:'ул. Тест 1', predPrice:100000, totL:100000, totP:0, totK:0, margL:20000, margP:0, margK:0, snap1:" + JSON.stringify(bigSnap1) + ", snap2:" + JSON.stringify(bigSnap2) + ", snap3:" + JSON.stringify(bigSnap3) + " })");
+  ok(so1.ok === true, 'заказ с 45к-снимком сохранён (saveOrder_)');
+  var oo1 = att("orderOne_(__ordSS, '501')");
+  ok(oo1.ok === true && oo1.order.snapshot === (bigSnap1 + bigSnap2 + bigSnap3), 'снимок сразу после saveOrder_ цел');
+
+  var uu1 = att("updateOrder_(__ordSS, { num:'501', status:'Договор', paid:5000, masterId:'e1' })");
+  ok(uu1.ok === true, 'updateOrder_ (батч-запись, статус+оплата+бригада) прошёл');
+  var oo2 = att("orderOne_(__ordSS, '501')");
+  ok(oo2.ok === true && oo2.order.snapshot === (bigSnap1 + bigSnap2 + bigSnap3), 'снимок НЕ тронут после updateOrder_ (диапазон 20-22 вне батча)');
+
+  var ol501 = att("ordersList_(__ordSS)");
+  var o501 = null; ol501.orders.forEach(function(x){ if(x.num === '501') o501 = x; });
+  ok(o501 && o501.status === 'Договор' && o501.paid === 5000 && o501.masterId === 'e1', 'ordersList отдаёт поля из обоих батч-диапазонов (A: статус/оплата, B: бригада)');
+
+  var uu2 = att("updateOrder_(__ordSS, { num:'999', client:'Новый Клиент', status:'Договор', margin:15000 })");
+  ok(uu2.ok === true && uu2.created === true, 'новый заказ через батч-запись создаётся (isNew, диапазоны инициализированы пусто)');
+  var ol999 = att("ordersList_(__ordSS)");
+  var o999 = null; ol999.orders.forEach(function(x){ if(x.num === '999') o999 = x; });
+  ok(o999 && o999.client === 'Новый Клиент' && o999.status === 'Договор' && o999.margin === 15000, 'новый заказ: поля из обоих диапазонов (A и B) применились корректно');
 
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');
