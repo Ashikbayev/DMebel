@@ -16,6 +16,14 @@ const order = {
   totL: 980000, totP: 0, totK: 0, material: 'L', source: 'Сарафан',
   masterId: '', helperId: '', helperPay: 0
 };
+const order2 = {
+  num: '215', client: 'Петров Сергей', phone: '+77029998877',
+  city: 'Жезказган', furn: 'шкаф-купе', obj: 'ул. Абая 10',
+  note: '', status: 'Замер', pred: 400000, sogl: 0,
+  avans: 0, paid: 0, mountDate: '', dogDate: '',
+  totL: 0, totP: 0, totK: 0, material: 'L', source: '',
+  masterId: '', helperId: '', helperPay: 0
+};
 const archivedOrder = {
   num: '099', client: 'Архивный Клиент', phone: '+77011112233',
   city: 'Сатпаев', furn: 'шкаф-купе', obj: 'ул. Старая 5',
@@ -122,7 +130,7 @@ w.fetch = function(url, opts){
   if(u.indexOf('action=tasks') >= 0){
     return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, tasks: [taskA, taskB, taskC, taskD, taskDone] }) });
   }
-  return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, orders: [order] }) });
+  return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, orders: [order, order2] }) });
 };
 w.alert = () => {}; w.confirm = () => true;
 w.localStorage.setItem('moff_crm_token', '2026');
@@ -143,8 +151,10 @@ setTimeout(() => {
   if (typeof w.crmPageOpen === 'function') w.crmPageOpen();
   setTimeout(() => {
     const doc = w.document;
-    // ищем карточку доски и кликаем
-    let card = doc.querySelector('.crm-card');
+    // ищем карточку заказа №214 (не «первую» — их теперь две, порядок
+    // на доске зависит от статуса) и кликаем
+    let card = Array.from(doc.querySelectorAll('.crm-card')).find(c => c.textContent.indexOf('Иванов') >= 0)
+      || doc.querySelector('.crm-card');
     if (card) {
       card.click();
     }
@@ -408,10 +418,54 @@ setTimeout(() => {
                                       ok(srcSelect && opts.join(',') === ',Реклама,Сарафан,Партнёр', 'модалка нового заказа предлагает источник с вариантами реклама/сарафан/партнёр: ' + opts.join(','));
                                     }
 
-                                    ok(pageErrors.length === 0, 'ошибок страницы нет (' + pageErrors.length + ')');
-                                    pageErrors.slice(0,5).forEach(e => console.log('   ' + e));
-                                    console.log(fails ? 'SMOKE FAIL' : 'SMOKE OK');
-                                    process.exit(fails ? 1 : 0);
+                                    // ── v4.11: Глобальный поиск (🔍) ──
+                                    // Сносим все ранее открытые модалки (карточка, новый заказ),
+                                    // иначе querySelector('.crm-modal') подхватит устаревшую.
+                                    Array.from(doc.querySelectorAll('.crm-modal-bg')).forEach(bgEl => { if (bgEl.parentNode) bgEl.parentNode.removeChild(bgEl); });
+                                    const bGlobalSearch = Array.from(doc.querySelectorAll('.crm-vbtn')).find(b => b.innerHTML.indexOf('🔍') >= 0 && b.textContent.trim() !== '+ Заказ');
+                                    ok(!!bGlobalSearch, 'иконка 🔍 глобального поиска есть в тулбаре');
+                                    if (bGlobalSearch) bGlobalSearch.click();
+                                    let gsModal = doc.querySelector('.crm-modal');
+                                    ok(!!gsModal && gsModal.textContent.indexOf('Поиск по всем заказам') >= 0, 'модалка глобального поиска открылась');
+                                    const gsInput = gsModal && gsModal.querySelector('input[type=search]');
+                                    ok(!!gsInput, 'поле ввода поиска есть');
+                                    // поиск по фрагменту адреса, который есть только у №214
+                                    if (gsInput) { gsInput.value = 'Достык'; gsInput.dispatchEvent(new w.Event('input')); }
+                                    let gsRows = () => Array.from(doc.querySelectorAll('.crm-gsr'));
+                                    ok(gsRows().some(r => r.textContent.indexOf('Иванов') >= 0), 'поиск по адресу «Достык» находит активный заказ №214');
+                                    ok(!gsRows().some(r => r.textContent.indexOf('Петров') >= 0), 'заказ №215 (другой адрес) в выдачу не попал — фильтр работает');
+
+                                    // поиск по телефону №215
+                                    if (gsInput) { gsInput.value = '77029998877'; gsInput.dispatchEvent(new w.Event('input')); }
+                                    ok(gsRows().some(r => r.textContent.indexOf('Петров') >= 0), 'поиск по телефону находит заказ №215');
+
+                                    // ── искать в архиве: кнопка подгружает архивный файл и досыпает совпадения ──
+                                    // Для проверки берём №088 «Тестовый Провал» — он ОСТАЛСЯ в архиве
+                                    // (его возврат ранее завалил мок). №099 использовать нельзя: тот
+                                    // блок успешно вернул его в активные ORDERS.
+                                    const archSearchBtn = Array.from(gsModal.querySelectorAll('button')).find(b => b.textContent.trim() === 'Искать в архиве');
+                                    ok(!!archSearchBtn, 'кнопка «Искать в архиве» есть');
+                                    if (gsInput) { gsInput.value = 'Тестовый Провал'; gsInput.dispatchEvent(new w.Event('input')); }
+                                    ok(!gsRows().some(r => r.textContent.indexOf('Тестовый Провал') >= 0), 'до нажатия кнопки архив в выдачу НЕ попадает');
+                                    if (archSearchBtn) archSearchBtn.click();
+                                    setTimeout(() => {
+                                      ok(gsRows().some(r => r.textContent.indexOf('Тестовый Провал') >= 0), 'после «Искать в архиве» архивный заказ появляется в выдаче');
+                                      const archRow = gsRows().find(r => r.textContent.indexOf('Тестовый Провал') >= 0);
+                                      ok(!!archRow && !!archRow.querySelector('.crm-gsr-tag.arch'), 'архивный результат помечен тегом «архив»');
+                                      ok(!!archRow && !archRow.classList.contains('clk'), 'архивный результат некликабелен (карточку архивных не открывают)');
+
+                                      // клик по активному результату открывает карточку
+                                      if (gsInput) { gsInput.value = 'Иванов'; gsInput.dispatchEvent(new w.Event('input')); }
+                                      const actRow = gsRows().find(r => r.textContent.indexOf('Иванов') >= 0 && r.classList.contains('clk'));
+                                      ok(!!actRow, 'активный результат кликабелен');
+                                      if (actRow) actRow.click();
+                                      ok(!doc.querySelector('.crm-modal') || !!doc.querySelector('.crm-card-strip'), 'клик по активному результату закрывает поиск и открывает карточку');
+
+                                      ok(pageErrors.length === 0, 'ошибок страницы нет (' + pageErrors.length + ')');
+                                      pageErrors.slice(0,5).forEach(e => console.log('   ' + e));
+                                      console.log(fails ? 'SMOKE FAIL' : 'SMOKE OK');
+                                      process.exit(fails ? 1 : 0);
+                                    }, 250);
                                   }, 200);
                                 }, 200);
                               }, 200);

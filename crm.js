@@ -681,6 +681,15 @@
       '.crm-task-row .dl.done{color:#bbb}'+
       '.crm-task-row .del{background:none;border:none;color:#ccc;cursor:pointer;font-size:13px;line-height:1;padding:2px}'+
       '.crm-task-row .del:hover{color:#c0392b}'+
+      '.crm-gsr-h{font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.03em;margin:10px 0 4px}'+
+      '.crm-gsr{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #eee;border-radius:8px;margin-bottom:6px}'+
+      '.crm-gsr.clk{cursor:pointer}'+
+      '.crm-gsr.clk:hover{background:#faf9f7;border-color:#e0ddd6}'+
+      '.crm-gsr-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}'+
+      '.crm-gsr-nm{font-size:13px;font-weight:600;color:#222;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+      '.crm-gsr-sub{font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+      '.crm-gsr-tag{font-size:10px;font-weight:600;color:#5F5E5A;background:#f2f0ec;border-radius:6px;padding:2px 7px;white-space:nowrap}'+
+      '.crm-gsr-tag.arch{background:#ece6da;color:#8a7a55}'+
       '.crm-sec-t{font-size:13px;font-weight:600;color:#444;margin:14px 0 8px}'+
       '.crm-ch-box{background:#f6f6f4;border-radius:10px;margin-bottom:10px;overflow:hidden}'+
       '.crm-ch-box.recl{background:#FCEBEB}'+
@@ -922,6 +931,12 @@
     bNew.textContent = '+ Заказ';
     bNew.addEventListener('click', openNewOrderModal);
     tools.appendChild(bNew);
+    var bSearch = document.createElement('button');
+    bSearch.className = 'crm-vbtn';
+    bSearch.innerHTML = '\uD83D\uDD0D';
+    bSearch.title = 'Поиск по всем заказам (активные + архив)';
+    bSearch.addEventListener('click', function(){ openGlobalSearch(); });
+    tools.appendChild(bSearch);
     var bBoard = document.createElement('button');
     bBoard.className = 'crm-vbtn' + (VIEW==='board' ? ' on' : '');
     bBoard.textContent = 'Доска';
@@ -1726,6 +1741,121 @@
         buildBalance(view);
       });
     });
+  }
+
+  // v4.11: Глобальный поиск — модалка поверх любой вкладки. Ищет по
+  // активным заказам (ORDERS, уже в памяти) сразу; по кнопке «искать в
+  // архиве» подгружает отдельный архивный файл (fetchArchive) и
+  // досыпает совпадения. Клик по активному открывает карточку; архивные
+  // некликабельны (карточку архивных не редактируют — как во вкладке).
+  function globalSearchMatch(o, s){
+    return String(o.num).toLowerCase().indexOf(s)>=0 ||
+      String(o.client||'').toLowerCase().indexOf(s)>=0 ||
+      String(o.phone||'').toLowerCase().indexOf(s)>=0 ||
+      String(o.obj||'').toLowerCase().indexOf(s)>=0 ||
+      String(o.city||'').toLowerCase().indexOf(s)>=0 ||
+      String(o.furn||'').toLowerCase().indexOf(s)>=0;
+  }
+  function openGlobalSearch(){
+    var bg = document.createElement('div'); bg.className = 'crm-modal-bg';
+    bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
+    var m = document.createElement('div'); m.className = 'crm-modal';
+    var h = document.createElement('div'); h.className = 'crm-m-h';
+    var hcol = document.createElement('div'); hcol.style.minWidth = '0';
+    var title = document.createElement('div'); title.className = 'crm-h-t'; title.textContent = '\uD83D\uDD0D Поиск по всем заказам';
+    hcol.appendChild(title);
+    var x = document.createElement('button'); x.className = 'crm-m-x'; x.textContent = '\u00D7';
+    x.addEventListener('click', function(){ document.body.removeChild(bg); });
+    h.appendChild(hcol); h.appendChild(x);
+    var b = document.createElement('div'); b.className = 'crm-m-b';
+
+    var inpEl = document.createElement('input');
+    inpEl.type = 'search'; inpEl.placeholder = '№, клиент, телефон, адрес, город, тип...';
+    inpEl.style.width = '100%'; inpEl.style.marginBottom = '10px';
+
+    var archBtn = document.createElement('button');
+    archBtn.className = 'crm-vbtn'; archBtn.textContent = 'Искать в архиве';
+    archBtn.style.marginBottom = '10px';
+
+    var results = document.createElement('div');
+
+    // Флаг: архив включён в поиск (загружен и досыпается в выдачу).
+    var archiveOn = false;
+
+    function rowEl(o, archived){
+      var r = document.createElement('div');
+      r.className = 'crm-gsr';
+      var main = document.createElement('div'); main.className = 'crm-gsr-main';
+      var nm = document.createElement('span'); nm.className = 'crm-gsr-nm';
+      nm.textContent = '\u2116' + o.num + ' \u00B7 ' + (o.client || '—');
+      var sub = document.createElement('span'); sub.className = 'crm-gsr-sub';
+      var bits = [];
+      if(o.phone) bits.push(o.phone);
+      if(o.city) bits.push(o.city);
+      if(o.furn) bits.push(o.furn);
+      sub.textContent = bits.join(' \u00B7 ');
+      main.appendChild(nm); main.appendChild(sub);
+      r.appendChild(main);
+      var tag = document.createElement('span'); tag.className = 'crm-gsr-tag';
+      if(archived){ tag.textContent = 'архив'; tag.classList.add('arch'); }
+      else { tag.textContent = String(o.status || ''); }
+      r.appendChild(tag);
+      if(!archived){
+        r.classList.add('clk');
+        r.addEventListener('click', function(){ document.body.removeChild(bg); openCard(o.num); });
+      }
+      return r;
+    }
+
+    function paint(){
+      var s = inpEl.value.trim().toLowerCase();
+      results.innerHTML = '';
+      if(!s){
+        var hint = document.createElement('div'); hint.className = 'crm-empty';
+        hint.textContent = 'Введите запрос — ищет по активным заказам' + (archiveOn ? ' и архиву' : '') + '.';
+        results.appendChild(hint);
+        return;
+      }
+      var act = ORDERS.filter(function(o){ return globalSearchMatch(o, s); });
+      var arch = archiveOn ? ARCHIVE.filter(function(o){ return globalSearchMatch(o, s); }) : [];
+      if(!act.length && !arch.length){
+        var none = document.createElement('div'); none.className = 'crm-empty';
+        none.textContent = 'Ничего не найдено' + (archiveOn ? '' : ' среди активных. Попробуйте «Искать в архиве».');
+        results.appendChild(none);
+        return;
+      }
+      if(act.length){
+        var hA = document.createElement('div'); hA.className = 'crm-gsr-h'; hA.textContent = 'Активные (' + act.length + ')';
+        results.appendChild(hA);
+        act.forEach(function(o){ results.appendChild(rowEl(o, false)); });
+      }
+      if(arch.length){
+        var hB = document.createElement('div'); hB.className = 'crm-gsr-h'; hB.textContent = 'Архив (' + arch.length + ')';
+        results.appendChild(hB);
+        arch.forEach(function(o){ results.appendChild(rowEl(o, true)); });
+      }
+    }
+
+    archBtn.addEventListener('click', function(){
+      if(archiveOn){ archiveOn = false; archBtn.textContent = 'Искать в архиве'; paint(); return; }
+      archBtn.disabled = true; archBtn.textContent = 'Загружаю архив...';
+      var proceed = function(){
+        archiveOn = true; archBtn.disabled = false; archBtn.textContent = 'Не искать в архиве'; paint();
+      };
+      if(ARCHIVE_LOADED){ proceed(); return; }
+      fetchArchive(function(err){
+        if(err){ archBtn.disabled = false; archBtn.textContent = 'Искать в архиве'; toast('\u26A0\uFE0F Архив не загрузился: ' + err, '#BA7517'); return; }
+        proceed();
+      });
+    });
+
+    inpEl.addEventListener('input', paint);
+    b.appendChild(inpEl); b.appendChild(archBtn); b.appendChild(results);
+    m.appendChild(h); m.appendChild(b);
+    bg.appendChild(m);
+    document.body.appendChild(bg);
+    paint();
+    setTimeout(function(){ try{ inpEl.focus(); }catch(e){} }, 50);
   }
 
   // Архив заказов (v4.9): плоский список (не доска — тащить статусы
