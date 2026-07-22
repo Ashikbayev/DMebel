@@ -36,6 +36,13 @@
   <div class="calc-body" id="calc-body">
   <div class="calc-left" id="calc-left">
   <div class="scr on" id="scr-calc">
+    <div class="ordt-row">
+      <span class="ordt-lb">Тип заказа</span>
+      <button class="ordt-b" data-t="shk" onclick="ordSet('shk')">Шкаф</button>
+      <button class="ordt-b" data-t="kuh" onclick="ordSet('kuh')">Кухня</button>
+      <button class="ordt-b" data-t="both" onclick="ordSet('both')">Шкаф+Кухня</button>
+    </div>
+    <div class="req-banner" id="req-banner"></div>
     <div class="card"><div class="ch" onclick="tog('korp')"><div class="ct"><span style="color:#534AB7">◆</span>Корпус<span class="tag tm">×коэф.</span></div><div style="display:flex;align-items:center;gap:4px;flex-shrink:0"><span class="cs" id="s-korp">0₸</span><span class="ar" id="ar-korp">▼</span></div></div>
       <div class="cb" id="cb-korp">
         <div class="stl">ЛДСП</div><div id="ldsp-list"></div>

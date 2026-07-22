@@ -831,7 +831,7 @@ select{width:100%;font-size:12px;padding:5px 6px;border:1px solid #ddd;border-ra
 .krhd2{width:82px;text-align:right}
 .krg{font-size:10px;color:var(--t2);padding:9px 2px 4px;font-weight:500}
 .krr{display:flex;align-items:center;gap:6px;padding:6px 2px;border-bottom:1px solid var(--bd)}
-.krr.ch{background:#FFF8E6;border-radius:6px;padding-left:6px;padding-right:6px}
+.krr.changed{background:#FFF8E6;border-radius:6px;padding-left:6px;padding-right:6px}
 .krn{flex:1 1 auto;min-width:0;font-size:12px;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kru{font-size:9px;color:var(--t2);margin-left:5px}
 .krp{width:46px;min-width:46px;flex-shrink:0;text-align:right;font-size:12px;color:var(--t2)}
@@ -839,3 +839,17 @@ input.kri{width:62px;min-width:62px;max-width:62px;flex-shrink:0;padding:4px 6px
 .krd{width:82px;min-width:82px;flex-shrink:0;text-align:right;font-size:12px;color:var(--t2)}
 .krup{color:#C0392B}
 .krdn{color:#0F6E56}
+
+/* ── v4.12: тип заказа + обязательные позиции ── */
+.ordt-row{display:flex;align-items:center;gap:6px;padding:8px 2px;flex-wrap:wrap}
+.ordt-lb{font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-right:2px}
+.ordt-b{font-size:11px;padding:5px 10px;border-radius:20px;border:1px solid var(--bd);background:#fff;color:var(--t2);cursor:pointer}
+.ordt-b.on{background:var(--t);border-color:var(--t);color:#fff;font-weight:600}
+.req-banner{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;background:#fff;border:1px solid var(--bd);border-radius:10px;margin-bottom:8px}
+.req-pill{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;flex-shrink:0}
+.req-pill.ok{background:color-mix(in srgb,#0F6E56 12%,#fff);color:#0F6E56}
+.req-pill.warn{background:color-mix(in srgb,#C0392B 10%,#fff);color:#C0392B}
+.req-list{font-size:11px;color:var(--t2);line-height:1.4}
+/* Открытая карточка — заметный акцент слева, чтобы взгляд не «плавал» */
+#pg-calc .card:has(.cb.op){border-color:var(--t)}
+#pg-calc .card:has(.cb.op)>.ch{background:color-mix(in srgb,var(--t) 5%,#fff)}

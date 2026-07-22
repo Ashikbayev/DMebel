@@ -287,7 +287,27 @@ const st=(id,v)=>{const e=$(id);if(e){e.textContent=fm(v);e.classList.toggle("fi
 const sx=(id,v)=>{const e=$(id);if(e)e.textContent=v;};
 function page(p){["calc","kp","hist","conf","kitchen","crm"].forEach(n=>{$("pg-"+n)?.classList.toggle("on",n===p);const b=$("bbt-"+n);if(b)b.classList.toggle("on",n===p);});if(p==="hist")renderHist();if(p==="conf"){initConf();}if(p==="kitchen"){initKitchen();}if(p==="crm"&&window.crmPageOpen){window.crmPageOpen();}}
 function tab(t){["calc","coef","extra","vit","itog","korr"].forEach(s=>{const e=$("scr-"+s);if(e)e.classList.toggle("on",s===t);});document.querySelectorAll(".tb").forEach((b,i)=>b.classList.toggle("on",["calc","coef","extra","vit","itog","korr"][i]===t));document.body.classList.toggle("itog-active",t==="itog");recalc();if(t==="korr")renderKorr();window.scrollTo(0,0);}
-function tog(id){const b=$("cb-"+id),a=$("ar-"+id);if(!b)return;const op=b.classList.toggle("op");if(a)a.classList.toggle("op",op);}
+// v4.12: аккордеон. Раньше tog() переключал карточку независимо — при
+// заполнении можно было открыть все восемь разделов разом, и калькулятор
+// превращался в стену полей. Теперь открытие карточки закрывает её родных
+// соседей (тех, что лежат в том же .scr/.cb — родителе). Группа берётся из
+// DOM, а не хардкодом: работает и для вложенных карточек «Доп.» бесплатно.
+function tog(id){
+  const b=$("cb-"+id),a=$("ar-"+id);if(!b)return;
+  const willOpen=!b.classList.contains("op");
+  const card=b.closest(".card");
+  const parent=card&&card.parentElement;
+  if(parent){
+    parent.querySelectorAll(":scope>.card>.cb.op").forEach(sib=>{
+      if(sib===b)return;
+      sib.classList.remove("op");
+      const sid=sib.id.replace(/^cb-/,"");
+      const sa=$("ar-"+sid);if(sa)sa.classList.remove("op");
+    });
+  }
+  b.classList.toggle("op",willOpen);
+  if(a)a.classList.toggle("op",willOpen);
+}
 function addLdsp(){
   const i=ST.ldsp.length;ST.ldsp.push(0);
   const c=$("ldsp-list");if(i===0)c.innerHTML="";
@@ -964,7 +984,7 @@ function renderKorr(){
       var gh=document.createElement("div");gh.className="krg";gh.textContent=grp;
       host.appendChild(gh);
     }
-    var row=document.createElement("div");row.className="krr"+(r.changed?" ch":"");
+    var row=document.createElement("div");row.className="krr"+(r.changed?" changed":"");
     var nm=document.createElement("div");nm.className="krn";
     nm.appendChild(document.createTextNode(r.n));
     var un=document.createElement("span");un.className="kru";
@@ -1017,6 +1037,75 @@ function korrPayload(){
   var t=korrTotals();
   if(!t.rows)return null;
   return {costPlan:Math.round(t.plan),costFact:Math.round(t.fact),delta:Math.round(t.delta)};
+}
+// ── v4.12: обязательные позиции ────────────────────────────────
+// Задача — дать менеджеру один ответ на вопрос «можно отдавать клиенту»
+// без пролистывания всех разделов. Проверяем ФАКТ выбора категории (а не
+// денежную сумму, как flatItems) — поэтому читаем ST/DOM напрямую.
+// Категории слайдов/ручек продублированы из Code.gs (slideCats, там же
+// логика начисления мастеру) — если каталог пополнится новым видом
+// телескопов, поправить нужно будет в обоих местах.
+const SLIDE_CATS=["Телескоп","Телескоп-Д","Телескоп-Д черный","СМ-полный","СМ-частичный","Push-open"];
+const HANDLE_CATS=["Руч-Скрытая","Руч-Торцевая","Руч-Скоба"];
+// Тип заказа решает, какие ДОП. группы обязательны (штанга — только для
+// шкафа/гардеробной, кухонная тройка — только для кухни). Пока тип не
+// выбран ('' — по умолчанию), эти две группы просто не проверяются: лучше
+// молчать, чем красным цветом требовать столешницу у шкафного заказа.
+var ORDT="";
+function ordSet(t){ORDT=(t==="shk"||t==="kuh"||t==="both")?t:"";renderRequired();}
+function catIn(sec,cats){
+  return ST[sec].some((item,i)=>{
+    if(!item)return false;
+    const c=$(sec+"c"+i)?.value;
+    return c&&cats.indexOf(c)>=0;
+  });
+}
+function accHas(key){return (ST[key]||[]).some(x=>x!==null&&x!==undefined);}
+function requiredDefs(){
+  var defs=[
+    {grp:"Корпус",n:"ЛДСП",ok:ST.ldsp.some(x=>x!==null&&x!==undefined)},
+    {grp:"Корпус",n:"ХДФ",ok:gn("hdf-qty")>0},
+    {grp:"Корпус",n:"Кромка",ok:gn("krom-qty")>0},
+    {grp:"Корпус",n:"Фасад",ok:ST.fldsp.some(x=>x!==null&&x!==undefined)||ST.fplen.some(x=>x!==null&&x!==undefined)||ST.fkr.some(x=>x!==null&&x!==undefined)},
+    {grp:"Логистика",n:"Доставка",ok:gn("d-sat")>0},
+    {grp:"Логистика",n:"ПДМ",ok:gn("d-pdm")>0},
+    {grp:"Фурнитура",n:"Петля",ok:catIn("furn",["Петля"])},
+    {grp:"Фурнитура",n:"Ножки",ok:catIn("furn",["Ножки"])},
+    {grp:"Фурнитура",n:"Ручки",ok:catIn("furn",HANDLE_CATS)},
+    {grp:"Фурнитура",n:"Телескоп",ok:catIn("furn",SLIDE_CATS)}
+  ];
+  if(ORDT==="shk"||ORDT==="both"){
+    defs.push({grp:"Фурнитура",n:"Штанга",ok:catIn("furn",["Штанга","Штанга-Хром"])||catIn("shk",["Штанга","Штанга-Хром"])});
+  }
+  if(ORDT==="kuh"||ORDT==="both"){
+    // Столешница/сушилка можно добавить и через «Кухня доп.» (kStol/kSusNiz/
+    // kSusVerh) — это тот же физический товар, просто другая карточка.
+    // Засчитываем любую из двух: см. риск дублирования прайса в обзоре.
+    defs.push({grp:"Кухня",n:"Столешница",ok:catIn("kuh",["Столешница"])||accHas("kStol")});
+    defs.push({grp:"Кухня",n:"Соединитель угловой",ok:catIn("kuh",["Угл.соед"])});
+    defs.push({grp:"Кухня",n:"Сушилка",ok:catIn("kuh",["Сушилка","Сушилка Нерж"])||accHas("kSusNiz")||accHas("kSusVerh")});
+  }
+  return defs;
+}
+function requiredStatus(){
+  var defs=requiredDefs(),missing=defs.filter(function(d){return !d.ok;});
+  return {total:defs.length,missing:missing.length,items:missing,ordType:ORDT};
+}
+function renderRequired(){
+  var host=$("req-banner");if(!host)return;
+  document.querySelectorAll(".ordt-b").forEach(function(btn){btn.classList.toggle("on",btn.dataset.t===ORDT);});
+  var s=requiredStatus();
+  host.innerHTML="";
+  var pill=document.createElement("span");
+  pill.className="req-pill "+(s.missing===0?"ok":"warn");
+  pill.textContent=s.missing===0?"Готово":"Не заполнено: "+s.missing;
+  host.appendChild(pill);
+  if(s.missing>0){
+    var list=document.createElement("span");
+    list.className="req-list";
+    list.textContent=s.items.map(function(d){return d.n;}).join(", ");
+    host.appendChild(list);
+  }
 }
 function blk(fas,k,rm,sk,tax,cr,vK,shared,extras,eInc){
   const base=vK+fas+shared,aK=base*k,rabM=aK*rm,preTax=aK+extras,taxA=preTax*tax,afterTax=preTax+taxA,tot=afterTax+sk,credit=tot*(1+cr);
@@ -1080,6 +1169,7 @@ function recalc(){
   }
   fB("il",BL);fB("ip",BP);fB("ik",BK);
   hlRows();
+  renderRequired();
   saveDraft();
 }
 
@@ -2567,6 +2657,9 @@ function fullReset(){
   document.querySelectorAll("#pg-calc .cb.op,#pg-calc .ar.op").forEach(e=>e.classList.remove("op"));
   renderTpl();
   clearDraft();
+  // v4.12: новый расчёт — тип заказа и факт корректировки тоже с нуля.
+  ordSet("");
+  korrReset();
   recalc();tab("calc");
 }
 
@@ -3069,6 +3162,7 @@ function getSnap(){
   // v4.12: корректировка (факт) — одним ключом. План в снимке остаётся
   // нетронутым: сравнение план/факт должно быть доступно всегда.
   snap["korr"]=JSON.stringify(KORR);
+  snap["ordt"]=ORDT;
   return snap;
 }
 // ── Черновик (защита от обновления страницы) — автосохранение текущего состояния ──
@@ -3099,6 +3193,10 @@ function restoreDraftOnLoad(preReadDraft){
   }
   if(!restored)renderTpl();
   appReady=true;
+  // v4.12: баннер обязательных позиций должен быть виден сразу, даже на
+  // чистой загрузке без единого клика — иначе менеджер не увидит статус,
+  // пока сам что-то не тронет (а recalc() до этого момента не вызывается).
+  renderRequired();
 }
 function checkStorageAvailable(){
   try{
@@ -3333,6 +3431,7 @@ function applySnap(rec){
       }
     }catch(eKorr){korrReset();}
   }
+  ordSet(snap["ordt"]!==undefined?snap["ordt"]:"");
   recalc();
   page("calc");tab("calc");
 }

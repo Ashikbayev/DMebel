@@ -268,8 +268,10 @@ function waitReady(dom, tries){
 
   // ── Сценарий В: fullReset → шаблон заново, деньги в ноль ──
   console.log('── Клиент: Новый расчёт ──');
-  domB.window.eval('tog("furn");tog("kuh")');
-  ok(dB.getElementById('cb-furn').classList.contains('op'), 'разделы открыты вручную перед сбросом');
+  domB.window.eval('tog("furn")');
+  ok(dB.getElementById('cb-furn').classList.contains('op'), 'раздел фурнитуры открыт');
+  domB.window.eval('tog("kuh")');
+  ok(!dB.getElementById('cb-furn').classList.contains('op') && dB.getElementById('cb-kuh').classList.contains('op'), 'v4.12 аккордеон: открытие «Кухня» закрывает «Фурнитура» (один раздел за раз)');
   domB.window.eval('fullReset()');
   ok(!dB.getElementById('cb-furn').classList.contains('op') && !dB.getElementById('cb-kuh').classList.contains('op'), 'fullReset: разделы свёрнуты, стрелки сброшены: ' + !dB.getElementById('ar-furn').classList.contains('op'));
   const dRows = dB.querySelectorAll('#furn-list select[id^="furnc"]').length;
@@ -1424,7 +1426,7 @@ function waitReady(dom, tries){
   domF.window.eval('korrSet("lq' + fLi + '", 2); renderKorr()');
   const kBody = domF.window.document.getElementById('korr-body');
   ok(kBody && kBody.querySelectorAll('.krr').length > 0, 'экран корректировки строит строки');
-  ok(kBody.querySelectorAll('.krr.ch').length >= 1, 'изменённые строки подсвечены классом ch');
+  ok(kBody.querySelectorAll('.krr.changed').length >= 1, 'изменённые строки подсвечены классом changed');
   ok(kBody.querySelectorAll('.krg').length >= 2, 'строки сгруппированы по разделам');
   const kInp = domF.window.document.getElementById('kf-lq' + fLi);
   ok(kInp && kInp.value === '2', 'поле факта показывает введённое значение');
@@ -1482,6 +1484,80 @@ function waitReady(dom, tries){
   const domEmpty = bootPage(null);
   await waitReady(domEmpty);
   ok(domEmpty.window.eval('korrPayload()') === null, 'пустой расчёт не шлёт нулевую себестоимость — шлёт null');
+
+  // ─────────────────────────────────────────────────────────────
+  // v4.12: обязательные позиции (чек-лист) + тип заказа.
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.12: обязательные позиции ──');
+  const domR2 = bootPage(null, { failFetch: true });
+  await waitReady(domR2);
+  const rs0 = JSON.parse(domR2.window.eval('JSON.stringify(requiredStatus())'));
+  ok(rs0.missing === rs0.total && rs0.total === 10, 'пустой расчёт без типа заказа: 10 универсальных пунктов, все не заполнены');
+  const freshBanner = domR2.window.document.getElementById('req-banner');
+  ok(freshBanner && freshBanner.querySelector('.req-pill'), 'банер виден сразу на чистой загрузке — без единого клика (recalc() ещё не вызывался)');
+  ok(rs0.items.some(function(d){ return d.n === 'Штанга'; }) === false, 'без выбранного типа «Штанга» не проверяется вовсе');
+  ok(rs0.items.some(function(d){ return d.n === 'Столешница'; }) === false, 'без выбранного типа кухонная тройка не проверяется вовсе');
+
+  domR2.window.eval('addLdsp();ST.ldsp[0]=0;document.getElementById("ls0").value="0";document.getElementById("lq0").value="6";');
+  domR2.window.eval('document.getElementById("hdf-qty").value="3";document.getElementById("krom-qty").value="85";');
+  domR2.window.eval('addSimple("fldsp",DB.ldsp,"fldsp-list");document.getElementById("fldsps0").value="0";document.getElementById("fldspq0").value="4";');
+  domR2.window.eval('document.getElementById("d-sat").value="15000";document.getElementById("d-pdm").value="5000";recalc()');
+  const rs1 = JSON.parse(domR2.window.eval('JSON.stringify(requiredStatus())'));
+  ok(rs1.missing === 4, 'корпус/фасад/доставка закрыты — осталось 4 (фурнитура)');
+  ok(rs1.items.every(function(d){ return d.grp === 'Фурнитура'; }), 'все оставшиеся пункты из группы «Фурнитура»');
+
+  domR2.window.eval('addCat("furn", DB.furn, "furn-list")');
+  domR2.window.eval('document.getElementById("furnc0").value="Петля";document.getElementById("furnq0").value="24";uCP("furn",0)');
+  const rs2 = JSON.parse(domR2.window.eval('JSON.stringify(requiredStatus())'));
+  ok(rs2.missing === 3 && !rs2.items.some(function(d){ return d.n === 'Петля'; }), 'добавили петлю — закрылась именно она');
+
+  // Ручки: категория «Руч-Скрытая» должна засчитываться как «Ручки».
+  domR2.window.eval('addCat("furn", DB.furn, "furn-list")');
+  domR2.window.eval('document.getElementById("furnc1").value="Руч-Скрытая";document.getElementById("furnv1").value="96мм";uCP("furn",1);document.getElementById("furnq1").value="10";uCP("furn",1)');
+  const rs3 = JSON.parse(domR2.window.eval('JSON.stringify(requiredStatus())'));
+  ok(!rs3.items.some(function(d){ return d.n === 'Ручки'; }), 'категория «Руч-Скрытая» засчитана как «Ручки»');
+
+  // Тип заказа переключает видимость групп.
+  domR2.window.eval('ordSet("shk")');
+  const rs4 = JSON.parse(domR2.window.eval('JSON.stringify(requiredStatus())'));
+  ok(rs4.total === 11 && rs4.items.some(function(d){ return d.n === 'Штанга'; }), 'тип «Шкаф» добавляет пункт «Штанга» (итого 11 пунктов)');
+  ok(!rs4.items.some(function(d){ return d.n === 'Столешница'; }), 'тип «Шкаф» не требует кухонную тройку');
+
+  domR2.window.eval('ordSet("kuh")');
+  const rs5 = JSON.parse(domR2.window.eval('JSON.stringify(requiredStatus())'));
+  ok(!rs5.items.some(function(d){ return d.n === 'Штанга'; }), 'тип «Кухня» не требует штангу');
+  ok(rs5.items.filter(function(d){ return d.grp === 'Кухня'; }).length === 3, 'тип «Кухня» добавляет все три кухонных пункта');
+
+  // Дубль-прайс: столешница через «Кухня доп.» тоже засчитывается.
+  domR2.window.eval('ST.kStol.push(0);recalc()');
+  const rs6 = JSON.parse(domR2.window.eval('JSON.stringify(requiredStatus())'));
+  ok(!rs6.items.some(function(d){ return d.n === 'Столешница'; }), 'столешница через «Кухня доп.» тоже закрывает требование (та же позиция, другая карточка)');
+
+  domR2.window.eval('ordSet("both")');
+  const rs7 = JSON.parse(domR2.window.eval('JSON.stringify(requiredStatus())'));
+  ok(rs7.items.some(function(d){ return d.n === 'Штанга'; }) && rs7.items.some(function(d){ return d.n === 'Соединитель угловой'; }), 'тип «Шкаф+Кухня» требует и штангу, и кухонные пункты');
+
+  // Банер: рендер и текст.
+  const rBanner = domR2.window.document.getElementById('req-banner');
+  ok(rBanner && rBanner.querySelector('.req-pill.warn'), 'банер показывает предупреждение, пока есть незаполненное');
+  ok(rBanner.textContent.indexOf('Штанга') >= 0, 'банер перечисляет незаполненные пункты по именам');
+  const onBtn = domR2.window.document.querySelector('.ordt-b.on');
+  ok(onBtn && onBtn.getAttribute('data-t') === 'both', 'кнопка типа заказа подсвечена активной');
+
+  // Круг снимка: тип заказа переживает сохранение/открытие.
+  const recT = JSON.parse(domR2.window.eval('JSON.stringify({ST:ST,snap:getSnap()})'));
+  const domT = bootPage(null, { failFetch: true });
+  await waitReady(domT);
+  domT.window.eval('applySnap(' + JSON.stringify(recT) + ')');
+  ok(domT.window.eval('ORDT') === 'both', 'тип заказа пережил круг снимка');
+  const rsT = JSON.parse(domT.window.eval('JSON.stringify(requiredStatus())'));
+  ok(rsT.total === rs7.total && rsT.missing === rs7.missing, 'после круга снимка чек-лист пересчитался идентично');
+
+  // fullReset обнуляет тип заказа.
+  domR2.window.eval('fullReset()');
+  ok(domR2.window.eval('ORDT') === '', 'fullReset сбрасывает тип заказа');
+  const rs8 = JSON.parse(domR2.window.eval('JSON.stringify(requiredStatus())'));
+  ok(rs8.total === 10, 'после fullReset чек-лист снова только универсальные 10 пунктов');
 
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');
