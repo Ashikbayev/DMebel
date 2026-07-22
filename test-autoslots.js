@@ -1355,6 +1355,71 @@ function waitReady(dom, tries){
   const fTot2 = domF.window.eval('flatPlanTotal(flatItems())');
   ok(fTot2 === fTot, 'flatPlanTotal принимает готовый список и даёт тот же итог');
 
+  // ─────────────────────────────────────────────────────────────
+  // v4.12: корректировка (факт против плана). Главный инвариант —
+  // она НЕ двигает цену клиенту и кредит: договор уже подписан.
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.12: корректировка (факт против плана) ──');
+  const kT0 = JSON.parse(domF.window.eval('JSON.stringify(korrTotals())'));
+  ok(kT0.plan === fTot && kT0.fact === fTot, 'без правок факт равен плану');
+  ok(kT0.delta === 0 && kT0.changed === 0, 'отклонения нет, изменённых строк нет');
+
+  const dF = domF.window.document;
+  const totBefore = norm(dF.getElementById('il-tot').textContent);
+  const crBefore = norm(dF.getElementById('il-cr').textContent);
+
+  domF.window.eval('korrSet("lq' + fLi + '", 2); recalc()');
+  const kT1 = JSON.parse(domF.window.eval('JSON.stringify(korrTotals())'));
+  ok(kT1.delta === -18500, 'списали 2 листа вместо 3 — отклонение минус 18 500₸ (экономия)');
+  ok(kT1.fact === fTot - 18500 && kT1.plan === fTot, 'факт уменьшился, план остался нетронутым');
+  ok(kT1.changed === 1, 'изменённой помечена ровно одна строка');
+  ok(norm(dF.getElementById('il-tot').textContent) === totBefore, 'корректировка НЕ меняет цену клиенту');
+  ok(norm(dF.getElementById('il-cr').textContent) === crBefore, 'корректировка НЕ меняет сумму в кредит');
+
+  const kRow = JSON.parse(domF.window.eval('JSON.stringify(korrList())')).filter(function(r){ return r.id === 'lq' + fLi; })[0];
+  ok(kRow && kRow.plan === 3 && kRow.fact === 2 && kRow.delta === -18500, 'строка отдаёт план 3, факт 2 и разницу в деньгах');
+
+  domF.window.eval('korrSet("d-sat", 12000)');
+  const kRowM = JSON.parse(domF.window.eval('JSON.stringify(korrList())')).filter(function(r){ return r.id === 'd-sat'; })[0];
+  ok(kRowM && kRowM.kind === 'money' && kRowM.plan === 15000 && kRowM.fact === 12000 && kRowM.delta === -3000, 'money-строка правится суммой: доставка 15 000 → 12 000');
+
+  domF.window.eval('korrSet("krom-qty", -5)');
+  const kNeg = JSON.parse(domF.window.eval('JSON.stringify(korrList())')).filter(function(r){ return r.id === 'krom-qty'; })[0];
+  ok(kNeg && kNeg.fact === 10 && kNeg.delta === 0, 'отрицательный факт отклонён, строка осталась на плане');
+
+  domF.window.eval('korrSet("d-sat", "")');
+  const kClr = JSON.parse(domF.window.eval('JSON.stringify(korrList())')).filter(function(r){ return r.id === 'd-sat'; })[0];
+  ok(kClr && kClr.fact === 15000 && kClr.delta === 0, 'пустое значение снимает факт — строка возвращается к плану');
+
+  domF.window.eval('korrAddItem("Уголок мебельный", 450, 20, "шт")');
+  const kAdd = JSON.parse(domF.window.eval('JSON.stringify(korrList())')).filter(function(r){ return r.added === true; })[0];
+  ok(kAdd && kAdd.plan === 0 && kAdd.factCost === 9000 && kAdd.delta === 9000, 'докупленная позиция: плана 0, отклонение плюс 9 000₸');
+  const kT2 = JSON.parse(domF.window.eval('JSON.stringify(korrTotals())'));
+  ok(kT2.delta === -18500 + 9000, 'свод складывает экономию и докупленное (минус 9 500₸)');
+
+  // Круг снимка: факт и докупленное обязаны пережить сохранение/открытие.
+  const recK = JSON.parse(domF.window.eval('JSON.stringify({ST:ST,snap:getSnap()})'));
+  const domK = bootPage(null);
+  await waitReady(domK);
+  domK.window.eval('applySnap(' + JSON.stringify(recK) + ')');
+  const kT3 = JSON.parse(domK.window.eval('JSON.stringify(korrTotals())'));
+  ok(kT3.delta === kT2.delta && kT3.plan === kT2.plan, 'после круга снимка план и отклонение сошлись копейка в копейку');
+  const kAdd3 = JSON.parse(domK.window.eval('JSON.stringify(korrList())')).filter(function(r){ return r.added === true; })[0];
+  ok(kAdd3 && kAdd3.n === 'Уголок мебельный' && kAdd3.fact === 20, 'докупленная позиция пережила круг снимка');
+  const kRow3 = JSON.parse(domK.window.eval('JSON.stringify(korrList())')).filter(function(r){ return r.id === 'lq' + fLi; })[0];
+  ok(kRow3 && kRow3.fact === 2, 'факт по листам пережил круг снимка');
+
+  domK.window.eval('korrRemoveItem(0)');
+  const kAfterDel = JSON.parse(domK.window.eval('JSON.stringify(korrTotals())'));
+  ok(kAfterDel.delta === -18500, 'удаление докупленной позиции убрало её из отклонения');
+
+  // Заказ без корректировки не должен подхватывать чужой факт.
+  const recClean = JSON.parse(domF.window.eval('JSON.stringify({ST:ST,snap:getSnap()})'));
+  delete recClean.snap.korr;
+  domK.window.eval('applySnap(' + JSON.stringify(recClean) + ')');
+  const kT4 = JSON.parse(domK.window.eval('JSON.stringify(korrTotals())'));
+  ok(kT4.delta === 0 && kT4.changed === 0, 'снимок без корректировки открывается чистым — факт прошлого заказа не протекает');
+
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');
   process.exit(FAIL ? 1 : 0);

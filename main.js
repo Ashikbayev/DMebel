@@ -878,6 +878,59 @@ function flatItems(){
 function flatPlanTotal(list){
   return (list||flatItems()).reduce(function(s,it){return s+it.q*it.u;},0);
 }
+// ── v4.12: КОРРЕКТИРОВКА (факт против плана) ──────────────────
+// План — это flatItems(): что посчитали при продаже. Факт — сколько реально
+// ушло в производство. Корректировка НЕ трогает цену клиенту и заработок
+// мастера: договор подписан, цена ядра зафиксирована. Она меняет только
+// себестоимость, а через неё — наш доход. Списали меньше листов, чем
+// заложили, — доход вырос ровно на сэкономленное.
+// Живёт ВНЕ ST сознательно: applySnap обнуляет ST целиком (ST[k]=[]), а
+// факт обязан пережить восстановление снимка.
+var KORR={f:{},add:[]};
+function korrReset(){KORR={f:{},add:[]};}
+function korrSet(id,v){
+  if(v===""||v===null||v===undefined){delete KORR.f[id];return;}
+  var n=Number(v);
+  if(isNaN(n)||n<0)return;
+  KORR.f[id]=n;
+}
+function korrAddItem(n,u,q,unit){
+  if(!n)return null;
+  var it={n:String(n),u:Number(u)||0,q:Number(q)||0,unit:unit||"шт"};
+  KORR.add.push(it);
+  return it;
+}
+function korrRemoveItem(i){if(KORR.add[i]!==undefined)KORR.add.splice(i,1);}
+// Строки корректировки: план, факт и отклонение в деньгах по каждой позиции.
+// Факт по умолчанию равен плану — пока его не тронули, отклонения нет.
+// added:true — позиция, которой в расчёте не было вовсе (докупили по ходу).
+function korrList(){
+  var out=[];
+  flatItems().forEach(function(it){
+    var hasF=KORR.f[it.id]!==undefined;
+    var plan=it.kind==="money"?it.u:it.q;
+    var fact=hasF?KORR.f[it.id]:plan;
+    var planC=it.q*it.u;
+    var factC=it.kind==="money"?fact:fact*it.u;
+    out.push({id:it.id,sec:it.sec,grp:it.grp,n:it.n,unit:it.unit,kind:it.kind,
+      u:it.u,plan:plan,fact:fact,planCost:planC,factCost:factC,
+      delta:factC-planC,changed:factC!==planC,added:false});
+  });
+  KORR.add.forEach(function(it,i){
+    var factC=it.q*it.u;
+    out.push({id:"korrAdd"+i,sec:"korrAdd",grp:"Докуплено",n:it.n,unit:it.unit,kind:"qty",
+      u:it.u,plan:0,fact:it.q,planCost:0,factCost:factC,
+      delta:factC,changed:true,added:true});
+  });
+  return out;
+}
+// Свод: план, факт, отклонение. delta<0 — сэкономили (доход выше),
+// delta>0 — перерасход (доход ниже ровно на эту сумму).
+function korrTotals(){
+  var list=korrList(),plan=0,fact=0,ch=0;
+  list.forEach(function(r){plan+=r.planCost;fact+=r.factCost;if(r.changed)ch++;});
+  return {plan:plan,fact:fact,delta:fact-plan,changed:ch,rows:list.length};
+}
 function blk(fas,k,rm,sk,tax,cr,vK,shared,extras,eInc){
   const base=vK+fas+shared,aK=base*k,rabM=aK*rm,preTax=aK+extras,taxA=preTax*tax,afterTax=preTax+taxA,tot=afterTax+sk,credit=tot*(1+cr);
   return{base,aK,rabM,sk,taxA,tot,credit,inc:aK-base-rabM+sk+eInc};
@@ -2926,6 +2979,9 @@ function getSnap(){
       const q=$(key+"Q"+i);if(q)snap[key+"Q"+i]=q.value;
     });
   });
+  // v4.12: корректировка (факт) — одним ключом. План в снимке остаётся
+  // нетронутым: сравнение план/факт должно быть доступно всегда.
+  snap["korr"]=JSON.stringify(KORR);
   return snap;
 }
 // ── Черновик (защита от обновления страницы) — автосохранение текущего состояния ──
@@ -3177,6 +3233,18 @@ function applySnap(rec){
     if(cwST[i]===null||cwST[i]===undefined){ST.cworks.push(null);continue;}
     addCWork();
     ["cwn","cwp","cwq"].forEach(p=>{if(snap[p+i]!==undefined){const e=$(p+i);if(e)e.value=snap[p+i];}});
+  }
+  // v4.12: корректировка. Сбрасываем всегда — иначе факт от прошлого
+  // заказа протечёт в только что открытый.
+  korrReset();
+  if(snap["korr"]!==undefined){
+    try{
+      var krRec=JSON.parse(snap["korr"]);
+      if(krRec&&typeof krRec==="object"){
+        KORR.f=krRec.f&&typeof krRec.f==="object"?krRec.f:{};
+        KORR.add=Array.isArray(krRec.add)?krRec.add:[];
+      }
+    }catch(eKorr){korrReset();}
   }
   recalc();
   page("calc");tab("calc");
