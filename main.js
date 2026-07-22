@@ -286,7 +286,7 @@ const gn=id=>{const e=$(id);return e?(parseFloat(e.value)||0):0;};
 const st=(id,v)=>{const e=$(id);if(e){e.textContent=fm(v);e.classList.toggle("filled",v>0);}};
 const sx=(id,v)=>{const e=$(id);if(e)e.textContent=v;};
 function page(p){["calc","kp","hist","conf","kitchen","crm"].forEach(n=>{$("pg-"+n)?.classList.toggle("on",n===p);const b=$("bbt-"+n);if(b)b.classList.toggle("on",n===p);});if(p==="hist")renderHist();if(p==="conf"){initConf();}if(p==="kitchen"){initKitchen();}if(p==="crm"&&window.crmPageOpen){window.crmPageOpen();}}
-function tab(t){["calc","coef","extra","vit","itog"].forEach(s=>$("scr-"+s).classList.toggle("on",s===t));document.querySelectorAll(".tb").forEach((b,i)=>b.classList.toggle("on",["calc","coef","extra","vit","itog"][i]===t));document.body.classList.toggle("itog-active",t==="itog");recalc();window.scrollTo(0,0);}
+function tab(t){["calc","coef","extra","vit","itog","korr"].forEach(s=>{const e=$("scr-"+s);if(e)e.classList.toggle("on",s===t);});document.querySelectorAll(".tb").forEach((b,i)=>b.classList.toggle("on",["calc","coef","extra","vit","itog","korr"][i]===t));document.body.classList.toggle("itog-active",t==="itog");recalc();if(t==="korr")renderKorr();window.scrollTo(0,0);}
 function tog(id){const b=$("cb-"+id),a=$("ar-"+id);if(!b)return;const op=b.classList.toggle("op");if(a)a.classList.toggle("op",op);}
 function addLdsp(){
   const i=ST.ldsp.length;ST.ldsp.push(0);
@@ -930,6 +930,82 @@ function korrTotals(){
   var list=korrList(),plan=0,fact=0,ch=0;
   list.forEach(function(r){plan+=r.planCost;fact+=r.factCost;if(r.changed)ch++;});
   return {plan:plan,fact:fact,delta:fact-plan,changed:ch,rows:list.length};
+}
+// Экран корректировки. Строится через createElement сознательно: новые
+// backtick-шаблоны в main.js запрещены инвариантом.
+function korrFmt(v){return Math.round(v).toLocaleString("ru")+"₸";}
+function renderKorr(){
+  var host=$("korr-body");if(!host)return;
+  host.innerHTML="";
+  var list=korrList(),t=korrTotals();
+  var ep=$("korr-plan");if(ep)ep.textContent=korrFmt(t.plan);
+  var ef=$("korr-fact");if(ef)ef.textContent=korrFmt(t.fact);
+  var ed=$("korr-delta");
+  if(ed){
+    ed.textContent=(t.delta>0?"+":"")+korrFmt(t.delta);
+    ed.className="cs "+(t.delta>0?"krup":t.delta<0?"krdn":"");
+  }
+  var en=$("korr-note");
+  if(en){
+    if(t.delta===0)en.textContent="Отклонений нет — факт совпадает с планом.";
+    else if(t.delta<0)en.textContent="Сэкономлено "+korrFmt(-t.delta)+" — доход выше планового на эту сумму.";
+    else en.textContent="Перерасход "+korrFmt(t.delta)+" — доход ниже планового на эту сумму.";
+    en.className="krnote "+(t.delta>0?"krup":t.delta<0?"krdn":"");
+  }
+  if(!list.length){
+    var em=document.createElement("p");em.className="hint";
+    em.textContent="Расчёт пуст — заполните калькулятор, позиции появятся здесь.";
+    host.appendChild(em);return;
+  }
+  var grp="";
+  list.forEach(function(r){
+    if(r.grp!==grp){
+      grp=r.grp;
+      var gh=document.createElement("div");gh.className="krg";gh.textContent=grp;
+      host.appendChild(gh);
+    }
+    var row=document.createElement("div");row.className="krr"+(r.changed?" ch":"");
+    var nm=document.createElement("div");nm.className="krn";
+    nm.appendChild(document.createTextNode(r.n));
+    var un=document.createElement("span");un.className="kru";
+    un.textContent=r.kind==="money"?"сумма":r.unit;
+    nm.appendChild(un);
+    var pl=document.createElement("div");pl.className="krp";
+    pl.textContent=r.kind==="money"?korrFmt(r.plan):String(r.plan);
+    var inp=document.createElement("input");
+    inp.className="kri";inp.type="number";inp.min="0";
+    inp.setAttribute("inputmode","decimal");
+    inp.value=String(r.fact);
+    inp.id="kf-"+r.id;
+    inp.onchange=function(){
+      if(r.added){
+        var ai=Number(r.id.replace("korrAdd",""));
+        if(KORR.add[ai])KORR.add[ai].q=Number(this.value)||0;
+      }else korrSet(r.id,this.value);
+      renderKorr();
+    };
+    var dl=document.createElement("div");
+    dl.className="krd "+(r.delta>0?"krup":r.delta<0?"krdn":"");
+    dl.textContent=r.delta===0?"—":(r.delta>0?"+":"")+korrFmt(r.delta);
+    row.appendChild(nm);row.appendChild(pl);row.appendChild(inp);row.appendChild(dl);
+    if(r.added){
+      var db=document.createElement("button");db.className="db";db.textContent="✕";
+      db.onclick=function(){korrRemoveItem(Number(r.id.replace("korrAdd","")));renderKorr();};
+      row.appendChild(db);
+    }
+    host.appendChild(row);
+  });
+}
+function korrAddFromForm(){
+  var n=$("korr-an"),u=$("korr-au"),q=$("korr-aq");
+  if(!n||!u||!q)return;
+  var nm=String(n.value||"").trim();
+  if(!nm){alert("Укажите название позиции");return;}
+  var uv=Number(u.value)||0,qv=Number(q.value)||0;
+  if(uv<=0||qv<=0){alert("Укажите цену и количество больше нуля");return;}
+  korrAddItem(nm,uv,qv,"шт");
+  n.value="";u.value="";q.value="";
+  renderKorr();
 }
 function blk(fas,k,rm,sk,tax,cr,vK,shared,extras,eInc){
   const base=vK+fas+shared,aK=base*k,rabM=aK*rm,preTax=aK+extras,taxA=preTax*tax,afterTax=preTax+taxA,tot=afterTax+sk,credit=tot*(1+cr);

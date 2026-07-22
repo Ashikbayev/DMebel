@@ -30,6 +30,7 @@
     <button class="tb" onclick="tab('extra')">Доп.</button>
     <button class="tb" onclick="tab('vit')">Витрина</button>
     <button class="tb" onclick="tab('itog')">Итог</button>
+    <button class="tb" onclick="tab('korr')">Корр.</button>
   </div>
 
   <div class="calc-body" id="calc-body">
@@ -200,6 +201,24 @@
   <div class="scr" id="scr-vit">
     <div class="card"><div class="ch" onclick="tog('vitp')"><div class="ct">🪟 Витрина<span class="tag tn">без наценки</span></div><span class="cs" id="s-vit">0₸</span></div>
       <div class="cb" id="cb-vitp"><div id="vit-list"></div><button class="ab" onclick="addVit()">+ Добавить витрину</button></div></div>
+  </div>
+
+  <div class="scr" id="scr-korr">
+    <div class="card"><div class="ch"><div class="ct"><span style="color:#0F6E56">◆</span>Корректировка<span class="tag tn">факт</span></div><span class="cs" id="korr-delta">0₸</span></div>
+      <div class="cb op">
+        <div class="krsum">
+          <div class="krsc"><span>План</span><b id="korr-plan">0₸</b></div>
+          <div class="krsc"><span>Факт</span><b id="korr-fact">0₸</b></div>
+        </div>
+        <div class="krnote" id="korr-note"></div>
+        <div class="krhd"><span class="krhn">Позиция</span><span class="krhp">план</span><span class="krhf">факт</span><span class="krhd2">разница</span></div>
+        <div id="korr-body"></div>
+        <div class="stl">Докупить позицию</div>
+        <div class="fr"><input id="korr-an" placeholder="Название позиции"></div>
+        <div class="fr"><span class="lb">Цена</span><input class="qi" type="number" inputmode="decimal" id="korr-au" placeholder="0" min="0"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="korr-aq" placeholder="0" min="0"></div>
+        <button class="ab" onclick="korrAddFromForm()">+ Добавить в корректировку</button>
+      </div>
+    </div>
   </div>
 
   </div>

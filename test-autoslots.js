@@ -1420,6 +1420,23 @@ function waitReady(dom, tries){
   const kT4 = JSON.parse(domK.window.eval('JSON.stringify(korrTotals())'));
   ok(kT4.delta === 0 && kT4.changed === 0, 'снимок без корректировки открывается чистым — факт прошлого заказа не протекает');
 
+  // Экран корректировки: рендер поверх korrList.
+  domF.window.eval('korrSet("lq' + fLi + '", 2); renderKorr()');
+  const kBody = domF.window.document.getElementById('korr-body');
+  ok(kBody && kBody.querySelectorAll('.krr').length > 0, 'экран корректировки строит строки');
+  ok(kBody.querySelectorAll('.krr.ch').length >= 1, 'изменённые строки подсвечены классом ch');
+  ok(kBody.querySelectorAll('.krg').length >= 2, 'строки сгруппированы по разделам');
+  const kInp = domF.window.document.getElementById('kf-lq' + fLi);
+  ok(kInp && kInp.value === '2', 'поле факта показывает введённое значение');
+  ok(norm(domF.window.document.getElementById('korr-plan').textContent).indexOf('91 780') === 0, 'шапка экрана показывает план 91 780₸');
+  const kNoteTxt = domF.window.document.getElementById('korr-note').textContent;
+  ok(kNoteTxt.indexOf('Сэкономлено') === 0, 'подпись объясняет экономию человеческим языком');
+  // Ввод в поле факта должен менять свод без перезагрузки.
+  kInp.value = '1';
+  kInp.onchange();
+  const kT5 = JSON.parse(domF.window.eval('JSON.stringify(korrTotals())'));
+  ok(kT5.delta === -18500 * 2 + 9000, 'правка прямо в поле пересчитала отклонение (с учётом докупленного уголка)');
+
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');
   process.exit(FAIL ? 1 : 0);
