@@ -962,6 +962,36 @@ function waitReady(dom, tries){
   var oNew2 = null; osl6.orders.forEach(function(x){ if(x.num === co2.num) oNew2 = x; });
   ok(co2.ok === true && oNew2 && oNew2.source === '', 'источник необязателен при создании (пустая строка по умолчанию)');
 
+  // ─────────────────────────────────────────────────────────────
+  // v4.13: saveOrder_ пишет себестоимость план/факт — это РЕАЛЬНЫЙ путь
+  // из калькулятора (crmPushOrder → action 'saveOrder'), а не updateOrder_,
+  // которую проверяли выше отдельно. Разные диапазоны записи — разная
+  // функция, разный риск.
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.13: saveOrder_ пишет себестоимость (реальный путь из калькулятора) ──');
+  var so1 = att("saveOrder_(__ordSS, { num:'850', client:'Заказ Для Себестоимости', totL:600000, costPlan:336480, costFact:317240 })");
+  ok(so1.ok === true, 'saveOrder_ с себестоимостью сохранён');
+  var osl7 = att("ordersList_(__ordSS)");
+  var o77s7 = null; osl7.orders.forEach(function(x){ if (x.num === '850') o77s7 = x; });
+  ok(o77s7.costPlan === 336480 && o77s7.costFact === 317240, 'saveOrder_: план и факт долетели до ordersList_');
+  ok(o77s7.costDelta === -19240, 'saveOrder_: отклонение посчиталось верно (минус 19 240₸)');
+  ok(o77s7.source === '', 'saveOrder_ не задел источник лида — он вне диапазона 1-25/35-36 этой функции');
+
+  // Повторное сохранение расчёта БЕЗ корректировки (costPlan/costFact не
+  // переданы вовсе) не должно стирать то, что уже записано.
+  att("saveOrder_(__ordSS, { num:'850', totL:610000 })");
+  var osl8 = att("ordersList_(__ordSS)");
+  var o77s8 = null; osl8.orders.forEach(function(x){ if (x.num === '850') o77s8 = x; });
+  ok(o77s8.costPlan === 336480 && o77s8.costFact === 317240, 'повторное сохранение без cost-полей не стирает ранее записанную себестоимость');
+
+  // Новый заказ, сохранённый сразу с себестоимостью (первое сохранение
+  // расчёта из калькулятора — самый частый случай в реальности).
+  var so2 = att("saveOrder_(__ordSS, { num:'901', client:'Новый С Расчётом', totL:400000, costPlan:200000, costFact:200000 })");
+  ok(so2.ok === true && so2.created === true, 'новый заказ создан через saveOrder_ сразу с себестоимостью');
+  var osl9 = att("ordersList_(__ordSS)");
+  var o901 = null; osl9.orders.forEach(function(x){ if (x.num === '901') o901 = x; });
+  ok(o901.costPlan === 200000 && o901.costFact === 200000 && o901.costDelta === 0, 'план=факт при первом сохранении — отклонения ещё нет, но оба поля на месте');
+
   var dtRows = [];
   var dtWSheet = mkWritable(dtRows);
   gsCtx.__dtSS = { getSheetByName: function(n){ return n === 'ШаблоныДопРабот' ? dtWSheet : null; }, insertSheet: function(){ return dtWSheet; } };
@@ -1484,6 +1514,40 @@ function waitReady(dom, tries){
   const domEmpty = bootPage(null);
   await waitReady(domEmpty);
   ok(domEmpty.window.eval('korrPayload()') === null, 'пустой расчёт не шлёт нулевую себестоимость — шлёт null');
+
+  // ─────────────────────────────────────────────────────────────
+  // v4.13: доход по факту на экране корректировки + пакет в rec (saveCalc).
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.13: доход по факту + пакет для CRM ──');
+  domF.window.eval('renderKorr()');
+  const incL = domF.window.document.getElementById('korr-inc-l').textContent;
+  const incExpectL = domF.window.eval('C.BL.inc') - kpT.delta;
+  ok(norm(incL) === norm(domF.window.eval('fm(' + incExpectL + ')')), 'плитка «ЛДСП»: доход из панели Итог минус отклонение корректировки');
+  const incP = domF.window.document.getElementById('korr-inc-p').textContent;
+  const incExpectP = domF.window.eval('C.BP.inc') - kpT.delta;
+  ok(norm(incP) === norm(domF.window.eval('fm(' + incExpectP + ')')), 'плитка «Плёнка» считается той же дельтой');
+  const incK = domF.window.document.getElementById('korr-inc-k').textContent;
+  const incExpectK = domF.window.eval('C.BK.inc') - kpT.delta;
+  ok(norm(incK) === norm(domF.window.eval('fm(' + incExpectK + ')')), 'плитка «Краска» считается той же дельтой');
+
+  // saveCalc: пакет korrPayload() прикладывается к rec.
+  domF.window.eval('const rc=$("kp-client");if(rc)rc.value="Тест Клиент";saveCalc()');
+  const histRec = JSON.parse(domF.window.eval('localStorage.getItem("mebeloff_hist")'))[0];
+  ok(histRec.costPlan === kp.costPlan && histRec.costFact === kp.costFact && histRec.costDelta === kp.delta, 'saveCalc: costPlan/costFact/costDelta приложены к записи для CRM');
+
+  // Без правок факта costPlan/costFact в rec всё равно присутствуют (план
+  // известен с первой минуты) — но равны друг другу, отклонения нет.
+  const domSaveEmpty = bootPage(null);
+  await waitReady(domSaveEmpty);
+  domSaveEmpty.window.eval('addLdsp();ST.ldsp[0]=0;document.getElementById("ls0").value="0";document.getElementById("lq0").value="2";recalc()');
+  domSaveEmpty.window.eval('const rc2=$("kp-client");if(rc2)rc2.value="Без корректировки";saveCalc()');
+  const histRec2 = JSON.parse(domSaveEmpty.window.eval('localStorage.getItem("mebeloff_hist")'))[0];
+  ok(histRec2.costPlan === histRec2.costFact && histRec2.costDelta === 0, 'без правок факт равен плану — отклонение 0, поля присутствуют');
+
+  // А вот на ПУСТОМ расчёте (ни одной позиции) полей нет вовсе — тут
+  // saveCalc() в принципе заблокирован через alert, так что косвенно
+  // проверяем это через сам korrPayload().
+  ok(domSaveEmpty.window.eval('ST.ldsp=[];recalc();korrPayload()') === null, 'если убрать все позиции — korrPayload снова null');
 
   // ─────────────────────────────────────────────────────────────
   // v4.12: обязательные позиции (чек-лист) + тип заказа.

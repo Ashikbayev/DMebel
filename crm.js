@@ -240,6 +240,12 @@
       margK: Math.round(rec.marginK || 0),
       snap1: sn.parts[0], snap2: sn.parts[1], snap3: sn.parts[2]
     };
+    // v4.13: себестоимость план/факт из корректировки — если в rec есть
+    // (saveCalc() прикладывает их через korrPayload(), только когда в
+    // расчёте есть хоть одна позиция). costDelta сервер считает сам
+    // из пары план/факт — отдельно его не шлём.
+    if (rec.costPlan !== undefined) order.costPlan = rec.costPlan;
+    if (rec.costFact !== undefined) order.costFact = rec.costFact;
     post({ action: 'saveOrder', order: order }, function(res){
       var extra = sn.tooBig ? ' (снимок слишком большой, остался только локально)' : '';
       if (res && res.prevClient && res.prevClient !== order.client) {
@@ -4727,6 +4733,21 @@
         costRow('Себестоимость', fm0(cost));
         costRow('Маржа', fm0(marg), 'crm-margin');
         costRow('Рентабельность', pct + '%');
+        // v4.13: факт себестоимости из корректировки калькулятора. Раньше
+        // корректировка сохранялась только в снимок расчёта — карточка
+        // заказа её не читала, и «Для тебя» всегда показывал плановые
+        // цифры, даже если по факту материала ушло меньше/больше. Строку
+        // показываем, только если корректировку реально делали (costFact
+        // задан) — до этого момента плановые цифры выше остаются точными
+        // и единственными, ничего не дублируем.
+        if(o.costFact !== null && o.costFact !== undefined){
+          var factDelta = (o.costDelta !== null && o.costDelta !== undefined) ? Number(o.costDelta) : null;
+          costRow('Себестоимость по факту', fm0(o.costFact));
+          if(factDelta !== null && factDelta !== 0){
+            costRow(factDelta < 0 ? 'Сэкономлено' : 'Перерасход', (factDelta < 0 ? '\u2212' : '+') + fm0(Math.abs(factDelta)));
+            costRow('Маржа по факту', fm0(marg - factDelta), 'crm-margin');
+          }
+        }
         moneyWrap.appendChild(costWrap);
       }
 

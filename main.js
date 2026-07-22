@@ -972,6 +972,15 @@ function renderKorr(){
     else en.textContent="Перерасход "+korrFmt(t.delta)+" — доход ниже планового на эту сумму.";
     en.className="krnote "+(t.delta>0?"krup":t.delta<0?"krdn":"");
   }
+  // v4.13: доход по факту — тот же доход, что в панели «Итог», минус
+  // отклонение корректировки. Одна и та же дельта вычитается из всех трёх
+  // вариантов, потому что она приходит из общих разделов (корпус,
+  // фурнитура, доставка) — они у всех трёх вариантов одни и те же,
+  // отличается только фасад.
+  var eil=$("korr-inc-l"),eip=$("korr-inc-p"),eik=$("korr-inc-k");
+  if(eil)eil.textContent=korrFmt((C.BL&&C.BL.inc||0)-t.delta);
+  if(eip)eip.textContent=korrFmt((C.BP&&C.BP.inc||0)-t.delta);
+  if(eik)eik.textContent=korrFmt((C.BK&&C.BK.inc||0)-t.delta);
   if(!list.length){
     var em=document.createElement("p");em.className="hint";
     em.textContent="Расчёт пуст — заполните калькулятор, позиции появятся здесь.";
@@ -3228,6 +3237,12 @@ function saveCalc(){
     vitCount:ST.vit.filter(x=>x!==null).length,
     dopCount:ST.dop.filter(x=>x!==null).length
   };
+  // v4.13: пакет корректировки едет вместе с записью — готов к отправке
+  // в CRM (updateOrder_ принимает costPlan/costFact уже сейчас), но саму
+  // точку вызова нужно добавить в crm.js: здесь мы только прикладываем
+  // данные к rec, а не отправляем их на сервер напрямую.
+  const kp=korrPayload();
+  if(kp){rec.costPlan=kp.costPlan;rec.costFact=kp.costFact;rec.costDelta=kp.delta;}
   const hist=JSON.parse(localStorage.getItem("mebeloff_hist")||"[]");
   hist.unshift(rec);
   if(hist.length>50)hist.pop();

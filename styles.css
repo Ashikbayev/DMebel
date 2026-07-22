@@ -853,3 +853,10 @@ input.kri{width:62px;min-width:62px;max-width:62px;flex-shrink:0;padding:4px 6px
 /* Открытая карточка — заметный акцент слева, чтобы взгляд не «плавал» */
 #pg-calc .card:has(.cb.op){border-color:var(--t)}
 #pg-calc .card:has(.cb.op)>.ch{background:color-mix(in srgb,var(--t) 5%,#fff)}
+
+/* ── v4.13: доход по факту (корректировка) ── */
+.krinc{display:flex;gap:6px;margin-bottom:10px}
+.krinc-t{flex:1;display:flex;flex-direction:column;gap:3px;background:var(--in);border:1px solid var(--bd);border-radius:8px;padding:7px 9px}
+.krinc-t span:nth-child(2){font-size:9px;color:var(--t2);font-weight:500;margin-left:2px}
+.krinc-t .dot{margin-bottom:-2px}
+.krinc-t b{font-size:13px;font-weight:700;color:var(--tx)}
