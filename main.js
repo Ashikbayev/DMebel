@@ -788,6 +788,96 @@ function allKitchenAccItems(){
   Object.keys(SIMPLE_CFG).forEach(k=>{items=items.concat(simpleItems(k));});
   return items;
 }
+// ── v4.12: плоский список позиций расчёта (ПЛАН) ──────────────
+// Единый источник для КОРРЕКТИРОВКИ (факт vs план) и любых сводок.
+// В отличие от cIt/sIt (только имя+кол-во) отдаёт ещё цену за единицу и
+// единицу измерения — без них отклонение в деньгах не посчитать.
+// kind: "qty" — правится количество (лист/пм/шт/м), "money" — правится
+// сумма целиком (доставка, ПДМ, витрина: цены за штуку там нет).
+// id — тот же id поля ввода в DOM: якорь для сопоставления факта с планом,
+// переживает пересортировку списка.
+// Состав повторяет то, что реально вошло в суммы recalc: если позиция в
+// расчёте не участвует (нет кол-ва или цены) — её нет и здесь.
+function fiPush(out,sec,grp,n,q,u,unit,kind,id){
+  if(!n)return;
+  if(kind==="money"){if(!u)return;}
+  else if(!q||!u)return;
+  out.push({id:id,sec:sec,grp:grp,n:n,q:q,u:u,unit:unit,kind:kind});
+}
+function flatItems(){
+  var out=[];
+  ST.ldsp.forEach(function(x,i){
+    if(x===null||x===undefined)return;
+    var row=DB.ldsp[x];if(!row)return;
+    fiPush(out,"ldsp","Корпус",row.n,gn("lq"+i),row.p,"лист","qty","lq"+i);
+  });
+  fiPush(out,"hdf","Корпус","ХДФ",gn("hdf-qty"),DB.hdf_p,"лист","qty","hdf-qty");
+  fiPush(out,"krom","Корпус","Кромка",gn("krom-qty"),DB.krom_p,"пм","qty","krom-qty");
+  [["fldsp","Фасад ЛДСП",DB.ldsp],["fplen","Фасад Плёнка",DB.fas_plen],["fkr","Фасад Краска",DB.fas_kr]].forEach(function(cfg){
+    var sec=cfg[0],grp=cfg[1],arr=cfg[2];
+    ST[sec].forEach(function(x,i){
+      if(x===null||x===undefined)return;
+      var row=arr[x];if(!row)return;
+      fiPush(out,sec,grp,row.n,gn(sec+"q"+i),row.p,"лист","qty",sec+"q"+i);
+    });
+  });
+  [["furn","Фурнитура общая"],["kuh","Фурнитура кухня"],["shk","Фурнитура шкаф"],["svet","Свет"]].forEach(function(cfg){
+    var sec=cfg[0],grp=cfg[1],arr=gA(sec);
+    ST[sec].forEach(function(item,i){
+      if(!item)return;
+      var cat=$(sec+"c"+i)?.value,vid=$(sec+"v"+i)?.value||"—",firm=$(sec+"f"+i)?.value||"—";
+      var row=fRow(arr,cat,vid,firm);if(!row)return;
+      var parts=[cat];if(vid&&vid!=="—")parts.push(vid);if(firm&&firm!=="—")parts.push(firm);
+      fiPush(out,sec,grp,parts.join(" "),gn(sec+"q"+i),row.p,"шт","qty",sec+"q"+i);
+    });
+  });
+  fiPush(out,"del","Логистика","Доставка",1,gn("d-sat"),"₸","money","d-sat");
+  fiPush(out,"del","Логистика","ПДМ",1,gn("d-pdm"),"₸","money","d-pdm");
+  fiPush(out,"svet","Свет","Доход с установки света",1,gn("svet-inc"),"₸","money","svet-inc");
+  DB.works.forEach(function(w,i){
+    fiPush(out,"works","Работы",w.n,gn("wq"+i),gn("wp"+i),"шт","qty","wq"+i);
+  });
+  ST.cworks.forEach(function(x,i){
+    if(x===null||x===undefined)return;
+    fiPush(out,"cworks","Работы",$("cwn"+i)?.value||"Работа",gn("cwq"+i),gn("cwp"+i),"шт","qty","cwq"+i);
+  });
+  ST.dop.forEach(function(x,i){
+    if(x===null)return;
+    fiPush(out,"dop","Доп. позиции",$("dn"+i)?.value||"Доп.",gn("dq"+i),gn("dp"+i),"шт","qty","dq"+i);
+  });
+  ST.vit.forEach(function(x,i){
+    if(x===null)return;
+    var d=gVD(i);
+    fiPush(out,"vit","Витрина","Витрина "+(i+1)+" "+d.stName,1,d.tot,"₸","money","vit"+i);
+  });
+  ST.moika.forEach(function(x,i){
+    if(x===null||x===undefined)return;
+    var row=mRow(i);if(!row)return;
+    fiPush(out,"moika","Кухня доп.","Мойка "+row.tip+" "+row.razmer+" "+row.cvet,gn("moikaQ"+i),row.base+row.work+row.des+row.our,"шт","qty","moikaQ"+i);
+  });
+  Object.keys(ACC_CFG).forEach(function(k){
+    var cfg=ACC_CFG[k];
+    ST[k].forEach(function(x,i){
+      if(x===null||x===undefined)return;
+      var row=accRow(k,i);if(!row)return;
+      var parts=[cfg.label];cfg.attrs.forEach(function(a){if(row[a]&&row[a]!=="—")parts.push(row[a]);});
+      fiPush(out,k,"Кухня доп.",parts.join(" "),gn(k+"Q"+i),row.base+row.work+row.des+row.our,"шт","qty",k+"Q"+i);
+    });
+  });
+  Object.keys(SIMPLE_CFG).forEach(function(k){
+    var cfg=SIMPLE_CFG[k];
+    ST[k].forEach(function(x,i){
+      if(x===null||x===undefined)return;
+      var row=simpleRow(k,i);if(!row)return;
+      fiPush(out,k,"Кухня доп.",cfg.label+" "+row.tip,gn(k+"Q"+i),row.p,cfg.unit,"qty",k+"Q"+i);
+    });
+  });
+  return out;
+}
+// Сумма плана по плоскому списку: money-строки входят суммой, qty — кол-во×цена.
+function flatPlanTotal(list){
+  return (list||flatItems()).reduce(function(s,it){return s+it.q*it.u;},0);
+}
 function blk(fas,k,rm,sk,tax,cr,vK,shared,extras,eInc){
   const base=vK+fas+shared,aK=base*k,rabM=aK*rm,preTax=aK+extras,taxA=preTax*tax,afterTax=preTax+taxA,tot=afterTax+sk,credit=tot*(1+cr);
   return{base,aK,rabM,sk,taxA,tot,credit,inc:aK-base-rabM+sk+eInc};

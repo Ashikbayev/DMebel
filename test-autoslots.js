@@ -1303,6 +1303,58 @@ function waitReady(dom, tries){
   var arRestoreDup = att("restoreFromArchive_(__arSS, __arArchiveSS, '601')");
   ok(arRestoreDup.ok === false, 'повторный возврат того же номера отклонён (его уже нет в архиве)');
 
+  // ─────────────────────────────────────────────────────────────
+  // v4.12: flatItems — плоский список позиций (ПЛАН) для корректировки.
+  // Проверяем: цена за единицу, единица измерения, kind qty/money,
+  // id-якорь на поле ввода и что пустые строки в список не лезут.
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.12: flatItems (план для корректировки) ──');
+  const domF = bootPage(null);
+  await waitReady(domF);
+  domF.window.eval('addLdsp()');
+  const fLi = domF.window.eval('ST.ldsp.length') - 1;
+  domF.window.eval('ST.ldsp[' + fLi + ']=0;document.getElementById("ls' + fLi + '").value="0";document.getElementById("lq' + fLi + '").value="3";recalc()');
+  domF.window.eval('document.getElementById("hdf-qty").value="2";document.getElementById("krom-qty").value="10";recalc()');
+  domF.window.eval('addCat("furn", DB.furn, "furn-list")');
+  const fFi = domF.window.eval('ST.furn.length') - 1;
+  domF.window.eval('document.getElementById("furnq' + fFi + '").value="4";uCP("furn",' + fFi + ')');
+  domF.window.eval('document.getElementById("d-sat").value="15000";document.getElementById("d-pdm").value="0";recalc()');
+  const FI = JSON.parse(domF.window.eval('JSON.stringify(flatItems())'));
+  const fFind = function(n){ let r = null; FI.forEach(function(x){ if (x.n === n) r = x; }); return r; };
+
+  const fLdsp = fFind('Эггер Дуб');
+  ok(!!fLdsp, 'flatItems отдаёт строку ЛДСП');
+  ok(fLdsp && fLdsp.q === 3 && fLdsp.u === 18500, 'ЛДСП: план 3 и цена за лист 18500 из прайса сервера');
+  ok(fLdsp && fLdsp.unit === 'лист' && fLdsp.kind === 'qty', 'ЛДСП: единица «лист», правится количество');
+  ok(fLdsp && fLdsp.id === 'lq' + fLi, 'ЛДСП: id-якорь совпадает с полем ввода количества');
+  ok(fLdsp && fLdsp.grp === 'Корпус', 'ЛДСП попал в группу «Корпус»');
+
+  const fHdf = fFind('ХДФ'), fKrom = fFind('Кромка');
+  ok(fHdf && fHdf.q === 2 && fHdf.u === 9000 && fHdf.unit === 'лист', 'ХДФ: 2 листа по 9000');
+  ok(fKrom && fKrom.q === 10 && fKrom.u === 200 && fKrom.unit === 'пм', 'Кромка считается в погонных метрах');
+
+  const fPet = fFind('Петля полувнешний En-7');
+  ok(!!fPet, 'фурнитура: имя собрано из категории, вида и фирмы');
+  ok(fPet && fPet.q === 4 && fPet.u === 320 && fPet.unit === 'шт', 'фурнитура: 4 шт по 320');
+
+  const fDel = fFind('Доставка');
+  ok(fDel && fDel.kind === 'money' && fDel.u === 15000 && fDel.q === 1, 'доставка — строка типа money (правится сумма, не количество)');
+  ok(fFind('ПДМ') === null, 'ПДМ с нулевой суммой в список не попадает');
+
+  let fZero = true;
+  FI.forEach(function(x){ if (!(x.q * x.u)) fZero = false; });
+  ok(fZero, 'в плоском списке нет строк с нулевой стоимостью (авто-слоты без количества отфильтрованы)');
+
+  let fFields = true;
+  FI.forEach(function(x){ if (!x.id || !x.sec || !x.grp || !x.unit || !x.kind) fFields = false; });
+  ok(fFields, 'у каждой строки заполнены id, раздел, группа, единица и тип');
+
+  const fTot = domF.window.eval('flatPlanTotal()');
+  ok(fTot === 3 * 18500 + 2 * 9000 + 10 * 200 + 4 * 320 + 15000, 'flatPlanTotal сходится с суммой строк (91 780₸)');
+
+  const fTot2 = domF.window.eval('flatPlanTotal(flatItems())');
+  ok(fTot2 === fTot, 'flatPlanTotal принимает готовый список и даёт тот же итог');
+
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');
   process.exit(FAIL ? 1 : 0);
