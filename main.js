@@ -1007,6 +1007,17 @@ function korrAddFromForm(){
   n.value="";u.value="";q.value="";
   renderKorr();
 }
+// Payload корректировки для карточки заказа (crm.js сохраняет его через
+// updateOrder_). Отдаём план и факт себестоимости, а не одно отклонение:
+// по двум числам отчёт восстановит и разницу, и базу, а по одной разнице
+// исходную себестоимость уже не собрать.
+// Если расчёт пуст — возвращаем null: "нечего сохранять" это не то же
+// самое, что "себестоимость ноль".
+function korrPayload(){
+  var t=korrTotals();
+  if(!t.rows)return null;
+  return {costPlan:Math.round(t.plan),costFact:Math.round(t.fact),delta:Math.round(t.delta)};
+}
 function blk(fas,k,rm,sk,tax,cr,vK,shared,extras,eInc){
   const base=vK+fas+shared,aK=base*k,rabM=aK*rm,preTax=aK+extras,taxA=preTax*tax,afterTax=preTax+taxA,tot=afterTax+sk,credit=tot*(1+cr);
   return{base,aK,rabM,sk,taxA,tot,credit,inc:aK-base-rabM+sk+eInc};

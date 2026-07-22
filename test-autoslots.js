@@ -1437,6 +1437,52 @@ function waitReady(dom, tries){
   const kT5 = JSON.parse(domF.window.eval('JSON.stringify(korrTotals())'));
   ok(kT5.delta === -18500 * 2 + 9000, 'правка прямо в поле пересчитала отклонение (с учётом докупленного уголка)');
 
+  // ─────────────────────────────────────────────────────────────
+  // v4.12: себестоимость план/факт в заказе (корректировка → финансы).
+  // Ключевое: пустая себестоимость = "неизвестна", а НЕ ноль.
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.12: себестоимость план/факт в заказе ──');
+  var oc0 = att("ordersList_(__ordSS)");
+  var o77c0 = null; oc0.orders.forEach(function(x){ if (x.num === '77') o77c0 = x; });
+  ok(o77c0 && o77c0.costPlan === null && o77c0.costFact === null, 'заказ без корректировки: себестоимость неизвестна (null, не ноль)');
+  ok(o77c0 && o77c0.costDelta === null, 'отклонение неизвестно, пока нет обеих половин');
+
+  att("updateOrder_(__ordSS, { num:'77', costPlan:336480, costFact:317240 })");
+  var oc1 = att("ordersList_(__ordSS)");
+  var o77c1 = null; oc1.orders.forEach(function(x){ if (x.num === '77') o77c1 = x; });
+  ok(o77c1.costPlan === 336480 && o77c1.costFact === 317240, 'план и факт себестоимости записались в заказ');
+  ok(o77c1.costDelta === -19240, 'сервер отдаёт отклонение минус 19 240₸ (сэкономили)');
+
+  att("updateOrder_(__ordSS, { num:'77', costFact:350000 })");
+  var oc2 = att("ordersList_(__ordSS)");
+  var o77c2 = null; oc2.orders.forEach(function(x){ if (x.num === '77') o77c2 = x; });
+  ok(o77c2.costDelta === 350000 - 336480, 'перерасход считается тем же правилом (плюс 13 520₸)');
+
+  var ocNeg = att("updateOrder_(__ordSS, { num:'77', costFact:-5 })");
+  var oc3 = att("ordersList_(__ordSS)");
+  var o77c3 = null; oc3.orders.forEach(function(x){ if (x.num === '77') o77c3 = x; });
+  ok(ocNeg.ok === true && o77c3.costFact === 350000, 'отрицательная себестоимость отклонена, прежнее значение цело');
+
+  att("updateOrder_(__ordSS, { num:'77', costFact:'' })");
+  var oc4 = att("ordersList_(__ordSS)");
+  var o77c4 = null; oc4.orders.forEach(function(x){ if (x.num === '77') o77c4 = x; });
+  ok(o77c4.costFact === null && o77c4.costPlan === 336480, 'пустое значение снимает факт (снова «неизвестно»), план не тронут');
+  ok(o77c4.costDelta === null, 'без факта отклонение опять неизвестно, а не равно минус плану');
+
+  att("updateOrder_(__ordSS, { num:'77', costPlan:200000, costFact:0 })");
+  var oc5 = att("ordersList_(__ordSS)");
+  var o77c5 = null; oc5.orders.forEach(function(x){ if (x.num === '77') o77c5 = x; });
+  ok(o77c5.costFact === 0 && o77c5.costDelta === -200000, 'явный ноль — это ноль, а не «неизвестно»');
+
+  // Клиентская сторона: payload из корректировки.
+  const kp = JSON.parse(domF.window.eval('JSON.stringify(korrPayload())'));
+  const kpT = JSON.parse(domF.window.eval('JSON.stringify(korrTotals())'));
+  ok(kp && kp.costPlan === Math.round(kpT.plan) && kp.costFact === Math.round(kpT.fact), 'korrPayload отдаёт план и факт себестоимости для карточки');
+  ok(kp.delta === kp.costFact - kp.costPlan, 'отклонение в payload сходится с разницей план/факт');
+  const domEmpty = bootPage(null);
+  await waitReady(domEmpty);
+  ok(domEmpty.window.eval('korrPayload()') === null, 'пустой расчёт не шлёт нулевую себестоимость — шлёт null');
+
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');
   process.exit(FAIL ? 1 : 0);
