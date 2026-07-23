@@ -314,7 +314,7 @@
   <div class="pg-toolbar">
     <div class="pg-toolbar-logo">C</div>
     <h2>СРМ — Заказы</h2>
-    <button onclick="if(window.crmReload)window.crmReload()" style="margin-left:auto;background:none;border:1px solid #e0e0e0;border-radius:6px;padding:4px 10px;font-size:11px;color:#666;cursor:pointer">↻ Обновить</button>
+    <button onclick="if(window.crmReload)window.crmReload()" style="margin-left:auto;background:none;border:1px solid var(--bd);border-radius:6px;padding:4px 10px;font-size:11px;color:#666;cursor:pointer">↻ Обновить</button>
   </div>
   <div id="crm-root" style="padding:10px 12px"></div>
 </div>
@@ -384,15 +384,15 @@
         <!-- Доп. аксессуары шкафа (DB.shk) -->
         <div id="conf-extras-block" style="margin-top:10px;border-top:1px solid #f0f0f0;padding-top:8px">
           <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 2px;cursor:pointer;user-select:none" onclick="confExtrasToggle()">
-            <span style="font-size:12px;font-weight:600;color:#333"><i class="ti ti-armchair" style="margin-right:5px;color:#1a5252"></i>Доп. аксессуары</span>
+            <span style="font-size:12px;font-weight:600;color:#333"><i class="ti ti-armchair" style="margin-right:5px;color:var(--t)"></i>Доп. аксессуары</span>
             <span style="display:flex;align-items:center;gap:6px">
-              <span id="conf-extras-cnt" style="font-size:10px;color:#1a5252;font-weight:600"></span>
+              <span id="conf-extras-cnt" style="font-size:10px;color:var(--t);font-weight:600"></span>
               <span id="conf-extras-arr" style="font-size:10px;color:#999">▾</span>
             </span>
           </div>
           <div id="conf-extras-body">
             <div id="conf-extras-list"></div>
-            <button onclick="confAddExtra()" style="width:100%;padding:7px;border-radius:8px;font-size:12px;cursor:pointer;border:1px dashed #1a5252;background:#f0f8f8;color:#1a5252;margin-top:6px;display:flex;align-items:center;justify-content:center;gap:5px">
+            <button onclick="confAddExtra()" style="width:100%;padding:7px;border-radius:8px;font-size:12px;cursor:pointer;border:1px dashed var(--t);background:#f0f8f8;color:var(--t);margin-top:6px;display:flex;align-items:center;justify-content:center;gap:5px">
               <i class="ti ti-plus"></i> Добавить аксессуар
             </button>
           </div>
@@ -522,7 +522,7 @@
       </span>
       <div style="display:flex;gap:8px;align-items:center">
         <button onclick="confBlueprintDownload()" style="background:#1d4ed8;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ti ti-download"></i> SVG</button>
-        <button onclick="confBlueprintPrint()" style="background:#1a5252;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ti ti-printer"></i> Печать</button>
+        <button onclick="confBlueprintPrint()" style="background:var(--t);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ti ti-printer"></i> Печать</button>
         <button class="closebtn" onclick="closeConfBlueprint()" style="color:#fff;background:rgba(255,255,255,.1)"><i class="ti ti-x"></i></button>
       </div>
     </div>
@@ -592,9 +592,9 @@
 <!-- ════ KITCHEN 3D PAGE ════ -->
 <div class="pg" id="pg-kitchen" style="min-height:100vh">
   <!-- Шапка -->
-  <div style="background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 12px;display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:50">
-    <button onclick="page('calc')" style="background:none;border:1px solid #e0e0e0;border-radius:6px;padding:5px 10px;font-size:12px;color:#666;cursor:pointer">← Назад</button>
-    <span style="font-size:13px;font-weight:700;color:#0a2e2e">3D Кухня</span>
+  <div style="background:#fff;border-bottom:1px solid var(--bd);padding:8px 12px;display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:50">
+    <button onclick="page('calc')" style="background:none;border:1px solid var(--bd);border-radius:6px;padding:5px 10px;font-size:12px;color:#666;cursor:pointer">← Назад</button>
+    <span style="font-size:13px;font-weight:700;color:var(--d)">3D Кухня</span>
     <button onclick="sendKitchenToCalc()" style="margin-left:auto;background:#148060;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px">
       <i class="ti ti-arrow-right"></i> В расчёт →
     </button>
@@ -655,7 +655,7 @@
               </div>
               <div>
                 <div style="font-size:10px;color:#888;margin-bottom:2px">Лист ЛДСП</div>
-                <select id="k-sheet-fmt" style="font-size:11px;border:1px solid #e0e0e0;border-radius:6px;padding:4px 6px;background:#fff;width:100%">
+                <select id="k-sheet-fmt" style="font-size:11px;border:1px solid var(--bd);border-radius:6px;padding:4px 6px;background:#fff;width:100%">
                   <option value="2750x1830">2750×1830</option>
                   <option value="2800x2070">2800×2070</option>
                 </select>
@@ -681,7 +681,7 @@
             <div style="padding:8px 10px;display:flex;flex-direction:column;gap:8px">
               <div style="display:flex;align-items:center;gap:8px">
                 <span style="font-size:11px;color:#555;width:56px;flex-shrink:0">Фасад</span>
-                <select id="k-facade-mat" style="font-size:12px;border:1px solid #e0e0e0;border-radius:6px;padding:4px 8px;background:#fff;flex:1">
+                <select id="k-facade-mat" style="font-size:12px;border:1px solid var(--bd);border-radius:6px;padding:4px 8px;background:#fff;flex:1">
                   <option value="ldsp">ЛДСП</option>
                   <option value="mdf_plen">МДФ Плёнка</option>
                   <option value="mdf_kr">МДФ Краска</option>
@@ -705,7 +705,7 @@
           <div class="kacc-hdr" onclick="kAccToggle('kacc-lower')">
             <span><i class="ti ti-rectangle"></i> Нижние шкафы</span>
             <span style="display:flex;align-items:center;gap:6px">
-              <span id="kacc-lower-cnt" style="font-size:10px;color:#1a5252;font-weight:600"></span>
+              <span id="kacc-lower-cnt" style="font-size:10px;color:var(--t);font-weight:600"></span>
               <span class="kacc-arr">▾</span>
             </span>
           </div>
@@ -732,7 +732,7 @@
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;background:#fdf8f0;border-radius:6px;padding:6px 8px">
                 <span style="font-size:11px;color:#7a5c2e;flex-shrink:0">Высота всех:</span>
                 <button id="kuh-750" onclick="kSetUpperHeight(750)" style="flex:1;padding:4px;font-size:11px;border:1.5px solid #7a5c2e;border-radius:5px;background:#7a5c2e;color:#fff;cursor:pointer;font-weight:600">750мм</button>
-                <button id="kuh-900" onclick="kSetUpperHeight(900)" style="flex:1;padding:4px;font-size:11px;border:1.5px solid #ddd;border-radius:5px;background:#fff;color:#666;cursor:pointer;font-weight:600">900мм</button>
+                <button id="kuh-900" onclick="kSetUpperHeight(900)" style="flex:1;padding:4px;font-size:11px;border:1.5px solid var(--bd);border-radius:5px;background:#fff;color:#666;cursor:pointer;font-weight:600">900мм</button>
               </div>
               <!-- Каталог верхних -->
               <div id="k-upper-catalog" class="k-catalog-grid"></div>
@@ -767,11 +767,11 @@
             <div style="padding:8px 10px;display:flex;flex-direction:column;gap:8px">
               <div style="display:flex;align-items:center;gap:8px">
                 <span style="font-size:11px;color:#555;width:56px;flex-shrink:0">Тип</span>
-                <select id="k-top-type" style="font-size:12px;border:1px solid #e0e0e0;border-radius:6px;padding:4px 8px;background:#fff;flex:1" onchange="kUpdateTopSelect()">
+                <select id="k-top-type" style="font-size:12px;border:1px solid var(--bd);border-radius:6px;padding:4px 8px;background:#fff;flex:1" onchange="kUpdateTopSelect()">
                   <option value="none">Без столешницы</option>
                 </select>
               </div>
-              <div id="k-top-len-lbl" style="font-size:10px;color:#1a5252;padding-left:64px;margin-top:-4px"></div>
+              <div id="k-top-len-lbl" style="font-size:10px;color:var(--t);padding-left:64px;margin-top:-4px"></div>
               <div style="display:flex;align-items:center;gap:8px" id="k-top-len-row" style="display:none">
                 <span style="font-size:11px;color:#555;width:56px;flex-shrink:0">Длина, пм</span>
                 <input class="kglobal-inp" style="width:80px;box-sizing:border-box" type="number" id="k-top-len" min="0.1" step="0.1" onchange="kProjMarkUnsaved()">
@@ -805,7 +805,7 @@
       <!-- ── ТАБ: ЦЕНЫ ──────────────────────────────────────── -->
       <div id="k-pane-prices" style="flex:1;overflow-y:auto;display:none">
         <div style="padding:10px">
-          <button onclick="kLoadFromSheets()" id="k-sync-btn" style="width:100%;padding:9px;border-radius:8px;background:#1a5252;color:#fff;border:none;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600">
+          <button onclick="kLoadFromSheets()" id="k-sync-btn" style="width:100%;padding:9px;border-radius:8px;background:var(--t);color:#fff;border:none;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600">
             <i class="ti ti-download"></i> Загрузить цены из Sheets
           </button>
           <div id="k-sync-status" style="font-size:10px;margin-top:6px;color:#888;text-align:center"></div>
@@ -819,7 +819,7 @@
         <button class="kfoot-btn" onclick="kShowSpec()"><i class="ti ti-file-invoice"></i><span>Смета</span></button>
         <button class="kfoot-btn" onclick="kShowCut()"><i class="ti ti-layout-grid"></i><span>Раскрой</span></button>
         <button class="kfoot-btn" style="background:#1a3a6a;color:#fff;border-color:#1a3a6a" onclick="kShowBlueprint()"><i class="ti ti-ruler-2"></i><span>Чертёж</span></button>
-        <button class="kfoot-btn" style="background:#1a5252;color:#fff;border-color:#1a5252;flex:2" onclick="sendKitchenToCalc()"><i class="ti ti-arrow-right"></i><span>В расчёт →</span></button>
+        <button class="kfoot-btn" style="background:var(--t);color:#fff;border-color:var(--t);flex:2" onclick="sendKitchenToCalc()"><i class="ti ti-arrow-right"></i><span>В расчёт →</span></button>
       </div>
     </div>
     <!-- 3D вьюпорт -->
@@ -852,7 +852,7 @@
       </span>
       <div style="display:flex;gap:8px;align-items:center">
         <button onclick="kBlueprintDownload()" style="background:#1d4ed8;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ti ti-download"></i> SVG</button>
-        <button onclick="kBlueprintPrint()" style="background:#1a5252;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ti ti-printer"></i> Печать</button>
+        <button onclick="kBlueprintPrint()" style="background:var(--t);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ti ti-printer"></i> Печать</button>
         <button class="closebtn" onclick="kCloseBlueprint()" style="color:#fff;background:rgba(255,255,255,.1)"><i class="ti ti-x"></i></button>
       </div>
     </div>
@@ -868,8 +868,8 @@
       <button class="closebtn" onclick="kCloseCut()"><i class="ti ti-x"></i></button>
     </div>
     <!-- Табы -->
-    <div style="display:flex;gap:0;border-bottom:2px solid #e0e0e0;padding:0 14px;background:#fafafa">
-      <button id="kcut-tab-sheets" onclick="kCutTab('sheets')" style="padding:9px 18px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;color:#1a5252;border-bottom:2px solid #1a5252;margin-bottom:-2px">
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--bd);padding:0 14px;background:#fafafa">
+      <button id="kcut-tab-sheets" onclick="kCutTab('sheets')" style="padding:9px 18px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;color:var(--t);border-bottom:2px solid var(--t);margin-bottom:-2px">
         <i class="ti ti-layout-grid"></i> Раскрой листов
       </button>
       <button id="kcut-tab-list" onclick="kCutTab('list')" style="padding:9px 18px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-2px">
@@ -961,9 +961,9 @@
 <!-- Выбор варианта КП -->
 <div id="kp-var-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:none;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
-    <div style="font-size:16px;font-weight:700;color:#0a2e2e;margin-bottom:6px">Выберите варианты КП</div>
+    <div style="font-size:16px;font-weight:700;color:var(--d);margin-bottom:6px">Выберите варианты КП</div>
     <div style="font-size:12px;color:#888;margin-bottom:20px">Отметьте какие варианты показать клиенту</div>
-    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid #e0e0e0;border-radius:10px;cursor:pointer;margin-bottom:8px;transition:.15s" id="kpv-ldsp-wrap">
+    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid var(--bd);border-radius:10px;cursor:pointer;margin-bottom:8px;transition:.15s" id="kpv-ldsp-wrap">
       <input type="checkbox" id="kpv-ldsp" checked onchange="kpVarCheck()" style="width:18px;height:18px;accent-color:#534AB7">
       <div style="width:10px;height:10px;border-radius:50%;background:#534AB7;flex-shrink:0"></div>
       <div>
@@ -971,15 +971,15 @@
         <div style="font-size:11px;color:#888">Корпус и фасад из ЛДСП</div>
       </div>
     </label>
-    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid #e0e0e0;border-radius:10px;cursor:pointer;margin-bottom:8px;transition:.15s" id="kpv-plen-wrap">
-      <input type="checkbox" id="kpv-plen" checked onchange="kpVarCheck()" style="width:18px;height:18px;accent-color:#1a5252">
-      <div style="width:10px;height:10px;border-radius:50%;background:#1a5252;flex-shrink:0"></div>
+    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid var(--bd);border-radius:10px;cursor:pointer;margin-bottom:8px;transition:.15s" id="kpv-plen-wrap">
+      <input type="checkbox" id="kpv-plen" checked onchange="kpVarCheck()" style="width:18px;height:18px;accent-color:var(--t)">
+      <div style="width:10px;height:10px;border-radius:50%;background:var(--t);flex-shrink:0"></div>
       <div>
-        <div style="font-weight:600;color:#1a5252">МДФ Плёнка</div>
+        <div style="font-weight:600;color:var(--t)">МДФ Плёнка</div>
         <div style="font-size:11px;color:#888">Фасад МДФ в плёнке</div>
       </div>
     </label>
-    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid #e0e0e0;border-radius:10px;cursor:pointer;margin-bottom:20px;transition:.15s" id="kpv-kr-wrap">
+    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid var(--bd);border-radius:10px;cursor:pointer;margin-bottom:20px;transition:.15s" id="kpv-kr-wrap">
       <input type="checkbox" id="kpv-kr" onchange="kpVarCheck()" style="width:18px;height:18px;accent-color:#8B4513">
       <div style="width:10px;height:10px;border-radius:50%;background:#8B4513;flex-shrink:0"></div>
       <div>
@@ -988,33 +988,33 @@
       </div>
     </label>
     <div style="display:flex;gap:8px">
-      <button onclick="kpVarClose()" style="flex:1;padding:10px;border:1.5px solid #ddd;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:#555">Отмена</button>
-      <button id="kpv-ok-btn" onclick="kpVarConfirm()" style="flex:2;padding:10px;border:none;border-radius:8px;background:#0a2e2e;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Сформировать КП →</button>
+      <button onclick="kpVarClose()" style="flex:1;padding:10px;border:1.5px solid var(--bd);border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:#555">Отмена</button>
+      <button id="kpv-ok-btn" onclick="kpVarConfirm()" style="flex:2;padding:10px;border:none;border-radius:8px;background:var(--d);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Сформировать КП →</button>
     </div>
   </div>
 </div>
 
 <div id="master-var-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
-    <div style="font-size:16px;font-weight:700;color:#0a2e2e;margin-bottom:6px">Какой материал реально ставим?</div>
+    <div style="font-size:16px;font-weight:700;color:var(--d);margin-bottom:6px">Какой материал реально ставим?</div>
     <div style="font-size:12px;color:#888;margin-bottom:20px">Работа по корпусу зависит от материала — выберите, что действительно заказано</div>
-    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid #e0e0e0;border-radius:10px;cursor:pointer;margin-bottom:8px">
+    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid var(--bd);border-radius:10px;cursor:pointer;margin-bottom:8px">
       <input type="radio" name="master-mat" value="L" checked style="width:18px;height:18px;accent-color:#534AB7">
       <div style="width:10px;height:10px;border-radius:50%;background:#534AB7;flex-shrink:0"></div>
       <div style="font-weight:600;color:#534AB7">ЛДСП</div>
     </label>
-    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid #e0e0e0;border-radius:10px;cursor:pointer;margin-bottom:8px">
-      <input type="radio" name="master-mat" value="P" style="width:18px;height:18px;accent-color:#1a5252">
-      <div style="width:10px;height:10px;border-radius:50%;background:#1a5252;flex-shrink:0"></div>
-      <div style="font-weight:600;color:#1a5252">МДФ Плёнка</div>
+    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid var(--bd);border-radius:10px;cursor:pointer;margin-bottom:8px">
+      <input type="radio" name="master-mat" value="P" style="width:18px;height:18px;accent-color:var(--t)">
+      <div style="width:10px;height:10px;border-radius:50%;background:var(--t);flex-shrink:0"></div>
+      <div style="font-weight:600;color:var(--t)">МДФ Плёнка</div>
     </label>
-    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid #e0e0e0;border-radius:10px;cursor:pointer;margin-bottom:20px">
+    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid var(--bd);border-radius:10px;cursor:pointer;margin-bottom:20px">
       <input type="radio" name="master-mat" value="K" style="width:18px;height:18px;accent-color:#8B4513">
       <div style="width:10px;height:10px;border-radius:50%;background:#8B4513;flex-shrink:0"></div>
       <div style="font-weight:600;color:#8B4513">МДФ Краска</div>
     </label>
     <div style="display:flex;gap:8px">
-      <button onclick="masterVarClose()" style="flex:1;padding:10px;border:1.5px solid #ddd;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:#555">Отмена</button>
+      <button onclick="masterVarClose()" style="flex:1;padding:10px;border:1.5px solid var(--bd);border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:#555">Отмена</button>
       <button onclick="masterVarConfirm()" style="flex:2;padding:10px;border:none;border-radius:8px;background:#3B6D11;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Сформировать список →</button>
     </div>
   </div>
@@ -1022,7 +1022,7 @@
 
 <div id="req-save-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
-    <div style="font-size:16px;font-weight:700;color:#0a2e2e;margin-bottom:6px">Расчёт заполнен не полностью</div>
+    <div style="font-size:16px;font-weight:700;color:var(--d);margin-bottom:6px">Расчёт заполнен не полностью</div>
     <div style="font-size:12px;color:#888;margin-bottom:14px">Не заполнены обязательные позиции — если сохранить сейчас, они так и останутся пустыми:</div>
     <div id="req-save-list" style="font-size:13px;color:#993C1D;line-height:1.7;margin-bottom:16px;max-height:160px;overflow:auto"></div>
     <label style="display:flex;align-items:center;gap:10px;padding:10px 4px;cursor:pointer;margin-bottom:16px">
@@ -1030,7 +1030,7 @@
       <div style="font-size:12px;color:#555">Понимаю, сохраняю расчёт как есть</div>
     </label>
     <div style="display:flex;gap:8px">
-      <button onclick="closeReqSaveModal()" style="flex:1;padding:10px;border:1.5px solid #ddd;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:#555">Вернуться и заполнить</button>
+      <button onclick="closeReqSaveModal()" style="flex:1;padding:10px;border:1.5px solid var(--bd);border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:#555">Вернуться и заполнить</button>
       <button id="req-save-btn" onclick="reqSaveForce()" disabled style="flex:2;padding:10px;border:none;border-radius:8px;background:#ccc;color:#fff;font-size:13px;font-weight:600;cursor:not-allowed">Сохранить всё равно</button>
     </div>
   </div>
@@ -1058,19 +1058,19 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
         <div>
           <div style="font-size:11px;color:#888;margin-bottom:4px">ФИО заказчика *</div>
-          <input type="text" id="dog-client" placeholder="Иванов Иван Иванович" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+          <input type="text" id="dog-client" placeholder="Иванов Иван Иванович" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px">
         </div>
         <div>
           <div style="font-size:11px;color:#888;margin-bottom:4px">ИИН / БИН</div>
-          <input type="text" id="dog-iin" placeholder="123456789012" maxlength="12" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+          <input type="text" id="dog-iin" placeholder="123456789012" maxlength="12" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px">
         </div>
         <div>
           <div style="font-size:11px;color:#888;margin-bottom:4px">Адрес</div>
-          <input type="text" id="dog-addr" placeholder="г. Сатпаев, ул. ..." style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+          <input type="text" id="dog-addr" placeholder="г. Сатпаев, ул. ..." style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px">
         </div>
         <div>
           <div style="font-size:11px;color:#888;margin-bottom:4px">Телефон</div>
-          <input type="text" id="dog-phone" placeholder="+7 700 000 0000" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+          <input type="text" id="dog-phone" placeholder="+7 700 000 0000" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px">
         </div>
       </div>
 
@@ -1078,11 +1078,11 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
         <div>
           <div style="font-size:11px;color:#888;margin-bottom:4px">Наименование мебели *</div>
-          <input type="text" id="dog-object" placeholder="Кухня, шкаф-купе..." style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+          <input type="text" id="dog-object" placeholder="Кухня, шкаф-купе..." style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px">
         </div>
         <div>
           <div style="font-size:11px;color:#888;margin-bottom:4px">Размеры Ш × Г × В, мм</div>
-          <input type="text" id="dog-size" placeholder="2400 × 600 × 2200" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+          <input type="text" id="dog-size" placeholder="2400 × 600 × 2200" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px">
         </div>
       </div>
       <div style="background:#F5F9F5;border:1px solid #D0E8D5;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#3A6040">
@@ -1093,7 +1093,7 @@
       <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9A8060;margin-bottom:12px">Стоимость</div>
       <div style="margin-bottom:12px">
         <div style="font-size:11px;color:#888;margin-bottom:4px">Вариант КП *</div>
-        <select id="dog-variant" onchange="dogVariantChange()" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;background:#fff"></select>
+        <select id="dog-variant" onchange="dogVariantChange()" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px;background:#fff"></select>
       </div>
       <div style="background:#FBF8F3;border:1px solid #E8E0D0;border-radius:10px;padding:14px 16px;margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -1133,20 +1133,20 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px">
         <div>
           <div style="font-size:11px;color:#888;margin-bottom:4px">Номер договора</div>
-          <input type="text" id="dog-num" placeholder="001" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+          <input type="text" id="dog-num" placeholder="001" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px">
         </div>
         <div>
           <div style="font-size:11px;color:#888;margin-bottom:4px">Срок изготовления (раб. дней)</div>
-          <input type="number" id="dog-days" value="14" min="1" max="60" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+          <input type="number" id="dog-days" value="14" min="1" max="60" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px">
         </div>
         <div>
           <div style="font-size:11px;color:#888;margin-bottom:4px">Планируемая дата монтажа</div>
-          <input type="date" id="dog-mount-date" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+          <input type="date" id="dog-mount-date" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px">
         </div>
       </div>
 
       <div style="display:flex;gap:10px">
-        <button onclick="closeDogovor()" style="flex:1;padding:12px;border:1.5px solid #ddd;border-radius:10px;background:#fff;font-size:14px;cursor:pointer;color:#555">Отмена</button>
+        <button onclick="closeDogovor()" style="flex:1;padding:12px;border:1.5px solid var(--bd);border-radius:10px;background:#fff;font-size:14px;cursor:pointer;color:#555">Отмена</button>
         <button onclick="generateDogovor()" style="flex:2;padding:12px;border:none;border-radius:10px;background:var(--nav-bg);color:#C9A96E;font-size:14px;font-weight:600;cursor:pointer">📋 Сформировать договор →</button>
       </div>
     </div>

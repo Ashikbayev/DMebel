@@ -13,7 +13,7 @@ function showStatus(msg, color) {
     document.body.appendChild(el);
   }
   el.textContent = msg;
-  el.style.background = color || '#1a5252';
+  el.style.background = color || 'var(--t)';
   el.style.color = '#fff';
   el.style.opacity = '1';
 }
@@ -234,7 +234,7 @@ function confirmStalePrices() {
 }
 
 async function loadFromSheets() {
-  showStatus('Загружаю цены из базы...', '#1a5252');
+  showStatus('Загружаю цены из базы...', 'var(--t)');
   try {
     const res = await fetch(SHEETS_URL);
     const data = await res.json();
@@ -483,7 +483,7 @@ function addDop(){
   const i=ST.dop.length;ST.dop.push(1);
   const c=$("dop-list");if(i===0)c.innerHTML="";
   const d=document.createElement("div");d.id="dr"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
-  d.innerHTML=`<div class="fr"><input style="font-size:12px;border:1px solid #ddd;border-radius:8px;padding:6px 8px;flex:1;min-width:0" type="text" id="dn${i}" placeholder="Название"><button class="db" onclick="$('dr${i}').style.display='none';ST.dop[${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Цена</span><input class="qi" type="number" inputmode="decimal" id="dp${i}" placeholder="0" onchange="recalc()"><span class="fp">₸/шт</span></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="dq${i}" placeholder="1" onchange="recalc()"><span class="fp">шт</span></div>`;
+  d.innerHTML=`<div class="fr"><input style="font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:6px 8px;flex:1;min-width:0" type="text" id="dn${i}" placeholder="Название"><button class="db" onclick="$('dr${i}').style.display='none';ST.dop[${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Цена</span><input class="qi" type="number" inputmode="decimal" id="dp${i}" placeholder="0" onchange="recalc()"><span class="fp">₸/шт</span></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="dq${i}" placeholder="1" onchange="recalc()"><span class="fp">шт</span></div>`;
   c.appendChild(d);recalc();
 }
 function dC(){return ST.dop.reduce((s,x,i)=>x===null?s:s+(gn("dp"+i))*(gn("dq"+i)),0);}
@@ -503,7 +503,7 @@ function addCWork(){
   const i=ST.cworks.length;ST.cworks.push(1);
   const c=$("cworks-list");if(!c)return;
   const d=document.createElement("div");d.id="cwr"+i;d.className="ib";d.style.marginTop="8px";
-  let h="<div class=\"fr\"><input style=\"font-size:12px;border:1px solid #ddd;border-radius:8px;padding:6px 8px;flex:1;min-width:0\" type=\"text\" id=\"cwn"+i+"\" placeholder=\"Название работы\" onchange=\"recalc()\">";
+  let h="<div class=\"fr\"><input style=\"font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:6px 8px;flex:1;min-width:0\" type=\"text\" id=\"cwn"+i+"\" placeholder=\"Название работы\" onchange=\"recalc()\">";
   h+="<button class=\"db\" onclick=\"$('cwr"+i+"').style.display='none';ST.cworks["+i+"]=null;recalc()\">✕</button></div>";
   h+="<div class=\"fr\"><span class=\"lb\">Цена</span><input class=\"qi\" type=\"number\" inputmode=\"decimal\" id=\"cwp"+i+"\" placeholder=\"0\" onchange=\"recalc()\"><span class=\"fp\">₸/шт</span></div>";
   h+="<div class=\"fr\"><span class=\"lb\">Кол-во</span><input class=\"qi\" type=\"number\" inputmode=\"decimal\" id=\"cwq"+i+"\" placeholder=\"1\" min=\"0\" onchange=\"recalc()\"><span class=\"fp\">шт</span></div>";
@@ -1193,7 +1193,7 @@ function kpManagerSave() {
     localStorage.setItem('moff_managers', JSON.stringify(list));
   }
   kpManagerLoadList();
-  showStatus('\u041c\u0435\u043d\u0435\u0434\u0436\u0435\u0440 \u0441\u043e\u0445\u0440\u0430\u043d\u0451\u043d', '#1a5252');
+  showStatus('\u041c\u0435\u043d\u0435\u0434\u0436\u0435\u0440 \u0441\u043e\u0445\u0440\u0430\u043d\u0451\u043d', 'var(--t)');
 }
 function kpManagerLoadList() {
   var dl = document.getElementById('kp-manager-list');
@@ -1766,7 +1766,7 @@ function showKP(showL=true, showP=true, showK=false, cmpMode=false){
   // Заголовки вариантов над итоговыми строками + итоговые строки
   var credits = {L: BLu.credit, P: BPu.credit, K: BKu.credit};
   var showCredit = vars.some(function(v){ return credits[v.key] > totals[v.key] + 1; });
-  var varColors = {L: "#534AB7", P: "#1a5252", K: "#8B4513"};
+  var varColors = {L: "#534AB7", P: "var(--t)", K: "#8B4513"};
   var headerRow = "";
   var totRow = "";
   var creditRow = "";
@@ -1840,7 +1840,7 @@ function showKP(showL=true, showP=true, showK=false, cmpMode=false){
   kpHtml += "<th style=\"text-align:left;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#777;font-weight:600;padding:7px 8px;border-bottom:1.5px solid #1C1C1E;width:32px\">№</th>";
   kpHtml += "<th style=\"text-align:left;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#777;font-weight:600;padding:7px 8px;border-bottom:1.5px solid #1C1C1E\">Наименование</th>";
   kpHtml += "<th style=\"text-align:left;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#777;font-weight:600;padding:7px 8px;border-bottom:1.5px solid #1C1C1E;width:60px\">Кол.</th>";
-  var vcolors = {L:"#534AB7", P:"#1a5252", K:"#8B4513"};
+  var vcolors = {L:"#534AB7", P:"var(--t)", K:"#8B4513"};
   if (nV > 1) {
     vars.forEach(function(v){
       kpHtml += "<th style=\"text-align:right;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:"+vcolors[v.key]+";font-weight:700;padding:7px 8px;border-bottom:1.5px solid #1C1C1E\">"+v.name+"</th>";
@@ -3090,7 +3090,7 @@ function sendConfToCalc() {
   const korpCb = $('cb-korp');
   if (korpCb && !korpCb.classList.contains('op')) tog('korp');
 
-  showStatus(`OK Импортировано: ЛДСП ${ldspEquiv} л, ХДФ ${hdfEquiv} л, кромка ${edgePm} пм, петли ${d.totalHinges||0} шт, ручки ${d.totalHandles||0} шт, ножки ${d.totalLegs||0} шт`, '#1a5252');
+  showStatus(`OK Импортировано: ЛДСП ${ldspEquiv} л, ХДФ ${hdfEquiv} л, кромка ${edgePm} пм, петли ${d.totalHinges||0} шт, ручки ${d.totalHandles||0} шт, ножки ${d.totalLegs||0} шт`, 'var(--t)');
   setTimeout(hideStatus, 5000);
 }
 
@@ -3197,7 +3197,7 @@ function restoreDraftOnLoad(preReadDraft){
     const hasData=Object.keys(draft.ST).some(k=>draft.ST[k].some(x=>x!==null&&x!==undefined))||DB.works.some((_,i)=>draft.snap&&parseFloat(draft.snap["wq"+i]||0)>0);
     if(hasData){
       applySnap(draft);
-      showStatus("OK Черновик восстановлен","#1a5252");setTimeout(hideStatus,2500);
+      showStatus("OK Черновик восстановлен","var(--t)");setTimeout(hideStatus,2500);
       restored=true;
     }
   }
@@ -3303,9 +3303,9 @@ function renderHist(){
           <button onclick="deleteHist(${r.id})" style="background:none;border:none;color:#ccc;font-size:18px;cursor:pointer;line-height:1;padding:0 4px">✕</button>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:8px">
-          <div style="background:#f4f3ff;border-radius:6px;padding:6px 8px"><div style="font-size:8px;color:#534AB7;font-weight:700;text-transform:uppercase;margin-bottom:2px">ЛДСП</div><div style="font-size:12px;font-weight:700;color:#0a2e2e">${fm(r.totL)}</div></div>
-          <div style="background:#f0faf7;border-radius:6px;padding:6px 8px"><div style="font-size:8px;color:#0F6E56;font-weight:700;text-transform:uppercase;margin-bottom:2px">Плёнка</div><div style="font-size:12px;font-weight:700;color:#0a2e2e">${fm(r.totP)}</div></div>
-          <div style="background:#fdf5f0;border-radius:6px;padding:6px 8px"><div style="font-size:8px;color:#993C1D;font-weight:700;text-transform:uppercase;margin-bottom:2px">Краска</div><div style="font-size:12px;font-weight:700;color:#0a2e2e">${fm(r.totK)}</div></div>
+          <div style="background:#f4f3ff;border-radius:6px;padding:6px 8px"><div style="font-size:8px;color:#534AB7;font-weight:700;text-transform:uppercase;margin-bottom:2px">ЛДСП</div><div style="font-size:12px;font-weight:700;color:var(--d)">${fm(r.totL)}</div></div>
+          <div style="background:#f0faf7;border-radius:6px;padding:6px 8px"><div style="font-size:8px;color:#0F6E56;font-weight:700;text-transform:uppercase;margin-bottom:2px">Плёнка</div><div style="font-size:12px;font-weight:700;color:var(--d)">${fm(r.totP)}</div></div>
+          <div style="background:#fdf5f0;border-radius:6px;padding:6px 8px"><div style="font-size:8px;color:#993C1D;font-weight:700;text-transform:uppercase;margin-bottom:2px">Краска</div><div style="font-size:12px;font-weight:700;color:var(--d)">${fm(r.totK)}</div></div>
         </div>
         <div style="display:flex;gap:6px">
           <button onclick="loadCalc(${r.id})" class="actn ad" style="flex:1;padding:8px;font-size:12px;margin:0">📂 Загрузить</button>
@@ -3403,7 +3403,7 @@ function applySnap(rec){
     ST.dop.push(1);
     const c=$("dop-list");if(i===0)c.innerHTML="";
     const d=document.createElement("div");d.id="dr"+i;if(i>0)d.className="ib";d.style.marginTop="8px";
-    d.innerHTML=`<div class="fr"><input style="font-size:12px;border:1px solid #ddd;border-radius:8px;padding:6px 8px;flex:1;min-width:0" type="text" id="dn${i}" placeholder="Название"><button class="db" onclick="$('dr${i}').style.display='none';ST.dop[${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Цена</span><input class="qi" type="number" inputmode="decimal" id="dp${i}" placeholder="0" onchange="recalc()"><span class="fp">₸/шт</span></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="dq${i}" placeholder="1" onchange="recalc()"><span class="fp">шт</span></div>`;
+    d.innerHTML=`<div class="fr"><input style="font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:6px 8px;flex:1;min-width:0" type="text" id="dn${i}" placeholder="Название"><button class="db" onclick="$('dr${i}').style.display='none';ST.dop[${i}]=null;recalc()">✕</button></div><div class="fr"><span class="lb">Цена</span><input class="qi" type="number" inputmode="decimal" id="dp${i}" placeholder="0" onchange="recalc()"><span class="fp">₸/шт</span></div><div class="fr"><span class="lb">Кол-во</span><input class="qi" type="number" inputmode="decimal" id="dq${i}" placeholder="1" onchange="recalc()"><span class="fp">шт</span></div>`;
     c.appendChild(d);
     ["dn","dp","dq"].forEach(p=>{if(snap[p+i]!==undefined){const e=$(p+i);if(e)e.value=snap[p+i];}});
   }
@@ -3493,7 +3493,7 @@ async function loadCalc(id){
   const rec=hist.find(r=>r.id===id);
   if(!rec)return;
   applySnap(rec);
-  showStatus("OK Расчёт загружен","#1a5252");setTimeout(hideStatus,2000);
+  showStatus("OK Расчёт загружен","var(--t)");setTimeout(hideStatus,2000);
 }
 async function loadAndKP(id){
   await loadCalc(id);
