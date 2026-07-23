@@ -4733,18 +4733,22 @@
         costRow('Себестоимость', fm0(cost));
         costRow('Маржа', fm0(marg), 'crm-margin');
         costRow('Рентабельность', pct + '%');
-        // v4.13: факт себестоимости из корректировки калькулятора. Раньше
-        // корректировка сохранялась только в снимок расчёта — карточка
-        // заказа её не читала, и «Для тебя» всегда показывал плановые
-        // цифры, даже если по факту материала ушло меньше/больше. Строку
-        // показываем, только если корректировку реально делали (costFact
-        // задан) — до этого момента плановые цифры выше остаются точными
-        // и единственными, ничего не дублируем.
+        // v4.13.1: корректировка меряет ТОЛЬКО материальную часть (закупка
+        // по flatItems), а «Себестоимость» строкой выше — договорная
+        // (цена − маржа, включает работу мастера и экстры). Это разные
+        // базы, поэтому факт корректировки нельзя подписывать
+        // «Себестоимость по факту» — цифры не бьются с ценой договора и
+        // выглядят враньём. Подписываем честно: «Материалы план → факт».
+        // А вот «Маржа по факту» = маржа − отклонение — формула ВЕРНАЯ
+        // при любой базе: отклонение это реальное изменение затрат.
         if(o.costFact !== null && o.costFact !== undefined){
           var factDelta = (o.costDelta !== null && o.costDelta !== undefined) ? Number(o.costDelta) : null;
-          costRow('Себестоимость по факту', fm0(o.costFact));
+          if(o.costPlan !== null && o.costPlan !== undefined){
+            costRow('Материалы: план', fm0(o.costPlan));
+          }
+          costRow('Материалы: факт', fm0(o.costFact));
           if(factDelta !== null && factDelta !== 0){
-            costRow(factDelta < 0 ? 'Сэкономлено' : 'Перерасход', (factDelta < 0 ? '\u2212' : '+') + fm0(Math.abs(factDelta)));
+            costRow(factDelta < 0 ? 'Сэкономлено на материалах' : 'Перерасход материалов', (factDelta < 0 ? '\u2212' : '+') + fm0(Math.abs(factDelta)));
             costRow('Маржа по факту', fm0(marg - factDelta), 'crm-margin');
           }
         }
@@ -5393,6 +5397,50 @@
     });
     btns.appendChild(bBuy); btns.appendChild(bIssue); btns.appendChild(bOpen); btns.appendChild(bSave);
     b.appendChild(btns);
+
+    // ── v4.13.1: вкладки карточки ─────────────────────────────
+    // Девять секций одной простынёй не читались (жалоба Дали). Секции
+    // построены выше как раньше — здесь мы их только ПЕРЕПАРЕНЧИВАЕМ в
+    // четыре вкладки. Ни одна точка сборки секций не тронута: слушатели
+    // событий и замыкания (renderMoney, renderSlog и т.д.) продолжают
+    // работать, appendChild просто перемещает узел.
+    // Обзор — 90% открытий; Деньги/Производство/История — по клику.
+    // Статус, кнопки действий и панель статусов остаются вне вкладок:
+    // статус меняют с любой вкладки, кнопки — общие для всего заказа.
+    (function(){
+      var TABS = [
+        { id:'obzor',  label:'Обзор',        secs:[secCli, secObj, secTasks] },
+        { id:'dengi',  label:'Деньги',       secs:[moneyWrap] },
+        { id:'proizv', label:'Производство', secs:[brigWrap, dopWrap, attWrap, reclWrap] },
+        { id:'ist',    label:'История',      secs:[feedWrap] }
+      ];
+      var bar = document.createElement('div');
+      bar.style.cssText = 'display:flex;gap:2px;margin:0 0 10px;border-bottom:1px solid #e5e5e0;overflow-x:auto';
+      var panes = {};
+      var btnsMap = {};
+      function show(id){
+        TABS.forEach(function(t){
+          panes[t.id].style.display = t.id === id ? 'block' : 'none';
+          btnsMap[t.id].style.cssText = 'flex:0 0 auto;padding:7px 12px;font-size:12px;background:none;border:none;cursor:pointer;white-space:nowrap;border-bottom:2px solid ' +
+            (t.id === id ? '#1a5252;color:#1a5252;font-weight:700' : 'transparent;color:#888');
+        });
+      }
+      TABS.forEach(function(t){
+        var tb = document.createElement('button');
+        tb.textContent = t.label;
+        tb.addEventListener('click', function(){ show(t.id); });
+        bar.appendChild(tb);
+        btnsMap[t.id] = tb;
+        var pane = document.createElement('div');
+        t.secs.forEach(function(sec){ if(sec) pane.appendChild(sec); });
+        panes[t.id] = pane;
+      });
+      // Вкладки встают после статуса/панели статусов, до кнопок действий:
+      // b сейчас: [Статус, slWrap, ...перемещённые секции исчезли..., btns]
+      b.insertBefore(bar, btns);
+      TABS.forEach(function(t){ b.insertBefore(panes[t.id], btns); });
+      show('obzor');
+    })();
 
     m.appendChild(h); m.appendChild(b);
     bg.appendChild(m);
