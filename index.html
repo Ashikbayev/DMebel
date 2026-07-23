@@ -17,13 +17,23 @@
 </head>
 <body>
 
+<nav class="side-nav" aria-label="Навигация">
+  <div class="side-logo">MebelOFF</div>
+  <button class="side-bbt on" id="side-bbt-crm" onclick="page('crm')"><i class="ti ti-layout-kanban" aria-hidden="true"></i>СРМ</button>
+  <button class="side-bbt" id="side-bbt-calc" onclick="page('calc')"><i class="ti ti-calculator" aria-hidden="true"></i>Расчёт</button>
+  <button class="side-bbt" id="side-bbt-kp" onclick="if(C.BL)openKpVarModal()"><i class="ti ti-file-text" aria-hidden="true"></i>КП</button>
+  <button class="side-bbt" id="side-bbt-hist" onclick="page('hist')"><i class="ti ti-history" aria-hidden="true"></i>История</button>
+  <button class="side-bbt" id="side-bbt-conf" onclick="page('conf')"><i class="ti ti-cube-3d-sphere" aria-hidden="true"></i>3D</button>
+  <button class="side-bbt" id="side-bbt-kitchen" onclick="page('kitchen')"><i class="ti ti-tools-kitchen-2" aria-hidden="true"></i>Кухня</button>
+</nav>
+
 <div class="hdr">
   <div class="hdr-logo">M</div>
-  <h1>MebelOFF — Расчёт</h1><button onclick="loadFromSheets()" style="margin-left:auto;background:none;border:1px solid #e0e0e0;border-radius:6px;padding:4px 10px;font-size:11px;color:#666;cursor:pointer">↻ Обновить</button>
+  <h1 id="hdr-title">MebelOFF — СРМ</h1><button onclick="loadFromSheets()" style="margin-left:auto;background:none;border:1px solid #3A4750;border-radius:6px;padding:4px 10px;font-size:11px;color:#C7D0D6;cursor:pointer">↻ Обновить</button>
 </div>
 
 <!-- КАЛЬКУЛЯТОР -->
-<div class="pg on" id="pg-calc">
+<div class="pg" id="pg-calc">
   <div class="tabs">
     <button class="tb on" onclick="tab('calc')">Расчёт</button>
     <button class="tb" onclick="tab('coef')">Коэф.</button>
@@ -300,7 +310,7 @@
 </div>
 
 <!-- ИСТОРИЯ -->
-<div class="pg" id="pg-crm">
+<div class="pg on" id="pg-crm">
   <div class="hdr" style="position:sticky;top:0;z-index:50">
     <div class="hdr-logo">C</div>
     <h1>СРМ — Заказы</h1>
@@ -939,9 +949,9 @@
 
 <!-- BOTTOMBAR -->
 <div class="bar">
-  <button class="bbt on" id="bbt-calc" onclick="page('calc')"><i class="ti ti-calculator"></i>Расчёт</button>
+  <button class="bbt" id="bbt-calc" onclick="page('calc')"><i class="ti ti-calculator"></i>Расчёт</button>
   <button class="bbt" id="bbt-kp" onclick="if(C.BL)openKpVarModal()"><i class="ti ti-file-text"></i>КП</button>
-  <button class="bbt" id="bbt-crm" onclick="page('crm')"><i class="ti ti-layout-kanban"></i>СРМ</button>
+  <button class="bbt on" id="bbt-crm" onclick="page('crm')"><i class="ti ti-layout-kanban"></i>СРМ</button>
   <button class="bbt" id="bbt-hist" onclick="page('hist')"><i class="ti ti-history"></i>История</button>
   <button class="bbt" id="bbt-conf" onclick="page('conf')"><i class="ti ti-cube-3d-sphere"></i>3D</button>
   <button class="bbt" id="bbt-kitchen" onclick="page('kitchen')"><i class="ti ti-tools-kitchen-2"></i>Кухня</button>
@@ -1006,6 +1016,22 @@
     <div style="display:flex;gap:8px">
       <button onclick="masterVarClose()" style="flex:1;padding:10px;border:1.5px solid #ddd;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:#555">Отмена</button>
       <button onclick="masterVarConfirm()" style="flex:2;padding:10px;border:none;border-radius:8px;background:#3B6D11;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Сформировать список →</button>
+    </div>
+  </div>
+</div>
+
+<div id="req-save-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+    <div style="font-size:16px;font-weight:700;color:#0a2e2e;margin-bottom:6px">Расчёт заполнен не полностью</div>
+    <div style="font-size:12px;color:#888;margin-bottom:14px">Не заполнены обязательные позиции — если сохранить сейчас, они так и останутся пустыми:</div>
+    <div id="req-save-list" style="font-size:13px;color:#993C1D;line-height:1.7;margin-bottom:16px;max-height:160px;overflow:auto"></div>
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 4px;cursor:pointer;margin-bottom:16px">
+      <input type="checkbox" id="req-save-check" onchange="reqSaveToggle()" style="width:18px;height:18px;accent-color:#534AB7">
+      <div style="font-size:12px;color:#555">Понимаю, сохраняю расчёт как есть</div>
+    </label>
+    <div style="display:flex;gap:8px">
+      <button onclick="closeReqSaveModal()" style="flex:1;padding:10px;border:1.5px solid #ddd;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:#555">Вернуться и заполнить</button>
+      <button id="req-save-btn" onclick="reqSaveForce()" disabled style="flex:2;padding:10px;border:none;border-radius:8px;background:#ccc;color:#fff;font-size:13px;font-weight:600;cursor:not-allowed">Сохранить всё равно</button>
     </div>
   </div>
 </div>

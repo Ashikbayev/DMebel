@@ -1531,7 +1531,10 @@ function waitReady(dom, tries){
   ok(norm(incK) === norm(domF.window.eval('fm(' + incExpectK + ')')), 'плитка «Краска» считается той же дельтой');
 
   // saveCalc: пакет korrPayload() прикладывается к rec.
-  domF.window.eval('const rc=$("kp-client");if(rc)rc.value="Тест Клиент";saveCalc()');
+  // doSaveCalc() — тело сохранения без гейта чек-листа (v4.14): здесь
+  // проверяем именно передачу costPlan/costFact, чек-лист в этом сценарии
+  // заведомо не заполнен и не является предметом теста.
+  domF.window.eval('const rc=$("kp-client");if(rc)rc.value="Тест Клиент";doSaveCalc()');
   const histRec = JSON.parse(domF.window.eval('localStorage.getItem("mebeloff_hist")'))[0];
   ok(histRec.costPlan === kp.costPlan && histRec.costFact === kp.costFact && histRec.costDelta === kp.delta, 'saveCalc: costPlan/costFact/costDelta приложены к записи для CRM');
 
@@ -1540,7 +1543,7 @@ function waitReady(dom, tries){
   const domSaveEmpty = bootPage(null);
   await waitReady(domSaveEmpty);
   domSaveEmpty.window.eval('addLdsp();ST.ldsp[0]=0;document.getElementById("ls0").value="0";document.getElementById("lq0").value="2";recalc()');
-  domSaveEmpty.window.eval('const rc2=$("kp-client");if(rc2)rc2.value="Без корректировки";saveCalc()');
+  domSaveEmpty.window.eval('const rc2=$("kp-client");if(rc2)rc2.value="Без корректировки";doSaveCalc()');
   const histRec2 = JSON.parse(domSaveEmpty.window.eval('localStorage.getItem("mebeloff_hist")'))[0];
   ok(histRec2.costPlan === histRec2.costFact && histRec2.costDelta === 0, 'без правок факт равен плану — отклонение 0, поля присутствуют');
 
@@ -1622,6 +1625,64 @@ function waitReady(dom, tries){
   ok(domR2.window.eval('ORDT') === '', 'fullReset сбрасывает тип заказа');
   const rs8 = JSON.parse(domR2.window.eval('JSON.stringify(requiredStatus())'));
   ok(rs8.total === 10, 'после fullReset чек-лист снова только универсальные 10 пунктов');
+
+  // ─────────────────────────────────────────────────────────────
+  // v4.14: блокировка сохранения неполного расчёта + модалка подтверждения.
+  // ─────────────────────────────────────────────────────────────
+  console.log('── v4.14: защита от сохранения неполного расчёта ──');
+
+  // Сценарий А: чек-лист НЕ закрыт (заполнена только пара позиций) —
+  // saveCalc() не должен писать в историю, вместо этого открывается модалка.
+  const domSaveA = bootPage(null, { failFetch: true });
+  await waitReady(domSaveA);
+  domSaveA.window.eval('addLdsp();ST.ldsp[0]=0;document.getElementById("ls0").value="0";document.getElementById("lq0").value="2";recalc()');
+  ok(JSON.parse(domSaveA.window.eval('JSON.stringify(requiredStatus())')).missing > 0, 'подготовка: чек-лист заведомо не закрыт');
+  domSaveA.window.eval('const rcA=$("kp-client");if(rcA)rcA.value="Неполный";saveCalc()');
+  ok(domSaveA.window.eval('localStorage.getItem("mebeloff_hist")') === null, 'saveCalc() с незакрытым чек-листом НЕ пишет в историю');
+  const modalA = domSaveA.window.document.getElementById('req-save-modal');
+  ok(modalA && modalA.style.display === 'flex', 'вместо сохранения открылась модалка подтверждения');
+  const listA = domSaveA.window.document.getElementById('req-save-list');
+  ok(listA && listA.textContent.indexOf('Ножки') >= 0 && listA.textContent.indexOf('Телескоп') >= 0, 'модалка перечисляет незаполненные пункты по именам');
+  const btnA = domSaveA.window.document.getElementById('req-save-btn');
+  ok(btnA && btnA.disabled === true, 'кнопка «Сохранить всё равно» заблокирована, пока не отмечена галочка');
+
+  // Отмечаем галочку — кнопка разблокируется.
+  domSaveA.window.eval('const chA=$("req-save-check");chA.checked=true;reqSaveToggle()');
+  ok(btnA.disabled === false, 'галочка «Понимаю, сохраняю как есть» разблокирует кнопку');
+
+  // Жмём «Сохранить всё равно» — теперь запись должна появиться в истории,
+  // несмотря на незакрытый чек-лист, и модалка закрывается.
+  domSaveA.window.eval('reqSaveForce()');
+  const histA = JSON.parse(domSaveA.window.eval('localStorage.getItem("mebeloff_hist")'));
+  ok(Array.isArray(histA) && histA.length === 1 && histA[0].client === 'Неполный', 'принудительное сохранение записало неполный расчёт в историю');
+  ok(modalA.style.display === 'none', 'после принудительного сохранения модалка закрылась');
+
+  // «Вернуться и заполнить» — просто закрывает модалку, ничего не сохраняя.
+  domSaveA.window.eval('addLdsp();ST.ldsp[1]=0;document.getElementById("ls1").value="0";document.getElementById("lq1").value="1";recalc();saveCalc()');
+  ok(domSaveA.window.document.getElementById('req-save-modal').style.display === 'flex', 'повторное сохранение неполного расчёта снова открывает модалку');
+  domSaveA.window.eval('closeReqSaveModal()');
+  ok(domSaveA.window.document.getElementById('req-save-modal').style.display === 'none', '«Вернуться и заполнить» закрывает модалку без сохранения');
+  const histA2 = JSON.parse(domSaveA.window.eval('localStorage.getItem("mebeloff_hist")'));
+  ok(histA2.length === 1, 'отмена в модалке не добавила вторую запись в историю');
+
+  // Сценарий Б: чек-лист полностью закрыт (универсальные 10 пунктов, тип
+  // заказа не выбран) — saveCalc() сохраняет сразу, без модалки.
+  const domSaveB = bootPage(null, { failFetch: true });
+  await waitReady(domSaveB);
+  domSaveB.window.eval('addLdsp();ST.ldsp[0]=0;document.getElementById("ls0").value="0";document.getElementById("lq0").value="6";');
+  domSaveB.window.eval('document.getElementById("hdf-qty").value="3";document.getElementById("krom-qty").value="85";');
+  domSaveB.window.eval('addSimple("fldsp",DB.ldsp,"fldsp-list");document.getElementById("fldsps0").value="0";document.getElementById("fldspq0").value="4";');
+  domSaveB.window.eval('document.getElementById("d-sat").value="15000";document.getElementById("d-pdm").value="5000";');
+  domSaveB.window.eval('addCat("furn",DB.furn,"furn-list");document.getElementById("furnc0").value="Петля";document.getElementById("furnq0").value="24";uCP("furn",0)');
+  domSaveB.window.eval('addCat("furn",DB.furn,"furn-list");document.getElementById("furnc1").value="Ножки";document.getElementById("furnq1").value="4";uCP("furn",1)');
+  domSaveB.window.eval('addCat("furn",DB.furn,"furn-list");document.getElementById("furnc2").value="Руч-Скрытая";document.getElementById("furnv2").value="96мм";uCP("furn",2);document.getElementById("furnq2").value="10";uCP("furn",2)');
+  domSaveB.window.eval('addCat("furn",DB.furn,"furn-list");document.getElementById("furnc3").value="Телескоп";document.getElementById("furnq3").value="10";uCP("furn",3);recalc()');
+  const rsB = JSON.parse(domSaveB.window.eval('JSON.stringify(requiredStatus())'));
+  ok(rsB.missing === 0, 'подготовка: чек-лист закрыт полностью (все 10 универсальных пунктов)');
+  domSaveB.window.eval('const rcB=$("kp-client");if(rcB)rcB.value="Полный";saveCalc()');
+  ok(domSaveB.window.document.getElementById('req-save-modal').style.display !== 'flex', 'при закрытом чек-листе модалка не открывается');
+  const histB = JSON.parse(domSaveB.window.eval('localStorage.getItem("mebeloff_hist")'));
+  ok(Array.isArray(histB) && histB.length === 1 && histB[0].client === 'Полный', 'saveCalc() с закрытым чек-листом сохраняет сразу, без подтверждения');
 
   console.log('');
   console.log('ИТОГ: ' + PASS + ' прошло, ' + FAIL + ' упало');

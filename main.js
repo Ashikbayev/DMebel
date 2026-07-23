@@ -285,7 +285,8 @@ const fm=n=>Math.round(n).toLocaleString("ru")+"₸";
 const gn=id=>{const e=$(id);return e?(parseFloat(e.value)||0):0;};
 const st=(id,v)=>{const e=$(id);if(e){e.textContent=fm(v);e.classList.toggle("filled",v>0);}};
 const sx=(id,v)=>{const e=$(id);if(e)e.textContent=v;};
-function page(p){["calc","kp","hist","conf","kitchen","crm"].forEach(n=>{$("pg-"+n)?.classList.toggle("on",n===p);const b=$("bbt-"+n);if(b)b.classList.toggle("on",n===p);});if(p==="hist")renderHist();if(p==="conf"){initConf();}if(p==="kitchen"){initKitchen();}if(p==="crm"&&window.crmPageOpen){window.crmPageOpen();}}
+const PAGE_TITLES={calc:"Расчёт",kp:"КП",hist:"История",conf:"3D",kitchen:"Кухня",crm:"СРМ"};
+function page(p){["calc","kp","hist","conf","kitchen","crm"].forEach(n=>{$("pg-"+n)?.classList.toggle("on",n===p);const b=$("bbt-"+n);if(b)b.classList.toggle("on",n===p);const sb=$("side-bbt-"+n);if(sb)sb.classList.toggle("on",n===p);});const ht=$("hdr-title");if(ht&&PAGE_TITLES[p])ht.textContent="MebelOFF — "+PAGE_TITLES[p];if(p==="hist")renderHist();if(p==="conf"){initConf();}if(p==="kitchen"){initKitchen();}if(p==="crm"&&window.crmPageOpen){window.crmPageOpen();}}
 function tab(t){["calc","coef","extra","vit","itog","korr"].forEach(s=>{const e=$("scr-"+s);if(e)e.classList.toggle("on",s===t);});document.querySelectorAll(".tb").forEach((b,i)=>b.classList.toggle("on",["calc","coef","extra","vit","itog","korr"][i]===t));document.body.classList.toggle("itog-active",t==="itog");recalc();if(t==="korr")renderKorr();window.scrollTo(0,0);}
 // v4.12: аккордеон. Раньше tog() переключал карточку независимо — при
 // заполнении можно было открыть все восемь разделов разом, и калькулятор
@@ -3206,6 +3207,12 @@ function restoreDraftOnLoad(preReadDraft){
   // чистой загрузке без единого клика — иначе менеджер не увидит статус,
   // пока сам что-то не тронет (а recalc() до этого момента не вызывается).
   renderRequired();
+  // v4.14: при первом открытии сайта — сразу СРМ, а не Расчёт. Черновик
+  // выше уже восстановлен в ST/снимок в фоне, просто видимая вкладка
+  // теперь другая. applySnap() (переход к конкретному сохранённому КП из
+  // Истории) по-прежнему сам переключает на "calc" — это отдельный сценарий,
+  // тут его не трогаем.
+  page("crm");
 }
 function checkStorageAvailable(){
   try{
@@ -3221,6 +3228,37 @@ function checkStorageAvailable(){
 window.addEventListener("beforeunload",saveDraft);
 function saveCalc(){
   if(!C.BL){alert("Сначала добавьте позиции в расчёт");return;}
+  var rs=requiredStatus();
+  if(rs.missing>0){openReqSaveModal(rs.items);return;}
+  doSaveCalc();
+}
+function openReqSaveModal(items){
+  var host=$("req-save-list");
+  if(host){
+    host.innerHTML="";
+    items.forEach(function(d){
+      var row=document.createElement("div");
+      row.textContent="• "+d.grp+": "+d.n;
+      host.appendChild(row);
+    });
+  }
+  var chk=$("req-save-check");if(chk)chk.checked=false;
+  reqSaveToggle();
+  var m=$("req-save-modal");if(m)m.style.display="flex";
+}
+function closeReqSaveModal(){var m=$("req-save-modal");if(m)m.style.display="none";}
+function reqSaveToggle(){
+  var chk=$("req-save-check"),btn=$("req-save-btn");
+  if(!chk||!btn)return;
+  btn.disabled=!chk.checked;
+  btn.style.background=chk.checked?"#3B6D11":"#ccc";
+  btn.style.cursor=chk.checked?"pointer":"not-allowed";
+}
+function reqSaveForce(){
+  closeReqSaveModal();
+  doSaveCalc();
+}
+function doSaveCalc(){
   const client=$("kp-client")?.value||"Клиент";
   const obj=$("kp-object")?.value||"";
   const num=$("kp-num")?.value||"001";
