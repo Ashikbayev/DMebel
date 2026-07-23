@@ -71,7 +71,6 @@ input.qt{font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:6px
   .side-bbt{display:flex;align-items:center;gap:10px;padding:10px 18px;background:none;border:none;cursor:pointer;color:var(--nav-ink);font-size:13px;width:100%;text-align:left}
   .side-bbt i{font-size:18px;flex-shrink:0}
   .side-bbt.on{color:#fff;background:var(--nav-active)}
-  .bar{display:none}
   body{margin-left:180px;padding-bottom:0}
 }
 .vc{border:1px solid var(--bd);border-radius:10px;padding:10px 8px;background:#fff}
@@ -93,6 +92,7 @@ input.qt{font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:6px
 .bar{position:fixed;bottom:0;left:0;right:0;background:var(--nav-bg);border-top:none;display:flex;padding:6px 0 10px;z-index:100}
 .bbt{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;cursor:pointer;padding:4px;color:var(--nav-ink);font-size:10px}
 .bbt.on{color:var(--nav-active)}.bbt i{font-size:22px}
+@media(min-width:960px){.bar{display:none}}
 /* КП СТРАНИЦА */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 .kp-back-bar{padding:8px 12px;display:flex;gap:8px;background:#fff;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:40;align-items:center}
