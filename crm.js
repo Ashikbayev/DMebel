@@ -557,20 +557,24 @@
       '.crm-tools input,.crm-tools select{font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:7px 10px}'+
       '.crm-vbtn{font-size:12px;border:1px solid var(--bd);background:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;color:#555}'+
       '.crm-vbtn.on{background:#1a5252;color:#fff;border-color:#1a5252}'+
+      '.crm-vgroup{display:flex;gap:2px;background:var(--bg);border-radius:8px;padding:3px}'+
+      '.crm-vgroup .crm-vbtn{border:none;background:none;border-radius:6px;padding:6px 11px;color:#8A8A86}'+
+      '.crm-vgroup .crm-vbtn.on{background:#fff;color:#0B0B0B;box-shadow:0 1px 2px rgba(0,0,0,.08)}'+
       '.crm-count{font-size:11px;color:#999;margin-left:auto}'+
       '.crm-board-tabs{display:flex;gap:6px;margin-bottom:8px}'+
       '.crm-board-tab{border:none;background:#eeece4;color:#666;font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer}'+
       '.crm-board-tab.on{background:#1a5252;color:#fff}'+
       '.crm-board{display:flex;gap:10px;overflow-x:auto;padding-bottom:12px;align-items:flex-start}'+
-      '.crm-col{min-width:200px;max-width:200px;background:var(--bg);border-radius:10px;padding:8px;flex-shrink:0;display:flex;flex-direction:column;max-height:calc(100vh - 320px)}'+
+      '.crm-col{min-width:180px;max-width:180px;background:var(--bg);border-radius:10px;padding:6px;flex-shrink:0;display:flex;flex-direction:column;max-height:calc(100vh - 320px)}'+
       '.crm-col-h{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#444;padding:2px 4px 8px;flex-shrink:0}'+
       '.crm-col-cards{overflow-y:auto;min-height:0}'+
       '.crm-col-h .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}'+
       '.crm-col-h .cnt{margin-left:auto;font-size:11px;color:#999;font-weight:400}'+
-      '.crm-card{background:#fff;border-radius:8px;margin-bottom:8px;cursor:pointer;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}'+
+      '.crm-card{background:#fff;border-radius:8px;margin-bottom:6px;cursor:pointer;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex}'+
       '.crm-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.12)}'+
-      '.crm-card-strip{height:4px}'+
-      '.crm-card-b{padding:8px 10px}'+
+      '.crm-card-strip{width:3px;flex-shrink:0}'+
+      '.crm-modal-strip{height:4px}'+
+      '.crm-card-b{padding:7px 9px;flex:1;min-width:0}'+
       '.crm-card .sum{font-size:15px;font-weight:700;color:#222;display:flex;align-items:center;gap:5px}'+
       '.crm-stale{display:inline-block;width:6px;height:6px;border-radius:50%;background:#BA1B1B;flex-shrink:0}'+
       '.crm-card .l1{display:flex;justify-content:space-between;gap:6px;font-size:12px;font-weight:600;color:#222}'+
@@ -974,7 +978,11 @@
     var tBadge = taskBadgeCount();
     bTasks.innerHTML = 'Задачи' + (tBadge ? ' <span class="crm-task-badge">' + tBadge + '</span>' : '');
     bTasks.addEventListener('click', function(){ VIEW='tasks'; localStorage.setItem('moff_crm_view','tasks'); renderAll(); });
-    tools.appendChild(bBoard); tools.appendChild(bList); tools.appendChild(bCal); tools.appendChild(bFin); tools.appendChild(bStock); tools.appendChild(bTasks); tools.appendChild(bArchive);
+    var vGroup1 = document.createElement('div'); vGroup1.className = 'crm-vgroup';
+    vGroup1.appendChild(bBoard); vGroup1.appendChild(bList); vGroup1.appendChild(bCal);
+    var vGroup2 = document.createElement('div'); vGroup2.className = 'crm-vgroup';
+    vGroup2.appendChild(bFin); vGroup2.appendChild(bStock); vGroup2.appendChild(bTasks);
+    tools.appendChild(vGroup1); tools.appendChild(vGroup2); tools.appendChild(bArchive);
     if(VIEW !== 'fin' && VIEW !== 'stock' && VIEW !== 'cal' && VIEW !== 'archive' && VIEW !== 'tasks'){
     var search = document.createElement('input');
     search.type = 'search'; search.placeholder = 'Поиск: №, клиент, телефон, город...';
@@ -4426,7 +4434,7 @@
     var bg = document.createElement('div'); bg.className='crm-modal-bg';
     bg.addEventListener('click', function(e){ if(e.target===bg) document.body.removeChild(bg); });
     var m = document.createElement('div'); m.className='crm-modal';
-    var strip0 = document.createElement('div'); strip0.className='crm-card-strip';
+    var strip0 = document.createElement('div'); strip0.className='crm-modal-strip';
     strip0.style.background = ST_COLOR[o.status] || '#ccc';
     m.appendChild(strip0);
     var h = document.createElement('div'); h.className='crm-m-h';
