@@ -5,6 +5,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .hdr{padding:10px 14px;background:var(--nav-bg);border-bottom:none;display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:50}
 .hdr-logo{width:28px;height:28px;border:1.5px solid var(--nav-active);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:var(--nav-active);flex-shrink:0}
 .hdr h1{font-size:14px;font-weight:700;color:#fff}
+.pg-toolbar{padding:10px 14px;background:#fff;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:50}
+.pg-toolbar-logo{width:28px;height:28px;border:1.5px solid var(--t);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:var(--t);flex-shrink:0}
+.pg-toolbar h2{font-size:14px;font-weight:700;color:var(--d)}
 /* TABS */
 .tabs{display:flex;background:#fff;border-bottom:1px solid var(--bd);overflow-x:auto;position:sticky;top:48px;z-index:40}
 .tb{flex:0 0 auto;padding:9px 12px;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-size:12px;color:var(--t2);white-space:nowrap}
@@ -56,6 +59,7 @@ input.qt{font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:6px
 /* ИТОГ */
 .tv{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
 /* РАСЧЁТ — сплит на широких экранах: слева калькулятор, справа живой Итог */
+.side-nav{display:none}
 @media(min-width:960px){
   #calc-body{display:flex;align-items:flex-start;gap:0}
   #pg-calc .calc-left{flex:1;min-width:0}
@@ -70,7 +74,6 @@ input.qt{font-size:12px;border:1px solid var(--bd);border-radius:8px;padding:6px
   .bar{display:none}
   body{margin-left:180px;padding-bottom:0}
 }
-.side-nav{display:none}
 .vc{border:1px solid var(--bd);border-radius:10px;padding:10px 8px;background:#fff}
 .vc.b{background:linear-gradient(160deg,#eef7f7,#fdf9e8)}
 .vp{font-size:13px;font-weight:700;margin-bottom:2px;color:var(--d)}
