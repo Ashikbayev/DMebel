@@ -561,9 +561,9 @@
       '.crm-vgroup .crm-vbtn{border:none;background:none;border-radius:6px;padding:6px 11px;color:#8A8A86}'+
       '.crm-vgroup .crm-vbtn.on{background:#fff;color:#0B0B0B;box-shadow:0 1px 2px rgba(0,0,0,.08)}'+
       '.crm-count{font-size:11px;color:#999;margin-left:auto}'+
-      '.crm-board-tabs{display:flex;gap:6px;margin-bottom:8px}'+
-      '.crm-board-tab{border:none;background:#eeece4;color:#666;font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer}'+
-      '.crm-board-tab.on{background:#1a5252;color:#fff}'+
+      '.crm-board-tabs{display:flex;gap:4px;margin-bottom:10px;border-bottom:1px solid var(--bd)}'+
+      '.crm-board-tab{border:none;border-bottom:2px solid transparent;background:none;color:#8A8A86;font-size:12px;font-weight:600;padding:6px 10px 8px;border-radius:0;cursor:pointer}'+
+      '.crm-board-tab.on{background:none;color:#0B0B0B;border-bottom-color:#1a5252}'+
       '.crm-board{display:flex;gap:10px;overflow-x:auto;padding-bottom:12px;align-items:flex-start}'+
       '.crm-col{min-width:180px;max-width:180px;background:var(--bg);border-radius:10px;padding:6px;flex-shrink:0;display:flex;flex-direction:column;max-height:calc(100vh - 320px)}'+
       '.crm-col-h{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#444;padding:2px 4px 8px;flex-shrink:0}'+
@@ -622,11 +622,11 @@
       '.crm-m-btn.save{background:#1a5252;color:#fff}'+
       '.crm-m-btn.open{background:#fff;color:#1a5252;border:1px solid #1a5252}'+
       '.crm-m-btn.danger{background:#fff;color:#c0392b;border:1px solid #e0b4ae;flex:0 0 auto;padding:10px 14px}'+
-      '.crm-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:10px}'+
-      '.crm-sum-t{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:10px 12px}'+
-      '.crm-sum-t .v{font-size:15px;font-weight:700;color:#1a5252;white-space:nowrap}'+
+      '.crm-sum{display:flex;flex-wrap:wrap;gap:28px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--bd)}'+
+      '.crm-sum-t{background:none;border:none;border-radius:0;padding:0}'+
+      '.crm-sum-t .v{font-size:19px;font-weight:700;color:#0B0B0B;white-space:nowrap}'+
       '.crm-sum-t .v.warn{color:#c0392b}'+
-      '.crm-sum-t .k{font-size:10px;color:#999;margin-top:2px}'+
+      '.crm-sum-t .k{font-size:11px;color:#8A8A86;margin-top:1px}'+
       '.crm-cityb{font-size:11px;border:1px solid var(--bd);background:#fff;border-radius:14px;padding:5px 11px;cursor:pointer;color:#666}'+
       '.crm-cityb.on{background:#5DCAA5;border-color:#5DCAA5;color:#fff}'+
       '.crm-next{margin-top:6px;width:100%;font-size:10px;border:1px solid #e0e0e0;background:#fafaf8;border-radius:6px;padding:4px 6px;cursor:pointer;color:#1a5252;text-align:center}'+
@@ -965,7 +965,7 @@
     bStock.addEventListener('click', function(){ VIEW='stock'; localStorage.setItem('moff_crm_view','stock'); renderAll(); });
     var bCal = document.createElement('button');
     bCal.className = 'crm-vbtn' + (VIEW==='cal' ? ' on' : '');
-    bCal.textContent = '\uD83D\uDCC5';
+    bCal.textContent = 'Календарь';
     bCal.title = 'Календарь установок';
     bCal.addEventListener('click', function(){ VIEW='cal'; localStorage.setItem('moff_crm_view','cal'); renderAll(); });
     var bArchive = document.createElement('button');
@@ -986,7 +986,7 @@
     if(VIEW !== 'fin' && VIEW !== 'stock' && VIEW !== 'cal' && VIEW !== 'archive' && VIEW !== 'tasks'){
     var search = document.createElement('input');
     search.type = 'search'; search.placeholder = 'Поиск: №, клиент, телефон, город...';
-    search.value = SEARCH; search.style.flex = '1'; search.style.minWidth = '140px';
+    search.value = SEARCH; search.style.marginLeft = 'auto'; search.style.width = '200px';
     search.addEventListener('input', function(){ SEARCH = search.value.trim(); renderView(); });
     tools.appendChild(search);
     // города
@@ -1016,6 +1016,7 @@
     mkeys.forEach(function(k){ var op=document.createElement('option'); op.value=k; op.textContent='Установка: '+monthLabel(k); mSel.appendChild(op); });
     var mNone = document.createElement('option'); mNone.value='none'; mNone.textContent='В работе без даты установки'; mSel.appendChild(mNone);
     mSel.value = MONTH_FILTER;
+    mSel.style.maxWidth = '190px';
     mSel.addEventListener('change', function(){ MONTH_FILTER = mSel.value; renderView(); });
     tools.appendChild(mSel);
     var filt = null;
