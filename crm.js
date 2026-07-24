@@ -2691,6 +2691,7 @@
     // оклады. Грузим их фоном и перерисовываем — кассу ждать не заставляем.
     if(!RECUR_LOADED){ fetchRecur(function(err){ if(!err) renderView(); }); }
     if(!EMP_LOADED){ fetchEmp(function(err){ if(!err) renderView(); }); }
+    if(!DOP_LOADED){ fetchDop(function(err){ if(!err) renderView(); }); }
     renderMonthPnl(view);
     renderKassa(view);
   }
@@ -2748,15 +2749,21 @@
     var expectRecur = 0, expectSalary = 0;
     if(RECUR_LOADED) RECUR.forEach(function(r){ if(r.active && Number(r.sum) > 0) expectRecur += Number(r.sum)||0; });
     if(EMP_LOADED) EMP.forEach(function(e){ if(e.active && Number(e.salary) > 0) expectSalary += Number(e.salary)||0; });
+    // v4.14: процент с заказов и доп. работы теперь тоже начисляются кнопкой,
+    // поэтому входят в ожидаемое. Берём ровно ту сумму, которую кнопка и
+    // создаст (payrollRows), — тогда после нажатия недостача станет нулём.
+    var expectPct = 0;
+    payrollRows(FIN_MONTH).forEach(function(r){ expectPct += Number(r.sum)||0; });
     var accrued = 0;
     FIN.forEach(function(f){
       if(monthKey(f.date) !== FIN_MONTH) return;
       if(f.type !== 'Расход') return;
       var c = String(f.comment || '');
       if(c.indexOf('[\u041f\u043e\u0441\u0442\u043e\u044f\u043d\u043d\u044b\u0435 ' + FIN_MONTH) === 0 ||
-         c.indexOf('[\u041e\u043a\u043b\u0430\u0434 ' + FIN_MONTH) === 0) accrued += Number(f.sum)||0;
+         c.indexOf('[\u041e\u043a\u043b\u0430\u0434 ' + FIN_MONTH) === 0 ||
+         c.indexOf('[\u041f\u0440\u043e\u0446\u0435\u043d\u0442 ' + FIN_MONTH) === 0) accrued += Number(f.sum)||0;
     });
-    var expectTotal = expectRecur + expectSalary;
+    var expectTotal = expectRecur + expectSalary + expectPct;
     var missing = Math.max(0, expectTotal - accrued);
     var canCheck = RECUR_LOADED && EMP_LOADED;
     var honest = net - missing;
@@ -2764,11 +2771,13 @@
     // Процент мастеров за месяц: реальное обязательство, но кнопкой
     // «Начислить» пока не закрывается — показываем отдельно, чтобы не
     // висело вечное предупреждение о недостаче, которое нечем закрыть.
-    var masterPct = 0;
-    if(LOADED) ORDERS.forEach(function(o){
-      if(monthKey(o.dogDate) !== FIN_MONTH) return;
-      masterPct += Number(o.earnMaster)||0;
-    });
+    var unassigned = LOADED ? Math.round(payrollForMonth(FIN_MONTH).unassignedM) : 0;
+    if(unassigned > 0){
+      var pw = document.createElement('div'); pw.className='crm-fin-note';
+      pw.style.color = '#BA7517';
+      pw.textContent = '\u0418\u0437 \u043d\u0438\u0445 ' + fm0(unassigned) + ' \u2014 \u043f\u043e \u0437\u0430\u043a\u0430\u0437\u0430\u043c \u0431\u0435\u0437 \u043d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u043d\u043e\u0433\u043e \u043c\u0430\u0441\u0442\u0435\u0440\u0430. \u0414\u0435\u043d\u044c\u0433\u0438 \u0432 \u043a\u0430\u0441\u0441\u0435 \u0443\u0447\u0442\u0443\u0442\u0441\u044f, \u043d\u043e \u043a\u043e\u043c\u0443 \u043f\u043b\u0430\u0442\u0438\u0442\u044c \u2014 \u043d\u0435\u044f\u0441\u043d\u043e. \u041e\u0442\u043a\u0440\u043e\u0439 \u0437\u0430\u043a\u0430\u0437 \u0438 \u0432\u044b\u0431\u0435\u0440\u0438 \u0431\u0440\u0438\u0433\u0430\u0434\u0443.';
+      view.appendChild(pw);
+    }
 
     var t0 = document.createElement('div'); t0.className='crm-sec-t';
     t0.textContent = 'Итог месяца';
@@ -2780,16 +2789,12 @@
     view.appendChild(sum);
 
     if(canCheck && missing > 0){
+      var parts = ['\u043f\u043e\u0441\u0442\u043e\u044f\u043d\u043d\u044b\u0435 ' + fm0(expectRecur), '\u043e\u043a\u043b\u0430\u0434\u044b ' + fm0(expectSalary)];
+      if(expectPct > 0) parts.push('\u043f\u0440\u043e\u0446\u0435\u043d\u0442 \u0438 \u0434\u043e\u043f. \u0440\u0430\u0431\u043e\u0442\u044b ' + fm0(expectPct));
       var mw = document.createElement('div'); mw.className='crm-fin-note';
       mw.style.color = '#BA1B1B';
-      mw.textContent = '\u26A0\uFE0F \u041d\u0435 \u043d\u0430\u0447\u0438\u0441\u043b\u0435\u043d\u043e \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u0441\u0442\u0432 \u043d\u0430 ' + fm0(missing) + ' (\u043f\u043e\u0441\u0442\u043e\u044f\u043d\u043d\u044b\u0435 ' + fm0(expectRecur) + ' + \u043e\u043a\u043b\u0430\u0434\u044b ' + fm0(expectSalary) + '). \u042d\u0442\u0430 \u0441\u0443\u043c\u043c\u0430 \u0443\u0436\u0435 \u0432\u044b\u0447\u0442\u0435\u043d\u0430 \u0438\u0437 \u0447\u0438\u0441\u0442\u043e\u0433\u043e \u0434\u043e\u0445\u043e\u0434\u0430 \u0432\u044b\u0448\u0435 \u2014 \u043d\u0430\u0436\u043c\u0438 \u00ab\u041d\u0430\u0447\u0438\u0441\u043b\u0438\u0442\u044c \u043f\u043e\u0441\u0442\u043e\u044f\u043d\u043d\u044b\u0435 \u0438 \u043e\u043a\u043b\u0430\u0434\u044b\u00bb \u0432\u043e \u0432\u043a\u043b\u0430\u0434\u043a\u0435 \u00ab\u041f\u043e\u0441\u0442\u043e\u044f\u043d\u043d\u044b\u0435\u00bb, \u0447\u0442\u043e\u0431\u044b \u043f\u0440\u043e\u0432\u043e\u0434\u043a\u0438 \u043f\u043e\u044f\u0432\u0438\u043b\u0438\u0441\u044c \u0432 \u043a\u0430\u0441\u0441\u0435.';
+      mw.textContent = '\u26A0\uFE0F \u041d\u0435 \u043d\u0430\u0447\u0438\u0441\u043b\u0435\u043d\u043e \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u0441\u0442\u0432 \u043d\u0430 ' + fm0(missing) + ' (' + parts.join(' + ') + '). \u042d\u0442\u0430 \u0441\u0443\u043c\u043c\u0430 \u0443\u0436\u0435 \u0432\u044b\u0447\u0442\u0435\u043d\u0430 \u0438\u0437 \u0447\u0438\u0441\u0442\u043e\u0433\u043e \u0434\u043e\u0445\u043e\u0434\u0430 \u0432\u044b\u0448\u0435 \u2014 \u043d\u0430\u0436\u043c\u0438 \u00ab\u041d\u0430\u0447\u0438\u0441\u043b\u0438\u0442\u044c \u043f\u043e\u0441\u0442\u043e\u044f\u043d\u043d\u044b\u0435 \u0438 \u043e\u043a\u043b\u0430\u0434\u044b\u00bb \u0432\u043e \u0432\u043a\u043b\u0430\u0434\u043a\u0435 \u00ab\u041f\u043e\u0441\u0442\u043e\u044f\u043d\u043d\u044b\u0435\u00bb, \u0447\u0442\u043e\u0431\u044b \u043f\u0440\u043e\u0432\u043e\u0434\u043a\u0438 \u043f\u043e\u044f\u0432\u0438\u043b\u0438\u0441\u044c \u0432 \u043a\u0430\u0441\u0441\u0435.';
       view.appendChild(mw);
-    }
-    if(masterPct > 0){
-      var pw = document.createElement('div'); pw.className='crm-fin-note';
-      pw.style.color = '#BA7517';
-      pw.textContent = '\u0421\u0432\u0435\u0440\u0445 \u044d\u0442\u043e\u0433\u043e \u043c\u0430\u0441\u0442\u0435\u0440\u0430\u043c \u0437\u0430 \u0437\u0430\u043a\u0430\u0437\u044b \u043c\u0435\u0441\u044f\u0446\u0430: ' + fm0(masterPct) + '. \u041a\u043d\u043e\u043f\u043a\u043e\u0439 \u00ab\u041d\u0430\u0447\u0438\u0441\u043b\u0438\u0442\u044c\u00bb \u043f\u0440\u043e\u0446\u0435\u043d\u0442 \u043f\u043e\u043a\u0430 \u043d\u0435 \u043f\u0440\u043e\u0432\u043e\u0434\u0438\u0442\u0441\u044f \u2014 \u0434\u043e\u0431\u0430\u0432\u044c \u0440\u0430\u0441\u0445\u043e\u0434 \u0432\u0440\u0443\u0447\u043d\u0443\u044e \u0447\u0435\u0440\u0435\u0437 \u00ab+ \u041e\u043f\u0435\u0440\u0430\u0446\u0438\u044f\u00bb, \u0438\u043d\u0430\u0447\u0435 \u043a\u0430\u0441\u0441\u0430 \u0437\u0430\u0432\u044b\u0448\u0435\u043d\u0430 \u043d\u0430 \u044d\u0442\u0443 \u0441\u0443\u043c\u043c\u0443.';
-      view.appendChild(pw);
     }
     if(badCnt){
       var bw = document.createElement('div'); bw.className='crm-fin-note';
@@ -3095,9 +3100,17 @@
     bAcc.addEventListener('click', function(){
       var m = iM.value;
       if(!m){ toast('\u26A0\uFE0F Выбери месяц', '#BA7517'); return; }
-      if(!confirm('Начислить постоянные расходы и оклады за '+m+'? Проводки уйдут в кассу. Повторно тот же месяц не задвоится.')) return;
+      // v4.14: процент считаем на клиенте (payrollRows) и отправляем
+      // готовыми строками — на сервере второй копии формулы нет.
+      var rows = payrollRows(m);
+      var rowsSum = 0;
+      rows.forEach(function(r){ rowsSum += Number(r.sum)||0; });
+      var extra = rows.length
+        ? '\n\u0421\u0432\u0435\u0440\u0445 \u043e\u043a\u043b\u0430\u0434\u043e\u0432 \u0431\u0443\u0434\u0435\u0442 \u043d\u0430\u0447\u0438\u0441\u043b\u0435\u043d \u043f\u0440\u043e\u0446\u0435\u043d\u0442 \u0438 \u0434\u043e\u043f. \u0440\u0430\u0431\u043e\u0442\u044b: ' + fm0(rowsSum) + ' \u043f\u043e ' + rows.length + ' \u0447\u0435\u043b.'
+        : '';
+      if(!confirm('Начислить постоянные расходы и оклады за '+m+'? Проводки уйдут в кассу. Повторно тот же месяц не задвоится.' + extra)) return;
       bAcc.disabled = true; bAcc.textContent = 'Начисляю...';
-      post({ action:'accrueMonth', month:m }, function(res){
+      post({ action:'accrueMonth', month:m, payroll:rows }, function(res){
         bAcc.disabled = false; bAcc.textContent = 'Начислить постоянные и оклады';
         FIN_LOADED = false; // касса изменилась — перечитать
         var msg = 'Начислено: ' + (res && res.created || 0);
@@ -3168,6 +3181,81 @@
   }
 
   // ── Подвкладка ЗАРПЛАТЫ: оклад + процент с заказов ──────────
+  // ── Фонд оплаты за месяц (v4.14) ────────────────────────────────
+  // ЕДИНСТВЕННОЕ место, где живёт формула дробления заработка. Её зовут
+  // три потребителя: экран «Зарплаты», проверка недостачи в «Кассе» и
+  // начисление проводок. Раньше она существовала только внутри отрисовки
+  // «Зарплат», и чтобы начислять процент на сервере, её пришлось бы
+  // переписать в Code.gs второй раз — то есть завести ровно ту болезнь
+  // (две копии одной формулы, которые расходятся), которую мы лечили
+  // в среднем чеке. Поэтому считает клиент, а сервер только пишет строки.
+  //
+  // Правила: earnMaster заказа делится — основному мастеру достаётся
+  // earnMaster − выплата помощнику, помощнику его фиксированная сумма.
+  // Заказы без назначенного мастера идут в unassigned (деньги не теряем).
+  // Дизайнеры делят общий пул earnDesigner поровну между активными.
+  function payrollForMonth(mk){
+    var earnMasterM = 0, earnDesignerM = 0, unassignedM = 0, dopTotalM = 0;
+    var perEmp = {};
+    function slot(id){ if(!perEmp[id]) perEmp[id] = { main:0, help:0, dop:0, nMain:0, nHelp:0, nDop:0 }; return perEmp[id]; }
+    if(LOADED){
+      ORDERS.forEach(function(o){
+        if(monthKey(o.dogDate) !== mk) return;
+        var em = Number(o.earnMaster)||0;
+        earnMasterM += em;
+        earnDesignerM += Number(o.earnDesigner)||0;
+        var hp = o.helperId ? (Number(o.helperPay)||0) : 0;
+        var masterPart = em - hp;
+        if(o.masterId){ var sm = slot(o.masterId); sm.main += masterPart; sm.nMain++; }
+        else unassignedM += masterPart;
+        if(o.helperId){ var shp = slot(o.helperId); shp.help += hp; shp.nHelp++; }
+      });
+    }
+    if(DOP_LOADED){
+      DOP.forEach(function(d){
+        if(monthKey(d.date) !== mk) return;
+        var s = Number(d.sum)||0;
+        dopTotalM += s;
+        if(d.empId){ var sd = slot(d.empId); sd.dop += s; sd.nDop++; }
+      });
+    }
+    var nDes = 0;
+    if(EMP_LOADED) EMP.forEach(function(e){ if(e.active && e.role === '\u0414\u0438\u0437\u0430\u0439\u043d\u0435\u0440') nDes++; });
+    return {
+      perEmp: perEmp, slot: slot,
+      earnMasterM: earnMasterM, earnDesignerM: earnDesignerM,
+      unassignedM: unassignedM, dopTotalM: dopTotalM,
+      nDesigners: nDes,
+      designerShare: nDes > 0 ? Math.round(earnDesignerM / nDes) : 0,
+      // Всё, что причитается людям сверх окладов — именно это кнопка
+      // «Начислить» и должна проводить в кассу.
+      variableTotal: earnMasterM + earnDesignerM + dopTotalM
+    };
+  }
+
+  // Готовые строки начисления процента для сервера. Сервер их не
+  // пересчитывает — только пишет и защищает от повторного начисления.
+  function payrollRows(mk){
+    var p = payrollForMonth(mk);
+    var rows = [];
+    if(EMP_LOADED){
+      EMP.forEach(function(e){
+        var pe = p.perEmp[e.id] || { main:0, help:0, dop:0 };
+        var isDes = e.role === '\u0414\u0438\u0437\u0430\u0439\u043d\u0435\u0440';
+        var sum = isDes
+          ? ((e.active ? p.designerShare : 0) + Math.round(pe.dop))
+          : Math.round(pe.main) + Math.round(pe.help) + Math.round(pe.dop);
+        if(sum > 0) rows.push({ empId: String(e.id), name: e.name, role: e.role, sum: sum });
+      });
+    }
+    // Заказы без назначенного мастера: деньги реальные, получателя нет.
+    // Проводку создаём всё равно (иначе касса завышена), но помечаем явно.
+    if(Math.round(p.unassignedM) > 0){
+      rows.push({ empId: '__none__', name: '\u0431\u0435\u0437 \u043d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u043d\u043e\u0433\u043e \u043c\u0430\u0441\u0442\u0435\u0440\u0430', role: '\u041c\u0430\u0441\u0442\u0435\u0440', sum: Math.round(p.unassignedM) });
+    }
+    return rows;
+  }
+
   function renderSubPay(view){
     if(!EMP_LOADED){
       var ld = document.createElement('div'); ld.className='crm-empty';
@@ -3182,36 +3270,11 @@
     }
     if(!DOP_LOADED){ fetchDop(function(err){ if(!err) renderView(); }); }
 
-    // Заработок с заказов за выбранный месяц (по дате договора).
-    // earnMaster заказа делится: основному мастеру = earnMaster − выплата
-    // помощнику; помощнику = его фикс. сумма. Заказы без назначенного
-    // основного мастера собираются в «Не распределено» (деньги не теряются).
-    var earnMasterM = 0, earnDesignerM = 0, unassignedM = 0;
-    var perEmp = {};
-    function slot(id){ if(!perEmp[id]) perEmp[id] = { main:0, help:0, dop:0, nMain:0, nHelp:0, nDop:0 }; return perEmp[id]; }
-    if(LOADED){
-      ORDERS.forEach(function(o){
-        if(monthKey(o.dogDate) !== FIN_MONTH) return;
-        var em = Number(o.earnMaster)||0;
-        earnMasterM += em;
-        earnDesignerM += Number(o.earnDesigner)||0;
-        var hp = o.helperId ? (Number(o.helperPay)||0) : 0;
-        var masterPart = em - hp;
-        if(o.masterId){ var sm = slot(o.masterId); sm.main += masterPart; sm.nMain++; }
-        else unassignedM += masterPart;
-        if(o.helperId){ var shp = slot(o.helperId); shp.help += hp; shp.nHelp++; }
-      });
-    }
-    // Доп. работы месяца (по дате работы) — сверх пула, конкретному исполнителю.
-    var dopTotalM = 0;
-    if(DOP_LOADED){
-      DOP.forEach(function(d){
-        if(monthKey(d.date) !== FIN_MONTH) return;
-        var s = Number(d.sum)||0;
-        dopTotalM += s;
-        if(d.empId){ var sd = slot(d.empId); sd.dop += s; sd.nDop++; }
-      });
-    }
+    // v4.14: расчёт живёт в payrollForMonth() — здесь только отрисовка.
+    var PR = payrollForMonth(FIN_MONTH);
+    var earnMasterM = PR.earnMasterM, earnDesignerM = PR.earnDesignerM;
+    var unassignedM = PR.unassignedM, dopTotalM = PR.dopTotalM;
+    var perEmp = PR.perEmp;
 
     renderMonthNav(view);
 
@@ -3229,10 +3292,6 @@
     btnRow.appendChild(addB);
     view.appendChild(btnRow);
 
-    var masters = EMP.filter(function(e){ return e.role === 'Мастер'; });
-    var designers = EMP.filter(function(e){ return e.role === 'Дизайнер'; });
-    var nMasters = masters.filter(function(e){ return e.active; }).length || masters.length;
-    var nDesigners = designers.filter(function(e){ return e.active; }).length || designers.length;
 
     if(!EMP.length){
       var e = document.createElement('div'); e.className='crm-empty';
@@ -3250,7 +3309,10 @@
         var isDes = emp.role === 'Дизайнер';
         // Дизайнеры: процент = доля общего пула (как раньше). Мастера:
         // именной заработок как основной по своим заказам.
-        var pct = isDes ? ((emp.active && nDesigners > 0) ? Math.round(earnDesignerM / nDesigners) : 0) : Math.round(pe.main);
+        // v4.14: доля дизайнера берётся из payrollForMonth() — раньше здесь
+        // была вторая формула, которая при нуле активных дизайнеров делила
+        // на общее их число, а не на активных.
+        var pct = isDes ? (emp.active ? PR.designerShare : 0) : Math.round(pe.main);
         var helpV = isDes ? 0 : Math.round(pe.help);
         var dopV = Math.round(pe.dop);
         var payout = (Number(emp.salary)||0) + pct + helpV + dopV;
