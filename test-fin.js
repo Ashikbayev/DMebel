@@ -24,6 +24,7 @@ const D = MONTH + '-15';
 const ORDERS = [
   { num:'46', status:'Договор', client:'уцка', furn:'Кухня', sogl:302040, pred:302040,
     avans:151020, paid:151020, dogDate:D, mountDate:'', margin:88934,
+    costPlan:268880, costFact:205040, costDelta:-63840,
     earnMaster:45306, earnDesigner:0, masterId:'', helperId:'', helperPay:0, updated:D },
   { num:'1', status:'Договор', client:'Иванов Иван', furn:'', sogl:0, pred:0,
     avans:30000, paid:0, dogDate:D, mountDate:'', margin:0,
@@ -127,6 +128,10 @@ setTimeout(function(){
     const salesAvg  = num(tile('средний чек'));
     const salesRev  = num(tile('выручка по договорам'));
     const salesRecv = num(tile('получено'));
+    // ВАЖНО: снимать плитки «Продаж» надо здесь — ниже, в колбэке
+    // «Аналитики», эта разметка уже заменена и tile() вернёт null.
+    const salesMargT = num(tile('маржа по договорам'));
+    const salesCost  = num(tile('себестоимость'));
     const salesTxt  = bodyText();
 
     openFin('Аналитика', function(){
@@ -156,6 +161,16 @@ setTimeout(function(){
         'получено = 352 040\u20B8 — по сделкам, без 30 000 по заказу с несогласованной ценой');
       ok(salesTxt.indexOf('30 000') >= 0 || salesTxt.indexOf('30000') >= 0,
         'предоплата 30 000\u20B8 вне договора показана отдельно, а не потеряна');
+
+      // Корректировка себестоимости: №46 сэкономил 63 840 на материалах.
+      // В карточке заказа «Маржа по факту» это уже учитывает (marg - delta),
+      // а «Финансы» считали по плану — те же деньги, две разные цифры.
+      ok(salesMargT === 192774,
+        'маржа по договорам учитывает экономию 63 840\u20B8 (88 934 + 63 840 + 40 000)');
+      ok(salesCost === 502040 - 192774,
+        'себестоимость пересчитана от фактической маржи, а не от плановой');
+      ok(salesTxt.indexOf('63 840') >= 0,
+        'экономия по материалам показана в «Финансах», а не только в карточке заказа');
 
       console.log('');
       console.log('\u2500\u2500 Касса: итог месяца не должен врать на неначисленные обязательства \u2500\u2500');

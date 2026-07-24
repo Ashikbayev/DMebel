@@ -677,8 +677,6 @@
       '.crm-ftbl td:first-child{text-align:left;font-weight:600;color:#222}'+
       '.crm-ftbl tr:last-child td{border-bottom:none}'+
       '.crm-ftbl td.debt{color:#c0392b}'+
-      '.crm-bar.fin-in{background:#0F6E56}'+
-      '.crm-bar.fin-out{background:#D85A30}'+
       '.crm-ops{background:#fff;border:1px solid var(--bd);border-radius:10px;margin-bottom:10px;overflow:hidden}'+
       '.crm-ops-h{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #f0f0ee}'+
       '.crm-ops-h b{font-size:12px;color:#444}'+
@@ -3479,58 +3477,9 @@
       view.appendChild(bn);
     }
 
-    // график приход/расход по месяцам
-    var byM = {};
-    FIN.forEach(function(f){
-      var k = monthKey(f.date); if(!k) return;
-      if(!byM[k]) byM[k] = { inc:0, exp:0 };
-      if(f.type === 'Приход') byM[k].inc += Number(f.sum)||0;
-      else if(f.type === 'Расход') byM[k].exp += Number(f.sum)||0;
-    });
-    var keys = Object.keys(byM).sort();
-    if(keys.length){
-      var allKeys = [];
-      var p0 = keys[0].split('-');
-      var d0 = new Date(+p0[0], +p0[1]-1, 1);
-      var dNow = new Date();
-      while(d0.getTime() <= dNow.getTime()){ allKeys.push(monthKey(d0)); d0.setMonth(d0.getMonth()+1); }
-      if(allKeys.length > 12) allKeys = allKeys.slice(-12);
-      var maxV = 1;
-      allKeys.forEach(function(k){ var m = byM[k]; if(m){ if(m.inc > maxV) maxV = m.inc; if(m.exp > maxV) maxV = m.exp; } });
-      var ch = document.createElement('div'); ch.className='crm-chart';
-      var ct = document.createElement('div'); ct.className='crm-chart-t';
-      ct.textContent = 'Приход и расход по месяцам';
-      ch.appendChild(ct);
-      var bars = document.createElement('div'); bars.className='crm-bars';
-      allKeys.forEach(function(k){
-        var m = byM[k] || { inc:0, exp:0 };
-        var g = document.createElement('div'); g.className='crm-bgrp';
-        var pair = document.createElement('div'); pair.className='crm-bpair';
-        var b1 = document.createElement('div'); b1.className='crm-bar fin-in';
-        b1.style.height = Math.round(m.inc / maxV * 110) + 'px';
-        b1.title = monthLabel(k) + ': приход ' + fm0(m.inc);
-        var b2 = document.createElement('div'); b2.className='crm-bar fin-out';
-        b2.style.height = Math.round(m.exp / maxV * 110) + 'px';
-        b2.title = monthLabel(k) + ': расход ' + fm0(m.exp);
-        pair.appendChild(b1); pair.appendChild(b2);
-        var lx = document.createElement('div'); lx.className='crm-bx';
-        var pk = k.split('-');
-        lx.textContent = MONTH_SHORT[(+pk[1])-1] + ' ' + pk[0].slice(2);
-        g.appendChild(pair); g.appendChild(lx);
-        bars.appendChild(g);
-      });
-      ch.appendChild(bars);
-      var leg = document.createElement('div'); leg.className='crm-legend';
-      var l1 = document.createElement('span');
-      var i1 = document.createElement('i'); i1.style.background='#0F6E56';
-      l1.appendChild(i1); l1.appendChild(document.createTextNode('Приход'));
-      var l2 = document.createElement('span');
-      var i2 = document.createElement('i'); i2.style.background='#D85A30';
-      l2.appendChild(i2); l2.appendChild(document.createTextNode('Расход'));
-      leg.appendChild(l1); leg.appendChild(l2);
-      ch.appendChild(leg);
-      view.appendChild(ch);
-    }
+    // v4.14: график «Приход и расход по месяцам» убран по просьбе
+    // владельца — помесячная динамика и так видна в «Продажах»,
+    // а в кассе важнее сами операции. Вернуть: см. историю git.
 
     // последние операции + кнопка добавления
     var ops = document.createElement('div'); ops.className='crm-ops';
@@ -3673,7 +3622,7 @@
     var datedRevenue = 0;
     datedDeals.forEach(function(o){ datedRevenue += Number(o.sogl)||0; });
     var avg = datedDeals.length ? datedRevenue / datedDeals.length : 0;
-    var margT = 0, margRev = 0, margCnt = 0;
+    var margT = 0, margRev = 0, margCnt = 0, corrTotal = 0, corrCnt = 0;
     var chUnknown = 0, chUnknownSum = 0;
     withSogl.forEach(function(o){
       var m = marginOf(o);
@@ -3683,7 +3632,14 @@
       var a = CH_LOADED ? marginAdjOf(o.num) : { adj:0, unknown:0, unknownSum:0 };
       chUnknown += a.unknown;
       chUnknownSum += a.unknownSum;
-      margT += m + a.adj;
+      // v4.14: учитываем корректировку себестоимости — ровно та же формула,
+      // что в карточке заказа («Маржа по факту» = маржа − отклонение,
+      // costDelta = факт − план, минус значит сэкономили). Раньше «Финансы»
+      // считали строго по плану, и одна и та же сделка показывала в карточке
+      // и в отчёте разную маржу.
+      var d = (o.costDelta === null || o.costDelta === undefined) ? null : Number(o.costDelta);
+      if(d !== null && !isNaN(d) && d !== 0){ corrTotal += d; corrCnt++; }
+      margT += m + a.adj - ((d !== null && !isNaN(d)) ? d : 0);
       margRev += Number(o.sogl)||0;
       margCnt += 1;
     });
@@ -3720,6 +3676,15 @@
       sumTile(sum2, margPct + '%', 'рентабельность');
       sumTile(sum2, String(margCnt) + ' из ' + withSogl.length, 'догов. с маржой');
       view.appendChild(sum2);
+      if(corrCnt){
+        var cw = document.createElement('div'); cw.className='crm-fin-note';
+        cw.style.color = corrTotal < 0 ? '#3B6D11' : '#BA7517';
+        cw.textContent = (corrTotal < 0
+            ? '\u0412 \u043c\u0430\u0440\u0436\u0435 \u0443\u0447\u0442\u0435\u043d\u0430 \u044d\u043a\u043e\u043d\u043e\u043c\u0438\u044f \u043d\u0430 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u0430\u0445 ' + fm0(Math.abs(corrTotal))
+            : '\u0412 \u043c\u0430\u0440\u0436\u0435 \u0443\u0447\u0442\u0451\u043d \u043f\u0435\u0440\u0435\u0440\u0430\u0441\u0445\u043e\u0434 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432 ' + fm0(Math.abs(corrTotal)))
+          + ' \u043f\u043e ' + corrCnt + ' \u0437\u0430\u043a\u0430\u0437\u0430\u043c \u2014 \u043f\u043e \u0444\u0430\u043a\u0442\u0443 \u0437\u0430\u043a\u0443\u043f\u043a\u0438, \u043a\u0430\u043a \u0432 \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0435 \u0437\u0430\u043a\u0430\u0437\u0430. \u041e\u0441\u0442\u0430\u043b\u044c\u043d\u044b\u0435 \u0437\u0430\u043a\u0430\u0437\u044b \u0441\u0447\u0438\u0442\u0430\u044e\u0442\u0441\u044f \u043f\u043e \u043f\u043b\u0430\u043d\u0443.';
+        view.appendChild(cw);
+      }
       if(margCnt < withSogl.length){
         var mn = document.createElement('div'); mn.className='crm-fin-note';
         mn.textContent = 'Маржа считается по ' + margCnt + ' договорам из ' + withSogl.length + ' — у остальных расчёт был сохранён до появления учёта маржи. Пересохрани расчёт заказа, чтобы маржа появилась.';
