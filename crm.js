@@ -408,6 +408,22 @@
     return s - (Number(o.avans)||0) - (Number(o.paid)||0);
   }
 
+  // ── Единое определение «сделки» (v4.14) ─────────────────────────
+  // До этого «Продажи» и «Аналитика» считали договоры по разным правилам
+  // и показывали разный средний чек на соседних вкладках. Теперь правило
+  // одно: сделка — это НЕ отказ и с согласованной ценой.
+  //
+  // Дата договора здесь намеренно НЕ требуется: если её забыли проставить
+  // руками, выкинуть живые деньги из выручки хуже, чем показать их без
+  // даты. В помесячную разбивку такой заказ всё равно не попадёт —
+  // группировать не по чему, — поэтому он выводится отдельной строкой,
+  // чтобы дату дозаполнили, а не чтобы сумма потерялась молча.
+  function isDeal(o){
+    return !!o && o.status !== '\u041e\u0442\u043a\u0430\u0437' && Number(o.sogl) > 0;
+  }
+  // Сделка, которую можно отнести к месяцу (есть дата договора).
+  function isDatedDeal(o){ return isDeal(o) && !!o.dogDate && !!monthKey(o.dogDate); }
+
   // Инициалы мастера для аватара на карточке доски (v4.6).
   // EMP на доску не грузится по умолчанию — подтягивается фоном в
   // renderBoard, до этого аватара просто нет (не блокируем доску).
@@ -2673,6 +2689,10 @@
       });
       return;
     }
+    // v4.14: для проверки «всё ли начислено за месяц» нужны постоянные и
+    // оклады. Грузим их фоном и перерисовываем — кассу ждать не заставляем.
+    if(!RECUR_LOADED){ fetchRecur(function(err){ if(!err) renderView(); }); }
+    if(!EMP_LOADED){ fetchEmp(function(err){ if(!err) renderView(); }); }
     renderMonthPnl(view);
     renderKassa(view);
   }
@@ -2704,22 +2724,85 @@
   // Месячный P&L: за выбранный месяц приход − расход = чистый доход.
   function renderMonthPnl(view){
     renderMonthNav(view);
-    var inc = 0, exp = 0;
+    var inc = 0, exp = 0, badCnt = 0, badSum = 0;
     FIN.forEach(function(f){
       if(monthKey(f.date) !== FIN_MONTH) return;
-      if(f.type === 'Приход') inc += Number(f.sum)||0; else exp += Number(f.sum)||0;
+      var s = Number(f.sum)||0;
+      // v4.14: раньше здесь было «иначе — расход», и любая строка с пустым
+      // или опечатанным типом молча уменьшала прибыль. Теперь расходом
+      // считается только явный «Расход», остальное — проблема данных.
+      if(f.type === 'Приход') inc += s;
+      else if(f.type === 'Расход') exp += s;
+      else { badCnt++; badSum += s; }
     });
     var net = inc - exp;
+
+    // ── Обязательства месяца (v4.14) ────────────────────────────────
+    // Раньше «чистый доход месяца» показывал только то, что реально
+    // проведено в кассе. Если кнопку «Начислить» забыли нажать, аренда и
+    // оклады в расход не попадали, и крупная зелёная цифра показывала
+    // прибыль там, где месяц на самом деле убыточный.
+    //
+    // Считаем ожидаемые начисления = активные постоянные + активные оклады
+    // (ровно то, что умеет закрыть кнопка «Начислить»), сравниваем с уже
+    // проведённым по тегам '[Постоянные ГГГГ-ММ' / '[Оклад ГГГГ-ММ',
+    // которые проставляет accrueMonth_ в Code.gs.
+    var expectRecur = 0, expectSalary = 0;
+    if(RECUR_LOADED) RECUR.forEach(function(r){ if(r.active && Number(r.sum) > 0) expectRecur += Number(r.sum)||0; });
+    if(EMP_LOADED) EMP.forEach(function(e){ if(e.active && Number(e.salary) > 0) expectSalary += Number(e.salary)||0; });
+    var accrued = 0;
+    FIN.forEach(function(f){
+      if(monthKey(f.date) !== FIN_MONTH) return;
+      if(f.type !== 'Расход') return;
+      var c = String(f.comment || '');
+      if(c.indexOf('[\u041f\u043e\u0441\u0442\u043e\u044f\u043d\u043d\u044b\u0435 ' + FIN_MONTH) === 0 ||
+         c.indexOf('[\u041e\u043a\u043b\u0430\u0434 ' + FIN_MONTH) === 0) accrued += Number(f.sum)||0;
+    });
+    var expectTotal = expectRecur + expectSalary;
+    var missing = Math.max(0, expectTotal - accrued);
+    var canCheck = RECUR_LOADED && EMP_LOADED;
+    var honest = net - missing;
+
+    // Процент мастеров за месяц: реальное обязательство, но кнопкой
+    // «Начислить» пока не закрывается — показываем отдельно, чтобы не
+    // висело вечное предупреждение о недостаче, которое нечем закрыть.
+    var masterPct = 0;
+    if(LOADED) ORDERS.forEach(function(o){
+      if(monthKey(o.dogDate) !== FIN_MONTH) return;
+      masterPct += Number(o.earnMaster)||0;
+    });
+
     var t0 = document.createElement('div'); t0.className='crm-sec-t';
     t0.textContent = 'Итог месяца';
     view.appendChild(t0);
     var sum = document.createElement('div'); sum.className='crm-sum';
     sumTile(sum, '+' + fm0(inc), 'приход за месяц');
     sumTile(sum, '\u2212' + fm0(exp), 'расход за месяц', 'warn');
-    sumTile(sum, (net>=0?'+':'\u2212') + fm0(Math.abs(net)), 'чистый доход месяца', net<0 ? 'warn' : '');
+    sumTile(sum, (honest>=0?'+':'\u2212') + fm0(Math.abs(honest)), 'чистый доход месяца', honest<0 ? 'warn' : '');
     view.appendChild(sum);
+
+    if(canCheck && missing > 0){
+      var mw = document.createElement('div'); mw.className='crm-fin-note';
+      mw.style.color = '#BA1B1B';
+      mw.textContent = '\u26A0\uFE0F \u041d\u0435 \u043d\u0430\u0447\u0438\u0441\u043b\u0435\u043d\u043e \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u0441\u0442\u0432 \u043d\u0430 ' + fm0(missing) + ' (\u043f\u043e\u0441\u0442\u043e\u044f\u043d\u043d\u044b\u0435 ' + fm0(expectRecur) + ' + \u043e\u043a\u043b\u0430\u0434\u044b ' + fm0(expectSalary) + '). \u042d\u0442\u0430 \u0441\u0443\u043c\u043c\u0430 \u0443\u0436\u0435 \u0432\u044b\u0447\u0442\u0435\u043d\u0430 \u0438\u0437 \u0447\u0438\u0441\u0442\u043e\u0433\u043e \u0434\u043e\u0445\u043e\u0434\u0430 \u0432\u044b\u0448\u0435 \u2014 \u043d\u0430\u0436\u043c\u0438 \u00ab\u041d\u0430\u0447\u0438\u0441\u043b\u0438\u0442\u044c \u043f\u043e\u0441\u0442\u043e\u044f\u043d\u043d\u044b\u0435 \u0438 \u043e\u043a\u043b\u0430\u0434\u044b\u00bb \u0432\u043e \u0432\u043a\u043b\u0430\u0434\u043a\u0435 \u00ab\u041f\u043e\u0441\u0442\u043e\u044f\u043d\u043d\u044b\u0435\u00bb, \u0447\u0442\u043e\u0431\u044b \u043f\u0440\u043e\u0432\u043e\u0434\u043a\u0438 \u043f\u043e\u044f\u0432\u0438\u043b\u0438\u0441\u044c \u0432 \u043a\u0430\u0441\u0441\u0435.';
+      view.appendChild(mw);
+    }
+    if(masterPct > 0){
+      var pw = document.createElement('div'); pw.className='crm-fin-note';
+      pw.style.color = '#BA7517';
+      pw.textContent = '\u0421\u0432\u0435\u0440\u0445 \u044d\u0442\u043e\u0433\u043e \u043c\u0430\u0441\u0442\u0435\u0440\u0430\u043c \u0437\u0430 \u0437\u0430\u043a\u0430\u0437\u044b \u043c\u0435\u0441\u044f\u0446\u0430: ' + fm0(masterPct) + '. \u041a\u043d\u043e\u043f\u043a\u043e\u0439 \u00ab\u041d\u0430\u0447\u0438\u0441\u043b\u0438\u0442\u044c\u00bb \u043f\u0440\u043e\u0446\u0435\u043d\u0442 \u043f\u043e\u043a\u0430 \u043d\u0435 \u043f\u0440\u043e\u0432\u043e\u0434\u0438\u0442\u0441\u044f \u2014 \u0434\u043e\u0431\u0430\u0432\u044c \u0440\u0430\u0441\u0445\u043e\u0434 \u0432\u0440\u0443\u0447\u043d\u0443\u044e \u0447\u0435\u0440\u0435\u0437 \u00ab+ \u041e\u043f\u0435\u0440\u0430\u0446\u0438\u044f\u00bb, \u0438\u043d\u0430\u0447\u0435 \u043a\u0430\u0441\u0441\u0430 \u0437\u0430\u0432\u044b\u0448\u0435\u043d\u0430 \u043d\u0430 \u044d\u0442\u0443 \u0441\u0443\u043c\u043c\u0443.';
+      view.appendChild(pw);
+    }
+    if(badCnt){
+      var bw = document.createElement('div'); bw.className='crm-fin-note';
+      bw.style.color = '#BA1B1B';
+      bw.textContent = '\u26A0\uFE0F \u0412 \u044d\u0442\u043e\u043c \u043c\u0435\u0441\u044f\u0446\u0435 ' + badCnt + ' \u043e\u043f\u0435\u0440\u0430\u0446\u0438\u0439 \u043d\u0430 ' + fm0(badSum) + ' \u0441 \u043d\u0435\u043e\u043f\u043e\u0437\u043d\u0430\u043d\u043d\u044b\u043c \u0442\u0438\u043f\u043e\u043c \u2014 \u0432 \u0438\u0442\u043e\u0433 \u043d\u0435 \u0432\u043e\u0448\u043b\u0438.';
+      view.appendChild(bw);
+    }
     var note = document.createElement('div'); note.className='crm-fin-note';
-    note.textContent = 'Расход за месяц включает постоянные (аренда, оклады), если они начислены во вкладке «Постоянные». Начисляй в начале каждого месяца.';
+    note.textContent = canCheck
+      ? '\u0427\u0438\u0441\u0442\u044b\u0439 \u0434\u043e\u0445\u043e\u0434 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441 \u0443\u0447\u0451\u0442\u043e\u043c \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u0441\u0442\u0432 \u043c\u0435\u0441\u044f\u0446\u0430, \u0434\u0430\u0436\u0435 \u0435\u0441\u043b\u0438 \u043f\u0440\u043e\u0432\u043e\u0434\u043a\u0438 \u0435\u0449\u0451 \u043d\u0435 \u0441\u043e\u0437\u0434\u0430\u043d\u044b.'
+      : '\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u044e \u043f\u043e\u0441\u0442\u043e\u044f\u043d\u043d\u044b\u0435 \u0438 \u043e\u043a\u043b\u0430\u0434\u044b \u2014 \u0447\u0438\u0441\u0442\u044b\u0439 \u0434\u043e\u0445\u043e\u0434 \u043f\u043e\u043a\u0430 \u0431\u0435\u0437 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438 \u043d\u0430\u0447\u0438\u0441\u043b\u0435\u043d\u0438\u0439.';
     view.appendChild(note);
   }
 
@@ -2852,12 +2935,15 @@
         if(!conv[mk]) conv[mk] = { total:0, won:0 };
         conv[mk].total++;
         var o = byNum[num];
-        if(o && o.dogDate) conv[mk].won++;
+        // v4.14: выигранной считается сделка по общему правилу isDeal —
+        // отказ и заказ с нулевой ценой конверсией не являются, иначе
+        // конверсия и «договоров всего» рассказывают разные истории.
+        if(isDatedDeal(o)) conv[mk].won++;
       });
 
       var sales = {}, lead = {};
       ORDERS.forEach(function(o){
-        if(!o.dogDate) return;
+        if(!isDatedDeal(o)) return;
         var mk = monthKey(o.dogDate);
         if(!mk) return;
         if(!sales[mk]) sales[mk] = { sum:0, cnt:0 };
@@ -3370,9 +3456,12 @@
   }
 
   function renderKassa(view){
-    var inc = 0, exp = 0;
+    var inc = 0, exp = 0, badCnt = 0, badSum = 0;
     FIN.forEach(function(f){
-      if(f.type === 'Приход') inc += f.sum; else exp += f.sum;
+      var s = Number(f.sum)||0;
+      if(f.type === 'Приход') inc += s;
+      else if(f.type === 'Расход') exp += s;
+      else { badCnt++; badSum += s; }
     });
     var t0 = document.createElement('div'); t0.className='crm-sec-t';
     t0.textContent = 'Касса — фактические деньги';
@@ -3383,12 +3472,20 @@
     sumTile(sum, fm0(inc - exp), 'итог (приход − расход)', inc - exp < 0);
     view.appendChild(sum);
 
+    if(badCnt){
+      var bn = document.createElement('div'); bn.className='crm-fin-note';
+      bn.style.color = '#BA1B1B';
+      bn.textContent = '\u26A0\uFE0F ' + badCnt + ' \u043e\u043f\u0435\u0440\u0430\u0446\u0438\u0439 \u043d\u0430 ' + fm0(badSum) + ' \u0441 \u043d\u0435\u043e\u043f\u043e\u0437\u043d\u0430\u043d\u043d\u044b\u043c \u0442\u0438\u043f\u043e\u043c (\u043d\u0435 \u00ab\u041f\u0440\u0438\u0445\u043e\u0434\u00bb \u0438 \u043d\u0435 \u00ab\u0420\u0430\u0441\u0445\u043e\u0434\u00bb) \u2014 \u0432 \u0438\u0442\u043e\u0433 \u043d\u0435 \u0432\u043e\u0448\u043b\u0438. \u041f\u043e\u0447\u0438\u043d\u0438 \u0442\u0438\u043f \u0432 \u0442\u0430\u0431\u043b\u0438\u0446\u0435 \u0438\u043b\u0438 \u0447\u0435\u0440\u0435\u0437 \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0443 \u043e\u043f\u0435\u0440\u0430\u0446\u0438\u0438.';
+      view.appendChild(bn);
+    }
+
     // график приход/расход по месяцам
     var byM = {};
     FIN.forEach(function(f){
       var k = monthKey(f.date); if(!k) return;
       if(!byM[k]) byM[k] = { inc:0, exp:0 };
-      if(f.type === 'Приход') byM[k].inc += f.sum; else byM[k].exp += f.sum;
+      if(f.type === 'Приход') byM[k].inc += Number(f.sum)||0;
+      else if(f.type === 'Расход') byM[k].exp += Number(f.sum)||0;
     });
     var keys = Object.keys(byM).sort();
     if(keys.length){
@@ -3557,14 +3654,25 @@
     t0.textContent = 'Продажи — по договорам';
     view.appendChild(t0);
     var real = ORDERS.filter(function(o){ return o.status !== 'Отказ'; });
-    var withSogl = real.filter(function(o){ return Number(o.sogl) > 0; });
-    var revenue = 0, received = 0, debtT = 0;
+    var withSogl = real.filter(isDeal);
+    var revenue = 0, received = 0, receivedOff = 0, debtT = 0;
     withSogl.forEach(function(o){ revenue += Number(o.sogl)||0; });
     real.forEach(function(o){
-      received += (Number(o.avans)||0) + (Number(o.paid)||0);
+      var got = (Number(o.avans)||0) + (Number(o.paid)||0);
+      // Деньги по заказу без согласованной цены — реальные, но это ещё не
+      // выручка по договору. Не прячем их и не мешаем с договорными.
+      if(isDeal(o)) received += got; else receivedOff += got;
       var d = debtOf(o); if(d > 0) debtT += d;
     });
-    var avg = withSogl.length ? revenue / withSogl.length : 0;
+    // Средний чек — по сделкам, которые можно отнести к месяцу (с датой
+    // договора): ровно та же выборка, что и в «Аналитике», иначе на двух
+    // соседних вкладках получались разные средние чеки. Выручка при этом
+    // остаётся полной (включая сделки без даты) — деньги не теряем,
+    // а расхождение объясняет предупреждение ниже.
+    var datedDeals = withSogl.filter(isDatedDeal);
+    var datedRevenue = 0;
+    datedDeals.forEach(function(o){ datedRevenue += Number(o.sogl)||0; });
+    var avg = datedDeals.length ? datedRevenue / datedDeals.length : 0;
     var margT = 0, margRev = 0, margCnt = 0;
     var chUnknown = 0, chUnknownSum = 0;
     withSogl.forEach(function(o){
@@ -3585,8 +3693,25 @@
     sumTile(sum, fm0(revenue), 'выручка по договорам, всего');
     sumTile(sum, fm0(received), 'получено (авансы + доплаты)');
     sumTile(sum, fm0(debtT), 'долг клиентов', debtT>0);
-    sumTile(sum, fm0(avg), 'средний чек (' + withSogl.length + ' догов.)');
+    sumTile(sum, fm0(avg), 'средний чек (' + datedDeals.length + ' догов.)');
     view.appendChild(sum);
+
+    if(receivedOff > 0){
+      var offN = document.createElement('div'); offN.className='crm-fin-note';
+      offN.textContent = 'Плюс ' + fm0(receivedOff) + ' получено по заказам без согласованной цены \u2014 это реальные деньги, но ещё не выручка по договору. Проставь Согл. цену, чтобы они попали в отчёт.';
+      view.appendChild(offN);
+    }
+    // Сделки с ценой, но без даты договора: в помесячную разбивку ниже они
+    // физически не попадут — предупреждаем, чтобы дату дозаполнили.
+    var noDate = withSogl.filter(function(o){ return !isDatedDeal(o); });
+    if(noDate.length){
+      var ndSum = 0;
+      noDate.forEach(function(o){ ndSum += Number(o.sogl)||0; });
+      var ndN = document.createElement('div'); ndN.className='crm-fin-note';
+      ndN.style.color = '#BA7517';
+      ndN.textContent = '\u26A0\uFE0F ' + noDate.length + ' \u0437\u0430\u043a\u0430\u0437\u043e\u0432 \u043d\u0430 ' + fm0(ndSum) + ' \u2014 \u0431\u0435\u0437 \u0434\u0430\u0442\u044b \u0434\u043e\u0433\u043e\u0432\u043e\u0440\u0430 (\u2116 ' + noDate.map(function(o){ return o.num; }).join(', ') + '). \u0412 \u0432\u044b\u0440\u0443\u0447\u043a\u0443 \u043e\u043d\u0438 \u0432\u0445\u043e\u0434\u044f\u0442, \u043d\u043e \u0432 \u0433\u0440\u0430\u0444\u0438\u043a \u043f\u043e \u043c\u0435\u0441\u044f\u0446\u0430\u043c \u0438 \u0432 \u00ab\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0443\u00bb \u2014 \u043d\u0435\u0442. \u041f\u0440\u043e\u0441\u0442\u0430\u0432\u044c \u0414\u0430\u0442\u0443 \u0434\u043e\u0433\u043e\u0432\u043e\u0440\u0430.';
+      view.appendChild(ndN);
+    }
 
     if(margCnt){
       var sum2 = document.createElement('div'); sum2.className='crm-sum';
